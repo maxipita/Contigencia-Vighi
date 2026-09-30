@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titulo %}Lote {{ l.codigo }}{% endblock %}
+{% block contenido %}
+<p class="no-imprimir"><a href="{{ url_for('lotes', fecha=l.fecha) }}">← Lotes del {{ l.fecha | f }}</a></p>
+<h1>Lote {{ l.codigo }}
+  {% if l.cerrado %}<span class="chip informado">Cerrado</span>{% else %}<span class="chip">Abierto</span>{% endif %}</h1>
+<p class="muted">Fecha {{ l.fecha | f }} · creado {{ l.creado_en | fh }} por {{ l.creador or '?' }}
+  {% if l.cerrado %} · cerrado {{ l.cerrado_en | fh }} por {{ l.cerrador or '?' }}{% endif %} · {{ casos | length }} protocolo(s)</p>
+
+<div class="cols">
+<div>
+  <table>
+    <tr><th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Estado</th><th class="no-imprimir"></th></tr>
+    {% for c in casos %}
+    <tr class="{{ 'bloqueado' if c.anulado }}">
+      <td class="muted">{{ loop.index }}</td>
+      <td><a href="{{ url_for('caso', caso_id=c.id) }}"><b>{{ c.protocolo }}</b></a></td>
+      <td>{{ TIPOS[c.tipo] }}</td>
+      <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
+      <td>{{ c.sitio or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
+      <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span></td>
+      <td class="no-imprimir">{% if not l.cerrado %}
+        <form method="post" action="{{ url_for('lote_quitar', lote_id=l.id, caso_id=c.id) }}" data-confirmar="¿Quitar {{ c.protocolo }} del lote?">
+          <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec" style="padding:3px 8px">Quitar</button></form>
+      {% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="muted">El lote todavía no tiene protocolos.</td></tr>
+    {% endfor %}
+  </table>
+  {% if l.observaciones %}<p><b>Observaciones:</b> {{ l.observaciones }}</p>{% endif %}
+</div>
+
+<div class="no-imprimir">
+  {% if not l.cerrado %}
+  <div class="tarjeta">
+    <h2>Agregar protocolo</h2>
+    <form method="post" action="{{ url_for('lote_agregar', lote_id=l.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>N° de protocolo (escribí o elegí)</label>
+      <input name="protocolo" list="sin_lote" autofocus autocomplete="off">
+      <datalist id="sin_lote">{% for s in sin_lote %}<option value="{{ s.tipo }} · {{ s.protocolo }}">{% endfor %}</datalist>
+      <p class="muted">La lista muestra los protocolos que todavía no tienen lote. Si el protocolo ya estaba en otro lote, se mueve a este.</p>
+      <div class="acciones"><button class="btn">Agregar</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="tarjeta">
+    <h2>Lote</h2>
+    <form method="post" action="{{ url_for('lote_observaciones', lote_id=l.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Observaciones</label><textarea name="observaciones" style="min-height:60px">{{ l.observaciones or '' }}</textarea>
+      <div class="acciones"><button class="btn sec">Guardar</button></div>
+    </form>
+    <div class="acciones">
+      <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
+      {% if not l.cerrado or yo.admin %}
+      <form method="post" action="{{ url_for('lote_cerrar', lote_id=l.id) }}" data-confirmar="{{ '¿Reabrir el lote?' if l.cerrado else '¿Cerrar el lote? Ya no se podrán agregar ni quitar protocolos.' }}">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <button class="btn">{{ 'Reabrir lote' if l.cerrado else 'Cerrar lote' }}</button></form>
+      {% endif %}
+      {% if not casos %}
+      <form method="post" action="{{ url_for('lote_eliminar', lote_id=l.id) }}" data-confirmar="¿Eliminar el lote vacío {{ l.codigo }}?">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn peligro">Eliminar</button></form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

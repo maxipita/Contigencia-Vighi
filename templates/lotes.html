@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Lotes{% endblock %}
+{% block contenido %}
+<h1>Lotes {{ 'de hoy' if es_hoy else 'del ' ~ (fecha_sel | f) }}</h1>
+
+<div class="cols">
+<div>
+  <table>
+    <tr><th>Lote</th><th>Protocolos</th><th>Creado</th><th>Estado</th></tr>
+    {% for l in lotes %}
+    <tr>
+      <td><a href="{{ url_for('lote', lote_id=l.id) }}"><b>{{ l.codigo }}</b></a></td>
+      <td>{{ l.cantidad }}</td>
+      <td class="muted">{{ l.creado_en | fh }} · {{ l.creador or '' }}</td>
+      <td>{% if l.cerrado %}<span class="chip informado">Cerrado</span>{% else %}<span class="chip">Abierto</span>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">No hay lotes {{ 'hoy todavía' if es_hoy else 'ese día' }}.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div>
+  {% if es_hoy %}
+  <div class="tarjeta">
+    <h2>Nuevo lote</h2>
+    <form method="post" action="{{ url_for('nuevo_lote') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Tipo de lote</label>
+      <select name="tipo_lote" required><option value=""></option>
+        {% for t in tipos_lote %}<option>{{ t }}</option>{% endfor %}</select>
+      <p class="muted">Se crea con la fecha de hoy y el número que sigue (ej. ONCO-{{ fecha_sel[5:7] }}{{ fecha_sel[8:10] }}.1, .2…).</p>
+      <div class="acciones"><button class="btn">Crear lote</button></div>
+    </form>
+  </div>
+  {% endif %}
+  <div class="tarjeta">
+    <h2>Otros días</h2>
+    <form method="get" class="acciones" style="margin-top:0">
+      <input type="date" name="fecha" value="{{ fecha_sel }}" style="width:auto"><button class="btn sec">Ver</button>
+      {% if not es_hoy %}<a class="btn sec" href="{{ url_for('lotes') }}">Hoy</a>{% endif %}
+    </form>
+    <div style="margin-top:8px">
+      {% for d in dias %}<a class="chip" style="margin:2px" href="{{ url_for('lotes', fecha=d.fecha) }}">{{ d.fecha | f }} ({{ d.n }})</a>{% endfor %}
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
