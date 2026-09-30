@@ -15,17 +15,17 @@
         <select name="lote_id">
           <option value="">— Sin lote —</option>
           {% if lotes %}<optgroup label="Lotes abiertos de hoy">
-            {% for l in lotes %}<option value="{{ l.id }}" {{ 'selected' if l.id|string == v('lote_id')|string }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}
+            {% for l in lotes %}<option value="{{ l.id }}" data-tipo="{{ l.tipo_lote }}" {{ 'selected' if l.id|string == v('lote_id')|string }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}
           </optgroup>{% endif %}
           <optgroup label="Crear lote nuevo de hoy">
-            {% for t in listas.tipo_lote %}<option value="nuevo:{{ t }}">+ Nuevo lote {{ t }}</option>{% endfor %}
+            {% for t in tipos_lote %}<option value="nuevo:{{ t }}">+ Nuevo lote {{ t }}</option>{% endfor %}
           </optgroup>
         </select>
         <div class="muted"><a href="{{ url_for('lotes') }}">Ver lotes del día</a></div></div>
       <div><label>Fecha recolección</label><input type="date" name="fecha_recoleccion" value="{{ v('fecha_recoleccion') }}"></div>
       <div><label>{{ 'Médico firmante' if tipo == 'BP' else 'Citotécnico responsable' }}</label>
-        <select name="responsable_id"><option value=""></option>
-          {% for r in responsables %}<option value="{{ r.id }}" {{ 'selected' if r.id|string == v('responsable_id')|string }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} — {{ r.nombre }}{% endif %}</option>{% endfor %}
+        <select name="responsable_id"{% if tipo == 'PAP' %} data-lote-cito{% endif %}><option value=""></option>
+          {% for r in responsables %}<option value="{{ r.id }}" data-ini="{{ r.iniciales }}" {{ 'selected' if r.id|string == v('responsable_id')|string }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} — {{ r.nombre }}{% endif %}</option>{% endfor %}
         </select></div>
     </div>
   </div>

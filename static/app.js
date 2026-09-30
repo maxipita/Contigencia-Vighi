@@ -50,3 +50,15 @@ document.querySelectorAll("input[data-templates]").forEach(inp => {
 // Confirmaciones
 document.querySelectorAll("form[data-confirmar]").forEach(f =>
   f.addEventListener("submit", e => { if (!confirm(f.dataset.confirmar)) e.preventDefault(); }));
+
+// PAP: al elegir el citotécnico, proponer su lote del día (el abierto o uno nuevo con sus iniciales)
+document.querySelectorAll("select[data-lote-cito]").forEach(function (sel) {
+  sel.addEventListener("change", function () {
+    var lote = sel.form.querySelector("select[name=lote_id]");
+    var ini = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.ini;
+    if (!lote || !ini || lote.value) return;
+    var abierto = lote.querySelector('option[data-tipo="' + ini + '"]');
+    var nuevo = lote.querySelector('option[value="nuevo:' + ini + '"]');
+    if (abierto || nuevo) lote.value = (abierto || nuevo).value;
+  });
+});

@@ -67,6 +67,15 @@ tr:hover td { background: var(--lila-2); }
 .muted { color: var(--gris); font-size: 12px; }
 .bloqueado { opacity: .6; }
 .login { max-width: 360px; margin: 60px auto; }
+.traza-enc { display: grid; gap: 3px; margin-bottom: 12px; font-size: 13px; }
+.traza-enc b { color: var(--gris); font-weight: 400; display: inline-block; min-width: 170px; }
+.traza th { background: #fff; color: var(--texto); border-bottom: 2px solid var(--borde); }
+.traza td { font-size: 13px; white-space: nowrap; }
+.traza tr.hecha td { background: #f5f3f7; }
+.traza .accion-prox { color: var(--violeta); font-weight: 600; }
+.ot { color: var(--verde); }
+.lt { color: var(--rojo); }
+.mini { font-size: 12px; margin-left: 6px; }
 @media print {
   .barra, .no-imprimir, .aviso { display: none !important; }
   body { background: #fff; }

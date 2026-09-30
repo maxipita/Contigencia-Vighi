@@ -17,7 +17,7 @@
       <a href="{{ url_for('ingreso', tipo='CT') }}">+ Citología</a>
       <a href="{{ url_for('lotes') }}">Lotes</a>
       <a href="{{ url_for('exportar') }}">Exportar Excel</a>
-      {% if yo.admin %}<a href="{{ url_for('usuarios') }}">Usuarios</a>{% endif %}
+      {% if yo.admin %}<a href="{{ url_for('usuarios') }}">Usuarios</a><a href="{{ url_for('feriados') }}">Feriados</a>{% endif %}
     </nav>
     <div class="quien">{{ yo.iniciales }} · <a href="{{ url_for('cambiar_clave') }}">Clave</a> · <a href="{{ url_for('logout') }}">Salir</a></div>
     {% endif %}

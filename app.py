@@ -15,6 +15,7 @@ from flask import (Flask, abort, flash, jsonify, redirect, render_template, requ
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
+import trazabilidad
 from flujos import IHQ, NOMBRE_ETAPA, SECTORES, TIPOS, estado, flujo, requisito
 
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
@@ -92,6 +93,20 @@ def fecha_hora(v):
         return datetime.strptime(v, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
     except ValueError:
         return v
+
+
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+         "noviembre", "diciembre"]
+
+
+@app.template_filter("larga")
+def fecha_larga(d):
+    return f"{d.day} {MESES[d.month - 1]} {d.year}" if d else ""
+
+
+@app.template_filter("dh")
+def fecha_hora_dt(d):
+    return d.strftime("%d/%m/%Y %H:%M hs") if d else ""
 
 
 @app.template_filter("f")
@@ -185,11 +200,13 @@ def cargar_casos(where="1=1", params=()):
     hechas = {}
     for e in db.q("SELECT caso_id, etapa FROM etapas"):
         hechas.setdefault(e["caso_id"], set()).add(e["etapa"])
-    out = []
+    out, fer, ahora_ = [], db.feriados(), datetime.now()
     for c in casos:
         d = dict(c)
         d["estado"], prox = estado(c["tipo"], hechas.get(c["id"], set()), bool(c["solicita_ihq"]), bool(c["anulado"]))
         d["proxima"] = prox
+        d["vence"] = trazabilidad.limite(c["tipo"], prox[0], c["fecha_recoleccion"] or c["creado_en"], fer) if prox else None
+        d["atrasado"] = bool(d["vence"] and d["vence"] < ahora_)
         out.append(d)
     return out
 
@@ -267,6 +284,21 @@ def datos_formulario(tipo):
 
 
 # ---------------------------------------------------------------- lotes
+# tipos de lote que corresponden a cada estudio. Los PAP van en un lote por citotécnico (sus iniciales, ej. MAD-0930.1)
+LOTES_POR_ESTUDIO = {"BP": ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS"], "CT": ["CT"]}
+
+
+def tipos_lote(tipo=None):
+    """Tipos de lote válidos para un estudio (o todos si no se indica)."""
+    fijos = listas().get("tipo_lote", [])
+    cito = [u["iniciales"] for u in responsables("PAP")]
+    if tipo == "PAP":
+        return cito
+    if tipo:
+        return [t for t in fijos if t in LOTES_POR_ESTUDIO.get(tipo, [])]
+    return fijos + [i for i in cito if i not in fijos]
+
+
 def hoy():
     return datetime.now().strftime("%Y-%m-%d")
 
@@ -282,26 +314,29 @@ def crear_lote(tipo_lote, usuario_id):
     return db.uno("SELECT * FROM lotes WHERE id=?", (lid,))
 
 
-def resolver_lote(seleccion, usuario_id, actual_id=None):
+def resolver_lote(seleccion, usuario_id, actual_id=None, tipo=None):
     """Traduce lo elegido en el formulario a un lote. Devuelve (lote o None, error o None)."""
     if not seleccion:
         return None, None
     if seleccion.startswith("nuevo:"):
         tipo_lote = seleccion[6:]
-        if tipo_lote not in listas().get("tipo_lote", []):
-            return None, "Tipo de lote inválido."
+        if tipo_lote not in tipos_lote(tipo):
+            return None, "Tipo de lote inválido para este estudio."
         return crear_lote(tipo_lote, usuario_id), None
     lote = db.uno("SELECT * FROM lotes WHERE id=?", (int(seleccion),)) if seleccion.isdigit() else None
     if not lote:
         return None, "El lote elegido no existe."
     if lote["cerrado"] and lote["id"] != actual_id:
         return None, f"El lote {lote['codigo']} está cerrado."
+    if tipo and lote["tipo_lote"] not in tipos_lote(tipo) and lote["id"] != actual_id:
+        return None, f"El lote {lote['codigo']} no corresponde a este estudio."
     return lote, None
 
 
-def lotes_para_formulario(actual_id=None):
-    """Lotes abiertos de hoy, más el lote actual del caso si es otro."""
-    lotes = list(db.q("SELECT * FROM lotes WHERE fecha=? AND cerrado=0 ORDER BY tipo_lote, numero", (hoy(),)))
+def lotes_para_formulario(actual_id=None, tipo=None):
+    """Lotes abiertos de hoy (de los tipos que corresponden al estudio), más el lote actual del caso si es otro."""
+    lotes = [l for l in db.q("SELECT * FROM lotes WHERE fecha=? AND cerrado=0 ORDER BY tipo_lote, numero", (hoy(),))
+             if not tipo or l["tipo_lote"] in tipos_lote(tipo)]
     if actual_id and actual_id not in [l["id"] for l in lotes]:
         actual = db.uno("SELECT * FROM lotes WHERE id=?", (actual_id,))
         if actual:
@@ -338,7 +373,7 @@ def ingreso(tipo=None, caso_id=None):
         elif dup:
             flash(f"El protocolo {d['protocolo']} ya existe en {TIPOS[tipo]}.", "error")
         else:
-            lote, error = resolver_lote(d["lote_sel"], yo["id"], caso["lote_id"] if caso else None)
+            lote, error = resolver_lote(d["lote_sel"], yo["id"], caso["lote_id"] if caso else None, tipo)
             if error:
                 flash(error, "error")
             else:
@@ -358,12 +393,14 @@ def ingreso(tipo=None, caso_id=None):
     ultimos = db.q("SELECT protocolo FROM casos WHERE tipo=? ORDER BY id DESC LIMIT 5", (tipo,))
     return render_template("ingreso.html", tipo=tipo, caso=caso, listas=listas(), responsables=responsables(tipo),
                            ultimos=[r["protocolo"] for r in ultimos], editando=bool(caso_id),
-                           lotes=lotes_para_formulario(caso["lote_id"] if caso else None))
+                           lotes=lotes_para_formulario(caso["lote_id"] if caso else None, tipo),
+                           tipos_lote=tipos_lote(tipo))
 
 
 def ficha(caso_id):
-    c = db.uno("""SELECT c.*, u.iniciales AS responsable, u.nombre AS responsable_nombre
-                  FROM casos c LEFT JOIN usuarios u ON u.id=c.responsable_id WHERE c.id=?""", (caso_id,))
+    c = db.uno("""SELECT c.*, u.iniciales AS responsable, u.nombre AS responsable_nombre, u2.iniciales AS creador
+                  FROM casos c LEFT JOIN usuarios u ON u.id=c.responsable_id
+                  LEFT JOIN usuarios u2 ON u2.id=c.creado_por WHERE c.id=?""", (caso_id,))
     if not c:
         abort(404)
     macro = db.uno("SELECT * FROM macro WHERE caso_id=?", (caso_id,))
@@ -384,8 +421,10 @@ def caso(caso_id):
     historial = db.q("""SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
                         WHERE caso_id=? ORDER BY a.id DESC""", (caso_id,))
     tpl = lambda clase: db.q("SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo", (clase,))
+    pasos = flujo(c["tipo"], solicita)
+    traza_enc, traza = trazabilidad.calcular(c, pasos, etapas, db.feriados())
     return render_template("caso.html", c=c, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est, prox=prox,
-                           pasos=flujo(c["tipo"], solicita), ultima=ultima, historial=historial,
+                           pasos=pasos, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
                            ihq_hecha=any(k in etapas for k, _, _ in IHQ))
 
@@ -520,14 +559,15 @@ def lotes():
                     WHERE l.fecha=? GROUP BY l.id ORDER BY l.cerrado, l.tipo_lote, l.numero""", (fecha_sel,))
     dias = db.q("SELECT fecha, COUNT(*) AS n FROM lotes GROUP BY fecha ORDER BY fecha DESC LIMIT 15")
     return render_template("lotes.html", lotes=filas, fecha_sel=fecha_sel, es_hoy=fecha_sel == hoy(), dias=dias,
-                           tipos_lote=listas().get("tipo_lote", []))
+                           grupos_lote=[("Biopsias", tipos_lote("BP")), ("Citologías", tipos_lote("CT")),
+                                        ("PAP · citotécnico", tipos_lote("PAP"))])
 
 
 @app.route("/lotes/nuevo", methods=["POST"])
 @requiere_login
 def nuevo_lote():
     tipo_lote = request.form.get("tipo_lote", "")
-    if tipo_lote not in listas().get("tipo_lote", []):
+    if tipo_lote not in tipos_lote():
         flash("Elegí el tipo de lote.", "error")
         return redirect(url_for("lotes"))
     lote = crear_lote(tipo_lote, usuario_actual()["id"])
@@ -563,12 +603,16 @@ def lote_agregar(lote_id):
     tipo, _, prot = texto.partition(" · ") if " · " in texto else ("", "", texto)   # opción del listado: "BP · 1234"
     candidatos = db.q("SELECT id, tipo, protocolo, lote_id FROM casos WHERE protocolo=?" + (" AND tipo=?" if tipo else ""),
                       (prot, tipo) if tipo else (prot,))
+    todos = candidatos
+    candidatos = [c for c in todos if l["tipo_lote"] in tipos_lote(c["tipo"])]
     if l["cerrado"]:
         flash("El lote está cerrado.", "error")
     elif not prot:
         flash("Escribí el N° de protocolo.", "error")
-    elif not candidatos:
+    elif not todos:
         flash(f"No existe el protocolo {prot}. Primero hay que ingresarlo.", "error")
+    elif not candidatos:
+        flash(f"El protocolo {prot} es de {', '.join(TIPOS[c['tipo']] for c in todos)}: no va en un lote {l['tipo_lote']}.", "error")
     elif len(candidatos) > 1:
         flash(f"El protocolo {prot} existe en más de un estudio: elegilo de la lista (ej. 'BP · {prot}').", "error")
     else:
@@ -689,6 +733,25 @@ def usuario(uid=None):
             flash(f"Usuario {ini} guardado." + (" Al ingresar va a tener que cambiar la clave." if clave else ""), "ok")
             return redirect(url_for("usuarios"))
     return render_template("usuario.html", u=u)
+
+
+# ---------------------------------------------------------------- feriados (para las fechas límite)
+@app.route("/feriados", methods=["GET", "POST"])
+@requiere_admin
+def feriados():
+    yo = usuario_actual()
+    if request.method == "POST":
+        f, desc = request.form.get("fecha", ""), request.form.get("descripcion", "").strip()
+        if request.form.get("borrar"):
+            db.ex("DELETE FROM feriados WHERE fecha=?", (request.form["borrar"],))
+            db.auditar(yo["id"], None, "feriado_borrado", request.form["borrar"])
+        elif len(f) == 10:
+            db.ex("DELETE FROM feriados WHERE fecha=?", (f,))           # SQL estándar (sin INSERT OR REPLACE)
+            db.ex("INSERT INTO feriados VALUES (?,?)", (f, desc))
+            db.auditar(yo["id"], None, "feriado", f"{f} {desc}")
+            flash("Feriado guardado.", "ok")
+        return redirect(url_for("feriados"))
+    return render_template("feriados.html", feriados=db.q("SELECT * FROM feriados ORDER BY fecha"))
 
 
 # ---------------------------------------------------------------- exportar

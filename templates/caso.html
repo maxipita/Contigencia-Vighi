@@ -12,23 +12,36 @@
   <span class="chip {{ 'anulado' if c.anulado else ('informado' if not prox) }}">{{ estado }}</span></h1>
 
 <div class="tarjeta">
-  <h2>Recorrido</h2>
-  <div class="pasos">
-    <div class="paso hecho"><div class="nom">Ingreso</div><div class="det">{{ c.creado_en | fh }}</div></div>
-    {% for k, nombre, sector in pasos %}
-      {% set e = etapas.get(k) %}
-      <div class="paso {{ 'hecho' if e else ('proximo' if prox and prox[0] == k) }}">
-        <div class="nom">{{ nombre }}</div>
-        {% if e %}<div class="det">✔ {{ e.iniciales }} · {{ e.fecha_hora | fh }}</div>
-        {% elif prox and prox[0] == k and not c.anulado %}
-          <form method="post" action="{{ url_for('marcar_listo', caso_id=c.id, etapa=k) }}" style="margin-top:6px">
-            <input type="hidden" name="_csrf" value="{{ csrf }}">
-            <button class="btn listo">✔ Listo ({{ yo.iniciales }})</button>
-          </form>
-          <div class="det">{{ SECTORES[sector] }}</div>
-        {% else %}<div class="det">{{ SECTORES[sector] }}</div>{% endif %}
-      </div>
+  <h2>Trazabilidad</h2>
+  <div class="traza-enc">
+    <div><b>Fecha de recolección:</b>
+      {% if traza_enc.recoleccion %}{{ traza_enc.recoleccion | larga }}{% else %}<span class="lt">sin cargar (se usa la fecha de ingreso)</span>{% endif %}
+      <a class="mini" href="{{ url_for('ingreso', caso_id=c.id) }}">✎ modificar</a></div>
+    <div><b>Fecha estimada informe:</b> <i>{{ traza_enc.estimada | larga }}</i> <i class="muted">{{ traza_enc.estimada_habiles }} días hábiles</i></div>
+    <div><b>Fecha informe:</b>
+      {% if traza_enc.informe %}{{ traza_enc.informe | larga }} <span class="muted">{{ traza_enc.informe_habiles }} días hábiles</span>{% else %}<span class="muted">—</span>{% endif %}</div>
+  </div>
+  <div style="overflow-x:auto">
+  <table class="traza">
+    <tr><th>Proceso</th><th>Actividad</th><th>Acción</th><th>Fecha límite</th><th>Fecha completada</th><th>Usuario</th><th></th><th></th><th></th></tr>
+    {% for f in traza %}
+    <tr class="{{ 'hecha' if f.completada }}">
+      <td>{{ f.proceso }}</td>
+      <td>{{ f.actividad }}</td>
+      <td class="{{ 'accion-prox' if f.proxima else 'muted' }}">{{ f.accion }}</td>
+      <td>{{ f.limite | dh }}</td>
+      <td>{% if f.completada %}{{ f.completada | dh }}{% elif f.estado == 'LT' %}<i class="lt">⚑ {{ f.limite | dh }}</i>{% else %}<i class="muted">{{ f.limite | dh }}</i>{% endif %}</td>
+      <td>{% if f.usuario %}👤 {{ f.usuario }}{% endif %}</td>
+      <td>{% if f.estado == 'OT' %}<span class="ot">◷ OT</span>{% elif f.estado == 'LT' %}<span class="lt">◷ LT {{ f.atraso }}</span>{% endif %}</td>
+      <td class="muted">{{ f.demora }}</td>
+      <td>{% if f.proxima and not c.anulado %}
+        <form method="post" action="{{ url_for('marcar_listo', caso_id=c.id, etapa=f.clave) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          <button class="btn listo" style="padding:4px 10px">✔ Completar ({{ yo.iniciales }})</button>
+        </form>{% endif %}</td>
+    </tr>
     {% endfor %}
+  </table>
   </div>
   {% if ultima and (ultima.usuario_id == yo.id or yo.admin) %}
   <form method="post" action="{{ url_for('deshacer', caso_id=c.id) }}" class="acciones" data-confirmar="¿Deshacer la última etapa registrada ({{ NOMBRE_ETAPA[ultima.etapa] }})?">

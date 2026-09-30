@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Feriados{% endblock %}
+{% block contenido %}
+<h1>Feriados</h1>
+<p class="muted">Se usan para calcular las fechas límite de la trazabilidad (días hábiles). Verificar con el calendario oficial.</p>
+<div class="cols">
+<div>
+  <table>
+    <tr><th>Fecha</th><th>Descripción</th><th></th></tr>
+    {% for f in feriados %}
+    <tr><td>{{ f.fecha | f }}</td><td>{{ f.descripcion or '' }}</td>
+      <td><form method="post" data-confirmar="¿Quitar el feriado del {{ f.fecha | f }}?">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="borrar" value="{{ f.fecha }}">
+        <button class="btn sec" style="padding:3px 8px">Quitar</button></form></td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="tarjeta">
+  <h2>Agregar feriado</h2>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <label>Fecha</label><input type="date" name="fecha" required>
+    <label style="margin-top:8px">Descripción</label><input name="descripcion">
+    <div class="acciones"><button class="btn">Agregar</button></div>
+  </form>
+</div>
+</div>
+{% endblock %}

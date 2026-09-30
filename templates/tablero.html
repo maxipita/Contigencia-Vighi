@@ -24,7 +24,7 @@
   <button class="btn sec">Filtrar</button>
 </form>
 <table>
-  <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Ingresado</th></tr>
+  <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th><th>Ingresado</th></tr>
   {% for c in casos %}
   <tr>
     <td><a href="{{ url_for('caso', caso_id=c.id) }}"><b>{{ c.protocolo }}</b></a></td>
@@ -35,10 +35,11 @@
     <td>{{ c.responsable or '' }}</td>
     <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span>
         {% if c.proxima %}<div class="muted">{{ SECTORES[c.proxima[2]] }}</div>{% endif %}</td>
+    <td>{% if c.vence %}<span class="{{ 'lt' if c.atrasado else 'muted' }}">{{ '⚑ ' if c.atrasado }}{{ c.vence | dh }}</span>{% endif %}</td>
     <td class="muted">{{ c.creado_en | fh }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="8" class="muted">No hay casos para mostrar.</td></tr>
+  <tr><td colspan="9" class="muted">No hay casos para mostrar.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

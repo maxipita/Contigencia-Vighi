@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     fecha_hora VARCHAR(19) NOT NULL, usuario_id INTEGER, caso_id INTEGER,
     accion VARCHAR(40) NOT NULL, detalle TEXT
 );
+CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
 CREATE INDEX IF NOT EXISTS ix_etapas_caso ON etapas(caso_id);
 CREATE INDEX IF NOT EXISTS ix_auditoria_caso ON auditoria(caso_id);
 """
@@ -139,6 +140,11 @@ def ex(sql, params=()):
     return cur.lastrowid
 
 
+def feriados():
+    from datetime import date
+    return {date.fromisoformat(r["fecha"]) for r in q("SELECT fecha FROM feriados")}
+
+
 def auditar(usuario_id, caso_id, accion, detalle=""):
     ex("INSERT INTO auditoria (fecha_hora, usuario_id, caso_id, accion, detalle) VALUES (?,?,?,?,?)",
        (ahora(), usuario_id, caso_id, accion, detalle))
@@ -174,6 +180,9 @@ def inicializar():
         with open(os.path.join(seed, nombre), encoding="utf-8") as f:
             return json.load(f)
 
+    if not c.execute("SELECT 1 FROM feriados LIMIT 1").fetchone():
+        from trazabilidad import FERIADOS_2026
+        c.executemany("INSERT INTO feriados VALUES (?,?)", FERIADOS_2026)
     if not c.execute("SELECT 1 FROM catalogo LIMIT 1").fetchone():
         c.executemany("INSERT INTO catalogo VALUES (?,?,?,?,?)",
                       [(x["tipo"], x["categoria"], x["subcategoria"], x["sitio"], x["tipo_muestra"])

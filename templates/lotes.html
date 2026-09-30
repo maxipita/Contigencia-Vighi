@@ -28,8 +28,10 @@
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <label>Tipo de lote</label>
       <select name="tipo_lote" required><option value=""></option>
-        {% for t in tipos_lote %}<option>{{ t }}</option>{% endfor %}</select>
-      <p class="muted">Se crea con la fecha de hoy y el número que sigue (ej. ONCO-{{ fecha_sel[5:7] }}{{ fecha_sel[8:10] }}.1, .2…).</p>
+        {% for grupo, tipos in grupos_lote if tipos %}<optgroup label="{{ grupo }}">
+          {% for t in tipos %}<option>{{ t }}</option>{% endfor %}</optgroup>{% endfor %}</select>
+      <p class="muted">Se crea con la fecha de hoy y el número que sigue (ej. ONCO-{{ fecha_sel[5:7] }}{{ fecha_sel[8:10] }}.1, .2…).
+        Los lotes de PAP llevan las iniciales del citotécnico.</p>
       <div class="acciones"><button class="btn">Crear lote</button></div>
     </form>
   </div>
