@@ -1,0 +1,5 @@
+Fuentes guardadas acá para que el sistema se vea igual sin internet. Todas bajo la licencia SIL Open Font License 1.1.
+- Finlandica (variable, latin): etiquetas impresas. https://fonts.google.com/specimen/Finlandica
+- Inter (variable, latin, pesos 300-800): texto de la interfaz. https://fonts.google.com/specimen/Inter
+- JetBrains Mono (variable, latin, pesos 400-500): subtítulos y contadores. https://fonts.google.com/specimen/JetBrains+Mono
+Descargadas de Google Fonts (fonts.gstatic.com); solo el subconjunto latin, que incluye tildes y ñ.

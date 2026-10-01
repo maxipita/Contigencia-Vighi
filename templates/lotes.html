@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Lotes{% endblock %}
 {% block contenido %}
+<div class="eyebrow">Laboratorio</div>
 <h1>Lotes {{ 'de hoy' if es_hoy else 'del ' ~ (fecha_sel | f) }}</h1>
 
 <div class="cols">
@@ -12,7 +13,7 @@
       <td><a href="{{ url_for('lote', lote_id=l.id) }}"><b>{{ l.codigo }}</b></a></td>
       <td>{{ l.cantidad }}</td>
       <td class="muted">{{ l.creado_en | fh }} · {{ l.creador or '' }}</td>
-      <td>{% if l.cerrado %}<span class="chip informado">Cerrado</span>{% else %}<span class="chip">Abierto</span>{% endif %}</td>
+      <td>{% if l.cerrado %}<span class="chip cerrado">Cerrado</span>{% else %}<span class="chip activo">Abierto</span>{% endif %}</td>
     </tr>
     {% else %}
     <tr><td colspan="4" class="muted">No hay lotes {{ 'hoy todavía' if es_hoy else 'ese día' }}.</td></tr>

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Por completar{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Recepción</div>
+<h1>Protocolos por completar</h1>
+<p class="muted">Son los protocolos generados al confirmar las etiquetas de Recepción. Cargá el paciente y la cantidad de cada uno
+  (frascos en biopsias, vidrios en PAP): con eso quedan listos para imprimir las <a href="{{ url_for('etiquetas') }}">etiquetas de laboratorio</a>.
+  Cobertura, médico y el resto de los datos se completan después desde la ficha de cada caso.</p>
+
+<form class="filtros" method="get">
+  <select name="lote" onchange="this.form.submit()">
+    <option value="">Todos los lotes ({{ n_borradores }})</option>
+    {% for l in lotes_con %}<option value="{{ l.id }}" {{ 'selected' if l.id|string == lote_sel }}>{{ l.codigo }} ({{ l.n }})</option>{% endfor %}
+  </select>
+</form>
+
+{% if casos %}
+<form method="post">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <input type="hidden" name="lote" value="{{ lote_sel }}">
+  <table>
+    <tr><th>Protocolo</th><th>Estudio</th><th>Lote</th><th>Apellido *</th><th>Nombre *</th><th>DNI</th><th>Cantidad *</th><th>Responsable</th><th></th></tr>
+    {% for c in casos %}
+    <tr>
+      <td><input type="hidden" name="ids" value="{{ c.id }}"><b>{{ c.protocolo }}</b></td>
+      <td>{{ TIPOS[c.tipo] }}</td>
+      <td>{{ c.lote or '' }}</td>
+      <td><input name="apellido_{{ c.id }}" value="{{ c.apellido or '' }}" autocomplete="off"></td>
+      <td><input name="nombre_{{ c.id }}" value="{{ c.nombre or '' }}" autocomplete="off"></td>
+      <td><input name="dni_{{ c.id }}" value="{{ c.dni or '' }}" autocomplete="off" size="10"></td>
+      <td><select name="cantidad_{{ c.id }}" style="width:auto"><option value=""></option>
+        {% for k in range(1, 11) %}<option {{ 'selected' if c.cantidad == k }}>{{ k }}</option>{% endfor %}</select></td>
+      <td><select name="responsable_{{ c.id }}" style="width:auto"><option value=""></option>
+        {% for r in resp[c.tipo] %}<option value="{{ r.id }}" {{ 'selected' if r.id == c.responsable_id }}>{{ r.iniciales }}</option>{% endfor %}</select></td>
+      <td><a class="mini" href="{{ url_for('ingreso', caso_id=c.id) }}">ficha completa</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="acciones">
+    <button class="btn">Guardar</button>
+    <span class="muted">Un protocolo se da por completo cuando tiene apellido, nombre y cantidad.</span>
+  </div>
+</form>
+{% else %}
+<div class="tarjeta">No hay protocolos por completar.
+  {% if n_borradores == 0 %}Se generan al confirmar etiquetas de Recepción en <a href="{{ url_for('etiquetas') }}">Etiquetas</a>.{% endif %}</div>
+{% endif %}
+{% endblock %}

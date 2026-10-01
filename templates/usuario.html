@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}Usuario{% endblock %}
 {% block contenido %}
+<div class="eyebrow">Administración</div>
 <h1>{{ 'Editar ' ~ u.iniciales if u else 'Nuevo usuario' }}</h1>
 <form method="post" class="tarjeta" style="max-width:640px">
   <input type="hidden" name="_csrf" value="{{ csrf }}">

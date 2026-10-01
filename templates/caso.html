@@ -8,8 +8,11 @@
   {% endif %}
 {% endmacro %}
 {% block contenido %}
+<div class="eyebrow">Protocolo</div>
 <h1>{{ TIPOS[c.tipo] }} {{ c.protocolo }}
   <span class="chip {{ 'anulado' if c.anulado else ('informado' if not prox) }}">{{ estado }}</span></h1>
+{% if c.borrador %}<div class="aviso">Protocolo a completar: faltan los datos del paciente y la cantidad.
+  <a href="{{ url_for('ingreso', caso_id=c.id) }}">Completar ficha</a> o <a href="{{ url_for('completar', lote=c.lote_id) }}">cargar varios juntos</a>.</div>{% endif %}
 
 <div class="tarjeta">
   <h2>Trazabilidad</h2>
