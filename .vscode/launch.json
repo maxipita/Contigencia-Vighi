@@ -1,0 +1,21 @@
+{
+  // F5 inicia el sistema en modo desarrollo: al guardar un archivo (.py, plantilla o CSS) alcanza con actualizar el navegador.
+  // Usa una base de prueba (data/prueba.db) y el puerto 8001, así que no toca los datos reales ni choca con el servidor real (8000).
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Contingencia — desarrollo (base de prueba)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "CONTINGENCIA_DESARROLLO": "1",
+        "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
+        "CONTINGENCIA_PUERTO": "8001"
+      }
+    }
+  ]
+}

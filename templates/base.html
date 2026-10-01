@@ -21,7 +21,7 @@
     <nav class="menu" id="menuPrincipal" aria-label="Menú principal">
       <a class="it {{ 'activo' if ep in ('tablero', 'protocolo', 'estudio') }}" href="{{ url_for('tablero') }}" title="Tablero"><svg class="ic"><use href="#i-tablero"/></svg><span class="t">Tablero</span></a>
       <a class="it {{ 'activo' if ep == 'completar' }}" href="{{ url_for('completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg><span class="t">Por completar</span>{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>
-      <a class="it" href="{{ url_for('etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>
+      <a class="it {{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>
       <a class="it {{ 'activo' if ep in ('lotes', 'lote') }}" href="{{ url_for('lotes') }}" title="Lotes"><svg class="ic"><use href="#i-lotes"/></svg><span class="t">Lotes</span></a>
       <div class="desplegable">
         <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span><svg class="ic chev"><use href="#i-chev"/></svg></button>

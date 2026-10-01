@@ -1342,8 +1342,21 @@ def ips_locales():
 
 
 if __name__ == "__main__":
-    from waitress import serve
     db.inicializar()
+    if os.environ.get("CONTINGENCIA_DESARROLLO") == "1":
+        # Modo desarrollo (VS Code, F5): recarga solo al guardar un archivo y muestra los errores en el navegador.
+        # Solo escucha en esta PC: el depurador de Flask permite ejecutar código y no debe quedar expuesto en la red.
+        # Usar siempre con una base de prueba (CONTINGENCIA_DB), nunca con la real.
+        app.jinja_env.auto_reload = True        # las plantillas se releen en cada pedido (el entorno ya está creado: no alcanza con la config)
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":    # el recargador ejecuta este archivo dos veces: avisar una sola
+            print("=" * 64)
+            print(" MODO DESARROLLO — recarga automática al guardar")
+            print(f" Abrir:             http://localhost:{PUERTO}")
+            print(f" Base de datos:     {db.DB_PATH}")
+            print("=" * 64)
+        app.run(host="127.0.0.1", port=PUERTO, debug=True, use_reloader=True)
+        raise SystemExit
+    from waitress import serve
     db.iniciar_respaldos(minutos=10)
     print("=" * 64)
     print(" Sistema de contingencia CAP Vighi")

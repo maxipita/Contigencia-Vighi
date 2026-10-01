@@ -50,6 +50,18 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 | `CONTINGENCIA_RESPALDO` | Carpeta extra de respaldos | — |
 | `CONTINGENCIA_ESTRICTO` | `1` = cada etapa solo la marca su sector | `0` |
 
+## Desarrollo (VS Code)
+
+Para modificar el sistema no hace falta cerrar y abrir el `.bat` por cada cambio:
+
+1. Abrir la carpeta del proyecto en VS Code (con la extensión de Python instalada).
+2. Apretar **F5** (o *Terminal > Ejecutar tarea > Contingencia: iniciar (desarrollo)*) y abrir `http://localhost:8001`.
+3. Al guardar un archivo alcanza con actualizar el navegador: las plantillas y el CSS se ven al instante y, si se cambia
+   un `.py`, el servidor se reinicia solo. Los errores se muestran en la propia página.
+
+Usa una base aparte (`data/prueba.db`) y el puerto 8001, así que no toca los datos reales ni choca con el sistema que
+esté corriendo en la PC servidor (puerto 8000). Solo se puede entrar desde la misma PC.
+
 ## Actualizar templates / catálogo / usuarios
 
 `py preparar_semillas.py` regenera `seed/*.json` desde el Excel y los CSV. Las semillas se cargan

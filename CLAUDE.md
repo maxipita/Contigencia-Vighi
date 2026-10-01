@@ -18,6 +18,10 @@ py app.py                                 # servidor real en :8000 (equivale a "
 
 - **Probar sin tocar datos reales:** `Probar contingencia.bat` (fija `CONTINGENCIA_DB=data\prueba.db` y
   `CONTINGENCIA_PUERTO=8001`). Para desarrollar usar siempre este modo o esas variables; nunca `data\contingencia.db`.
+- **Desarrollo con recarga automática:** en VS Code, F5 (`.vscode/launch.json`, base `data/prueba.db`, puerto 8001) o la tarea
+  "Contingencia: iniciar (desarrollo)". Equivale a `CONTINGENCIA_DESARROLLO=1` + `py app.py`: usa el servidor de Flask con recargador
+  (plantillas y CSS se ven al refrescar; un cambio en `.py` reinicia solo), escucha solo en `127.0.0.1` y no hace respaldos.
+  El `.bat` usa waitress (producción) y **no** recarga: es para la PC servidor, no para desarrollar.
 - Variables de entorno: `CONTINGENCIA_PUERTO`, `CONTINGENCIA_DB`, `CONTINGENCIA_RESPALDO` (carpeta extra de
   respaldos), `CONTINGENCIA_ESTRICTO=1` (cada etapa solo la marca su sector).
 - `py preparar_semillas.py` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
