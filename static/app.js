@@ -154,3 +154,24 @@ document.querySelectorAll("form[data-confirmar]").forEach(f =>
     if (menu && !menu.contains(e.target)) html.classList.remove("menu-abierto");
   });
 })();
+
+// Ficha de usuario: muestra qué da el perfil elegido y cómo queda cada permiso con el ajuste del usuario
+(function () {
+  var tabla = document.querySelector("table.ajustes[data-perfiles]"), perfil = document.getElementById("perfil_id");
+  if (!tabla || !perfil) return;
+  var perfiles = JSON.parse(tabla.dataset.perfiles), admin = document.querySelector("input[name=admin]");
+  function pintar() {
+    var delPerfil = perfiles[perfil.value] || [];
+    tabla.querySelectorAll("tr[data-permiso]").forEach(function (fila) {
+      var k = fila.dataset.permiso, base = delPerfil.indexOf(k) >= 0, ajuste = fila.querySelector("select").value;
+      var final = admin && admin.checked ? true : ajuste === "mas" ? true : ajuste === "menos" ? false : base;
+      fila.querySelector(".del-perfil").innerHTML = base ? '<span class="si">✔</span>' : '<span class="no">—</span>';
+      fila.querySelector(".resultado").innerHTML = final ? '<span class="si">✔ Puede</span>' : '<span class="no">No puede</span>';
+      fila.classList.toggle("ajustado", ajuste !== "");
+    });
+  }
+  tabla.addEventListener("change", pintar);
+  perfil.addEventListener("change", pintar);
+  if (admin) admin.addEventListener("change", pintar);
+  pintar();
+})();

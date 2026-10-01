@@ -265,3 +265,14 @@ fieldset.seccion[disabled] .acciones { display: none; }
 .titulo-seccion { margin-top: 6px; }
 .agregar-estudio { margin: 0 0 18px; }
 .tabs a.bloqueado { text-decoration: line-through; }
+/* ---------- perfiles y permisos ---------- */
+table.matriz td.c, table.matriz th.c { text-align: center; }
+table.matriz tr.grupo td { background: var(--superficie); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--pizarra); }
+table.matriz .si { color: var(--ok); font-weight: 600; }
+table.matriz .no { color: var(--pizarra); opacity: .6; }
+table.matriz .cuantos { font-size: 11px; font-weight: 400; opacity: .8; }
+table.ajustes { margin-top: 10px; }
+table.ajustes tr.ajustado td { background: #fbf5ff; }
+.permisos-grupo { margin-top: 14px; }
+.rotulo-grupo { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--pizarra); margin-bottom: 4px; }
+label.casilla { display: flex; gap: 8px; align-items: center; color: inherit; font-size: 14px; margin: 4px 0; }

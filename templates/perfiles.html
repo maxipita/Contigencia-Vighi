@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Perfiles y permisos{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Administración</div>
+<h1>Perfiles y permisos</h1>
+<p class="muted">Cada usuario tiene un perfil con sus permisos; en la ficha del usuario se le pueden sumar o quitar permisos puntuales.
+  Los administradores pueden todo. Las etapas, además del permiso, las marca solo el sector que las realiza.</p>
+<div class="acciones" style="margin:0 0 12px"><a class="btn" href="{{ url_for('perfil') }}">+ Nuevo perfil</a></div>
+<div style="overflow-x:auto">
+<table class="matriz">
+  <tr><th>Permiso</th>{% for p in perfiles %}<th class="c"><a href="{{ url_for('perfil', pid=p.id) }}">{{ p.nombre }}</a>
+    <div class="cuantos">{{ p.usuarios }} usuario{{ 's' if p.usuarios != 1 }}</div></th>{% endfor %}</tr>
+  {% for grupo in GRUPOS %}
+  <tr class="grupo"><td colspan="{{ perfiles | length + 1 }}">{{ grupo }}</td></tr>
+  {% for k, (g, desc) in PERMISOS.items() if g == grupo %}
+  <tr><td>{{ desc }}</td>{% for p in perfiles %}<td class="c">{% if k in p.set %}<span class="si" title="Permitido">✔</span>{% else %}<span class="no">—</span>{% endif %}</td>{% endfor %}</tr>
+  {% endfor %}
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

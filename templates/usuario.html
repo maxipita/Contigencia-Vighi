@@ -3,7 +3,7 @@
 {% block contenido %}
 <div class="eyebrow">Administración</div>
 <h1>{{ 'Editar ' ~ u.iniciales if u else 'Nuevo usuario' }}</h1>
-<form method="post" class="tarjeta" style="max-width:640px">
+<form method="post" class="tarjeta" style="max-width:820px">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <div class="grilla">
     <div><label>Iniciales *</label><input name="iniciales" value="{{ u.iniciales if u else '' }}" required style="text-transform:uppercase"></div>
@@ -23,6 +23,31 @@
     <label style="display:flex;gap:6px;align-items:center;color:inherit;font-size:14px">
       <input type="checkbox" name="admin" value="1" {{ 'checked' if u and u.admin }}> Administrador</label>
   </div>
+  <h2 class="titulo-seccion" style="margin-top:18px">Permisos</h2>
+  <label>Perfil</label>
+  <select name="perfil_id" id="perfil_id" style="max-width:320px">
+    <option value="">— Sin perfil (solo ve el tablero) —</option>
+    {% for pf in perfiles %}<option value="{{ pf.id }}" {{ 'selected' if u and u.perfil_id == pf.id }}>{{ pf.nombre }}</option>{% endfor %}
+  </select>
+  <div class="muted">Los administradores pueden todo, sin importar el perfil. <a href="{{ url_for('perfiles') }}">Ver perfiles</a></div>
+  {% set mas, menos = lista_permisos(u.permisos_mas if u else ''), lista_permisos(u.permisos_menos if u else '') %}
+  <table class="matriz ajustes" data-perfiles='{{ mapa_perfiles | tojson }}'>
+    <tr><th>Permiso</th><th class="c">Perfil</th><th>Ajuste para este usuario</th><th class="c">Resultado</th></tr>
+    {% for grupo in GRUPOS %}
+    <tr class="grupo"><td colspan="4">{{ grupo }}</td></tr>
+    {% for k, (g, desc) in PERMISOS.items() if g == grupo %}
+    <tr data-permiso="{{ k }}">
+      <td>{{ desc }}</td>
+      <td class="c del-perfil"></td>
+      <td><select name="p_{{ k }}" style="width:auto">
+        <option value="">Según el perfil</option>
+        <option value="mas" {{ 'selected' if k in mas }}>Permitir</option>
+        <option value="menos" {{ 'selected' if k in menos }}>Quitar</option></select></td>
+      <td class="c resultado"></td>
+    </tr>
+    {% endfor %}
+    {% endfor %}
+  </table>
   <label style="margin-top:12px">{{ 'Nueva clave temporal (dejar vacío para no cambiarla)' if u and u.clave_hash else 'Clave temporal (mínimo 8 caracteres)' }}</label>
   <input name="clave" type="text" autocomplete="off">
   <div class="muted">La persona la usa para entrar la primera vez y el sistema le pide que la cambie por una propia.</div>

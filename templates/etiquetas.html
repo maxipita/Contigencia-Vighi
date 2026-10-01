@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Etiquetas · CAP Vighi</title>
 <style>
+    [hidden] { display: none !important; }
     /* Fuente guardada en el proyecto: las etiquetas se imprimen igual sin internet */
     @font-face {
         font-family: Finlandica;
@@ -143,9 +144,11 @@
     <a class="volver" href="{{ url_for('tablero') }}">← Volver al sistema</a>
     <div class="tipos-wrap">Tipo de etiqueta
         <div class="tipos">
-            <label><input type="radio" name="tipo" value="bp" checked><span>Recepción</span></label>
-            <label><input type="radio" name="tipo" value="pap"><span>PAP-Laboratorio</span></label>
-            <label><input type="radio" name="tipo" value="lab"><span>BP-Laboratorio</span></label>
+            {# cada pestaña solo con su permiso (el servidor también lo controla al confirmar) #}
+            {% set rec, lab = puede('etiquetas_recepcion'), puede('etiquetas_lab') %}
+            <label {{ 'hidden' if not rec }}><input type="radio" name="tipo" value="bp" {{ 'checked' if rec else 'disabled' }}><span>Recepción</span></label>
+            <label {{ 'hidden' if not lab }}><input type="radio" name="tipo" value="pap" {{ 'checked' if not rec else '' }} {{ 'disabled' if not lab }}><span>PAP-Laboratorio</span></label>
+            <label {{ 'hidden' if not lab }}><input type="radio" name="tipo" value="lab" {{ 'disabled' if not lab }}><span>BP-Laboratorio</span></label>
         </div>
     </div>
 
@@ -586,7 +589,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     // Vuelve a mostrar un lote de etiquetas ya confirmado, tal como se imprimió
     function verLote(id) {
         var b = buscarLote(id);
-        if (!b) return;
+        if (!b || document.querySelector('input[name=tipo][value=' + b.tipo + ']').disabled) return;
         loteActual = null;
         reiniciarLab();
         if (b.tipo !== 'bp') {
@@ -697,7 +700,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         try {
             var tg = localStorage.getItem('etiquetas_tipo');
             var radio = tg && document.querySelector('input[name=tipo][value=' + tg + ']');
-            if (radio) radio.checked = true;
+            if (radio && !radio.disabled) radio.checked = true;
         } catch (e) {}
     }
 

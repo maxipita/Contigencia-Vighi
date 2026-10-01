@@ -12,17 +12,16 @@ import socket
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import (Flask, abort, flash, jsonify, redirect, render_template, request, send_file,
+from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
+import permisos
 import trazabilidad
 from estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, TIPOS, validar_combinacion
 
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
-# 1 = solo el sector correspondiente puede marcar cada etapa como lista (el admin siempre puede)
-ESTRICTO = os.environ.get("CONTINGENCIA_ESTRICTO", "0") == "1"
 
 app = Flask(__name__)
 
@@ -44,8 +43,21 @@ app.teardown_appcontext(db.cerrar)
 
 # ---------------------------------------------------------------- sesión y seguridad
 def usuario_actual():
+    """Usuario de la sesión (activo) con sus permisos efectivos en u["permisos"]. Se calcula una vez por pedido."""
     uid = session.get("uid")
-    return db.uno("SELECT * FROM usuarios WHERE id=? AND activo=1", (uid,)) if uid else None
+    if not uid:
+        return None
+    if g.get("yo_id") != uid:
+        f = db.uno("""SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
+                      LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.id=? AND u.activo=1""", (uid,))
+        g.yo = {**dict(f), "permisos": permisos.efectivos(f, f["perfil_permisos"])} if f else None
+        g.yo_id = uid
+    return g.yo
+
+
+def puede(permiso):
+    u = usuario_actual()
+    return bool(u and permiso in u["permisos"])
 
 
 def requiere_login(f):
@@ -58,6 +70,21 @@ def requiere_login(f):
             return redirect(url_for("cambiar_clave"))
         return f(*a, **k)
     return envuelta
+
+
+def requiere_permiso(*claves):
+    """La ruta exige alguno de esos permisos. Sin permiso: aviso y vuelta a la pantalla anterior (o al tablero)."""
+    def decorador(f):
+        @wraps(f)
+        @requiere_login
+        def envuelta(*a, **k):
+            if not any(puede(c) for c in claves):
+                flash("No tenés permiso para esa acción. Pedíselo a un administrador.", "error")
+                destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else None
+                return redirect(destino or url_for("tablero"))
+            return f(*a, **k)
+        return envuelta
+    return decorador
 
 
 def requiere_admin(f):
@@ -86,7 +113,7 @@ def globales():
     pendientes = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1")["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
             "n_borradores": pendientes,
-            "NOMBRE_ETAPA": NOMBRE_ETAPA, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
+            "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
 @app.template_filter("fh")
@@ -441,7 +468,7 @@ def protocolo_o_404(pid):
 
 
 @app.route("/protocolo/nuevo", methods=["GET", "POST"])
-@requiere_login
+@requiere_permiso("protocolo_crear")
 def protocolo_nuevo():
     yo = usuario_actual()
     p, lista = {}, []
@@ -482,12 +509,15 @@ def completo(p, estudios):
 
 
 @app.route("/protocolo/<int:pid>/editar", methods=["GET", "POST"])
-@requiere_login
+@requiere_permiso("protocolo_crear", "protocolo_editar")
 def protocolo_editar(pid):
     """Datos del protocolo. Si está en borrador (generado desde Recepción) también se completan sus estudios."""
     yo = usuario_actual()
     p = protocolo_o_404(pid)
     borrador = bool(p["borrador"])
+    if not borrador and not puede("protocolo_editar"):
+        flash("No tenés permiso para editar protocolos. Pedíselo a un administrador.", "error")
+        return redirect(url_for("protocolo", pid=pid))
     actuales = {e["id"]: e for e in db.q("SELECT * FROM estudios WHERE protocolo_id=? ORDER BY id", (pid,))}
     lista = [{**dict(e), "lote_sel": str(e["lote_id"] or "")} for e in actuales.values() if not e["anulado"]] if borrador else []
     if request.method == "POST":
@@ -552,7 +582,7 @@ def protocolo(pid):
 
 
 @app.route("/protocolo/<int:pid>/estudio/nuevo", methods=["GET", "POST"])
-@requiere_login
+@requiere_permiso("protocolo_editar")
 def estudio_nuevo(pid):
     yo = usuario_actual()
     p = protocolo_o_404(pid)
@@ -574,7 +604,7 @@ def estudio_nuevo(pid):
 
 
 @app.route("/estudio/<int:eid>/editar", methods=["GET", "POST"])
-@requiere_login
+@requiere_permiso("protocolo_editar")
 def estudio_editar(eid):
     yo = usuario_actual()
     actual = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
@@ -619,6 +649,11 @@ def ficha(eid):
     return e, macro, micro, ihq, etapas, solicita
 
 
+def con_permiso(permiso, estado):
+    """(True, "") solo si además de estar habilitada la sección el usuario tiene el permiso de cargarla."""
+    return estado if puede(permiso) or not estado[0] else (False, "No tenés permiso para cargar esta sección.")
+
+
 def habilitada(e, etapas, solicita, etapa):
     """La carga de macro / micro solo se puede editar mientras el estudio está en esa etapa.
     Devuelve (True, "") o (False, motivo)."""
@@ -653,8 +688,8 @@ def estudio(eid):
                            hermanos=hermanos, etiqueta=etiqueta(e),
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
-                           edita_macro=habilitada(e, etapas, solicita, "macroscopia"),
-                           edita_micro=habilitada(e, etapas, solicita, "microscopia"))
+                           edita_macro=con_permiso("macro", habilitada(e, etapas, solicita, "macroscopia")),
+                           edita_micro=con_permiso("micro", habilitada(e, etapas, solicita, "microscopia")))
 
 
 def guardar_seccion(tabla, eid, valores):
@@ -666,7 +701,7 @@ def guardar_seccion(tabla, eid, valores):
 
 
 @app.route("/estudio/<int:eid>/macro", methods=["POST"])
-@requiere_login
+@requiere_permiso("macro")
 def guardar_macro(eid):
     e, _, _, _, etapas, solicita = ficha(eid)
     ok, motivo = habilitada(e, etapas, solicita, "macroscopia")
@@ -685,7 +720,7 @@ def guardar_macro(eid):
 
 
 @app.route("/estudio/<int:eid>/micro", methods=["POST"])
-@requiere_login
+@requiere_permiso("micro")
 def guardar_micro(eid):
     e, _, micro, _, etapas, solicita = ficha(eid)
     ok, motivo = habilitada(e, etapas, solicita, "microscopia")
@@ -708,7 +743,7 @@ def guardar_micro(eid):
 
 
 @app.route("/estudio/<int:eid>/ihq", methods=["POST"])
-@requiere_login
+@requiere_permiso("micro")
 def guardar_ihq(eid):
     e = ficha(eid)[0]
     guardar_seccion("ihq", eid, {"marcadores": request.form.get("marcadores", "").strip(),
@@ -721,7 +756,7 @@ def guardar_ihq(eid):
 
 
 @app.route("/estudio/<int:eid>/listo/<etapa>", methods=["POST"])
-@requiere_login
+@requiere_permiso("etapas")
 def marcar_listo(eid, etapa):
     yo = usuario_actual()
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
@@ -732,7 +767,7 @@ def marcar_listo(eid, etapa):
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     if not prox or prox[0] != etapa:
         flash("Esa etapa no es la próxima pendiente de este estudio.", "error")
-    elif ESTRICTO and not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
+    elif not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):     # cada etapa la marca su sector
         flash(f"La etapa {prox[1]} la marca el sector {SECTORES[prox[2]]}.", "error")
     elif (falta := tipo.requisito(etapa, macro, micro, ihq)):
         flash(falta, "error")
@@ -744,15 +779,15 @@ def marcar_listo(eid, etapa):
 
 
 @app.route("/estudio/<int:eid>/deshacer", methods=["POST"])
-@requiere_login
+@requiere_permiso("etapas")
 def deshacer(eid):
     yo = usuario_actual()
     e = ficha(eid)[0]
     ultima = db.uno("SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (eid,))
     if not ultima:
         flash("No hay etapas para deshacer.", "error")
-    elif ultima["usuario_id"] != yo["id"] and not yo["admin"]:
-        flash("Solo quien la registró o un administrador puede deshacer la etapa.", "error")
+    elif ultima["usuario_id"] != yo["id"] and not puede("etapas_deshacer"):
+        flash("Solo quien la registró o alguien con permiso puede deshacer la etapa.", "error")
     else:
         db.ex("DELETE FROM etapas WHERE id=?", (ultima["id"],))
         db.auditar(yo["id"], e["protocolo_id"], "deshacer", NOMBRE_ETAPA.get(ultima["etapa"], ultima["etapa"]), eid)
@@ -761,7 +796,7 @@ def deshacer(eid):
 
 
 @app.route("/estudio/<int:eid>/anular", methods=["POST"])
-@requiere_login
+@requiere_permiso("estudio_anular")
 def anular(eid):
     """Se anula solo ese estudio; el protocolo y sus otros estudios siguen."""
     e = ficha(eid)[0]
@@ -781,7 +816,7 @@ def anular(eid):
 
 
 @app.route("/protocolo/<int:pid>/sistema", methods=["POST"])
-@requiere_login
+@requiere_permiso("sistema")
 def cargado_sistema(pid):
     protocolo_o_404(pid)
     cargado = 1 if request.form.get("cargado_sistema") == "1" else 0
@@ -808,7 +843,7 @@ def lotes():
 
 
 @app.route("/lotes/nuevo", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_armar")
 def nuevo_lote():
     tipo_lote = request.form.get("tipo_lote", "")
     if tipo_lote not in tipos_lote():
@@ -842,7 +877,7 @@ def lote(lote_id):
 
 
 @app.route("/lotes/<int:lote_id>/agregar", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_armar")
 def lote_agregar(lote_id):
     yo = usuario_actual()
     l = lote_o_404(lote_id)
@@ -877,7 +912,7 @@ def lote_agregar(lote_id):
 
 
 @app.route("/lotes/<int:lote_id>/quitar/<int:eid>", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_armar")
 def lote_quitar(lote_id, eid):
     l = lote_o_404(lote_id)
     if l["cerrado"]:
@@ -889,17 +924,14 @@ def lote_quitar(lote_id, eid):
 
 
 @app.route("/lotes/<int:lote_id>/cerrar", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_cerrar")
 def lote_cerrar(lote_id):
     yo = usuario_actual()
     l = lote_o_404(lote_id)
     if l["cerrado"]:
-        if not yo["admin"]:
-            flash("Solo un administrador puede reabrir un lote.", "error")
-        else:
-            db.ex("UPDATE lotes SET cerrado=0, cerrado_por=NULL, cerrado_en=NULL WHERE id=?", (lote_id,))
-            db.auditar(yo["id"], None, "reabrir_lote", l["codigo"])
-            flash(f"Lote {l['codigo']} reabierto.", "ok")
+        db.ex("UPDATE lotes SET cerrado=0, cerrado_por=NULL, cerrado_en=NULL WHERE id=?", (lote_id,))
+        db.auditar(yo["id"], None, "reabrir_lote", l["codigo"])
+        flash(f"Lote {l['codigo']} reabierto.", "ok")
     else:
         db.ex("UPDATE lotes SET cerrado=1, cerrado_por=?, cerrado_en=? WHERE id=?", (yo["id"], db.ahora(), lote_id))
         db.auditar(yo["id"], None, "cerrar_lote", l["codigo"])
@@ -908,7 +940,7 @@ def lote_cerrar(lote_id):
 
 
 @app.route("/lotes/<int:lote_id>/observaciones", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_armar")
 def lote_observaciones(lote_id):
     lote_o_404(lote_id)
     db.ex("UPDATE lotes SET observaciones=? WHERE id=?", (request.form.get("observaciones", "").strip(), lote_id))
@@ -917,7 +949,7 @@ def lote_observaciones(lote_id):
 
 
 @app.route("/lotes/<int:lote_id>/eliminar", methods=["POST"])
-@requiere_login
+@requiere_permiso("lotes_cerrar")
 def lote_eliminar(lote_id):
     l = lote_o_404(lote_id)
     if db.uno("SELECT 1 FROM estudios WHERE lote_id=?", (lote_id,)):
@@ -958,7 +990,9 @@ def api_medicos():
 @app.route("/usuarios")
 @requiere_admin
 def usuarios():
-    return render_template("usuarios.html", usuarios=db.q("SELECT * FROM usuarios ORDER BY activo DESC, iniciales"))
+    filas = db.q("""SELECT u.*, p.nombre AS perfil FROM usuarios u LEFT JOIN perfiles p ON p.id=u.perfil_id
+                    ORDER BY u.activo DESC, u.iniciales""")
+    return render_template("usuarios.html", usuarios=filas)
 
 
 @app.route("/usuarios/nuevo", methods=["GET", "POST"])
@@ -970,32 +1004,97 @@ def usuario(uid=None):
     if request.method == "POST":
         ini = request.form["iniciales"].strip().upper()
         sectores = ",".join(s for s in SECTORES if request.form.get("s_" + s))
+        perfil_id = int(request.form["perfil_id"]) if request.form.get("perfil_id", "").isdigit() else None
+        ajuste = {k: request.form.get("p_" + k, "") for k in permisos.PERMISOS}
         vals = (ini, request.form.get("nombre", "").strip() or ini, sectores,
-                1 if request.form.get("admin") else 0, 1 if request.form.get("activo") else 0)
+                1 if request.form.get("admin") else 0, 1 if request.form.get("activo") else 0, perfil_id,
+                permisos.texto({k for k, v in ajuste.items() if v == "mas"}),
+                permisos.texto({k for k, v in ajuste.items() if v == "menos"}))
         dup = db.uno("SELECT id FROM usuarios WHERE iniciales=? AND id<>?", (ini, uid or 0))
         clave = request.form.get("clave", "")
         if not ini or dup:
             flash("Iniciales vacías o ya usadas por otra persona.", "error")
         elif clave and len(clave) < 8:
             flash("La clave temporal debe tener al menos 8 caracteres.", "error")
+        elif perfil_id and not db.uno("SELECT 1 FROM perfiles WHERE id=?", (perfil_id,)):
+            flash("El perfil elegido no existe.", "error")
         elif uid == yo["id"] and not (vals[3] and vals[4]):
             flash("No podés quitarte el rol de administrador ni desactivarte a vos mismo.", "error")
         else:
             if u:
-                db.ex("UPDATE usuarios SET iniciales=?, nombre=?, sectores=?, admin=?, activo=? WHERE id=?", vals + (uid,))
+                db.ex("UPDATE usuarios SET iniciales=?, nombre=?, sectores=?, admin=?, activo=?, perfil_id=?, permisos_mas=?, "
+                      "permisos_menos=? WHERE id=?", vals + (uid,))
             else:
-                uid = db.ex("INSERT INTO usuarios (iniciales, nombre, sectores, admin, activo) VALUES (?,?,?,?,?)", vals)
+                uid = db.ex("INSERT INTO usuarios (iniciales, nombre, sectores, admin, activo, perfil_id, permisos_mas, "
+                            "permisos_menos) VALUES (?,?,?,?,?,?,?,?)", vals)
             if clave:
                 db.ex("UPDATE usuarios SET clave_hash=?, debe_cambiar_clave=1 WHERE id=?", (generate_password_hash(clave), uid))
-            db.auditar(yo["id"], None, "usuario", f"{ini}{' (clave temporal)' if clave else ''}")
+            detalle = (f"perfil {db.uno('SELECT nombre FROM perfiles WHERE id=?', (perfil_id,))['nombre'] if perfil_id else '—'}"
+                       + (f", +{vals[6]}" if vals[6] else "") + (f", -{vals[7]}" if vals[7] else ""))
+            db.auditar(yo["id"], None, "usuario", f"{ini}: {detalle}{' (clave temporal)' if clave else ''}")
             flash(f"Usuario {ini} guardado." + (" Al ingresar va a tener que cambiar la clave." if clave else ""), "ok")
             return redirect(url_for("usuarios"))
-    return render_template("usuario.html", u=u)
+        u = {**(dict(u) if u else {}), "iniciales": ini, "nombre": vals[1], "sectores": sectores, "admin": vals[3],
+             "activo": vals[4], "perfil_id": perfil_id, "permisos_mas": vals[6], "permisos_menos": vals[7],
+             "clave_hash": u["clave_hash"] if u else None}
+    lista_perfiles = perfiles_con_permisos()
+    return render_template("usuario.html", u=u, perfiles=lista_perfiles, PERMISOS=permisos.PERMISOS,
+                           GRUPOS=permisos.GRUPOS, lista_permisos=permisos.lista,
+                           mapa_perfiles={p["id"]: sorted(p["set"]) for p in lista_perfiles})
+
+
+# ---------------------------------------------------------------- perfiles y permisos
+def perfiles_con_permisos():
+    return [{**dict(f), "set": permisos.lista(f["permisos"])} for f in db.q(
+        """SELECT p.*, (SELECT COUNT(*) FROM usuarios u WHERE u.perfil_id=p.id AND u.activo=1) AS usuarios
+           FROM perfiles p ORDER BY p.nombre""")]
+
+
+@app.route("/perfiles")
+@requiere_admin
+def perfiles():
+    return render_template("perfiles.html", perfiles=perfiles_con_permisos(), PERMISOS=permisos.PERMISOS,
+                           GRUPOS=permisos.GRUPOS)
+
+
+@app.route("/perfiles/nuevo", methods=["GET", "POST"])
+@app.route("/perfiles/<int:pid>", methods=["GET", "POST"])
+@requiere_admin
+def perfil(pid=None):
+    yo = usuario_actual()
+    p = db.uno("SELECT * FROM perfiles WHERE id=?", (pid,)) if pid else None
+    if pid and not p:
+        abort(404)
+    if request.method == "POST":
+        if request.form.get("eliminar"):
+            if db.uno("SELECT 1 FROM usuarios WHERE perfil_id=?", (pid,)):
+                flash("No se puede eliminar: hay usuarios con este perfil. Cambiales el perfil primero.", "error")
+                return redirect(url_for("perfil", pid=pid))
+            db.ex("DELETE FROM perfiles WHERE id=?", (pid,))
+            db.auditar(yo["id"], None, "eliminar_perfil", p["nombre"])
+            flash(f"Perfil {p['nombre']} eliminado.", "ok")
+            return redirect(url_for("perfiles"))
+        nombre = request.form.get("nombre", "").strip()
+        elegidos = permisos.texto({k for k in permisos.PERMISOS if request.form.get("p_" + k)})
+        if not nombre or db.uno("SELECT 1 FROM perfiles WHERE nombre=? AND id<>?", (nombre, pid or 0)):
+            flash("El nombre está vacío o ya lo usa otro perfil.", "error")
+        else:
+            if p:
+                db.ex("UPDATE perfiles SET nombre=?, permisos=? WHERE id=?", (nombre, elegidos, pid))
+            else:
+                pid = db.ex("INSERT INTO perfiles (nombre, permisos) VALUES (?,?)", (nombre, elegidos))
+            db.auditar(yo["id"], None, "perfil", f"{nombre}: {elegidos or 'sin permisos'}")
+            flash(f"Perfil {nombre} guardado.", "ok")
+            return redirect(url_for("perfiles"))
+        p = {**(dict(p) if p else {}), "nombre": nombre, "permisos": elegidos}
+    usuarios_del = db.q("SELECT iniciales, nombre, activo FROM usuarios WHERE perfil_id=? ORDER BY iniciales", (pid,)) if pid else []
+    return render_template("perfil.html", p=p, marcados=permisos.lista(p["permisos"] if p else ""), usuarios=usuarios_del,
+                           PERMISOS=permisos.PERMISOS, GRUPOS=permisos.GRUPOS)
 
 
 # ---------------------------------------------------------------- feriados (para las fechas límite)
 @app.route("/feriados", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso("feriados")
 def feriados():
     yo = usuario_actual()
     if request.method == "POST":
@@ -1127,7 +1226,7 @@ def datos_etiquetas():
 
 
 @app.route("/etiquetas")
-@requiere_login
+@requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
 def etiquetas():
     """Generador de etiquetas de contingencia. Pantalla aparte, sin la barra del sistema, para que imprima con
     las medidas exactas de las etiquetas. Con ?lote=<id> abre la pestaña de laboratorio con ese lote elegido."""
@@ -1137,6 +1236,9 @@ def etiquetas():
         if not lote:
             flash("El lote no existe.", "error")
             return redirect(url_for("lotes"))
+        if not puede("etiquetas_lab"):
+            flash("No tenés permiso para las etiquetas de laboratorio.", "error")
+            return redirect(url_for("lote", lote_id=lote["id"]))
         if lote["tipo_lote"] in tipos_lote("BP"):
             preset = {"tab": "lab", "loteId": lote["id"]}
         elif lote["tipo_lote"] in tipos_lote("PAP"):
@@ -1148,13 +1250,13 @@ def etiquetas():
 
 
 @app.route("/api/etiquetas/estado")
-@requiere_login
+@requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
 def api_etiquetas_estado():
     return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos()})
 
 
 @app.route("/api/etiquetas/confirmar", methods=["POST"])
-@requiere_login
+@requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
 def api_etiquetas_confirmar():
     """Valida y registra un lote de etiquetas. El servidor decide si el rango está libre (es lo que evita que dos PCs
     impriman los mismos números) y, en Recepción, crea los protocolos a completar."""
@@ -1168,6 +1270,8 @@ def api_etiquetas_confirmar():
 
     if tipo not in TIPOS_ETIQUETA:
         return error("Tipo de etiqueta inválido.")
+    if not puede("etiquetas_recepcion" if tipo == "bp" else "etiquetas_lab"):
+        return error(f"No tenés permiso para etiquetas de {TIPOS_ETIQUETA[tipo]}.", 403)
     firmantes = {x["iniciales"] for x in personal("firmante")}
     citos = {x["iniciales"] for x in personal("citotecnico")}
     desde = hasta = None
@@ -1253,7 +1357,7 @@ def api_etiquetas_confirmar():
 
 # ---------------------------------------------------------------- protocolos a completar
 @app.route("/completar")
-@requiere_login
+@requiere_permiso("protocolo_crear")
 def completar():
     """Protocolos generados desde Recepción a los que les faltan los datos. Cada uno se completa con el formulario
     del protocolo (paciente + estudios); con apellido, nombre y la cantidad de cada estudio deja de ser borrador."""
@@ -1271,7 +1375,7 @@ def completar():
 
 # ---------------------------------------------------------------- exportar
 @app.route("/exportar")
-@requiere_login
+@requiere_permiso("exportar")
 def exportar():
     """Excel con una fila por estudio (con los datos de su protocolo) y sus etapas, para volver a cargarlos en el sistema."""
     import openpyxl

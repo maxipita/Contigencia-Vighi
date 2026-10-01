@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}{{ e.numero }} · {{ etiqueta }}{% endblock %}
 {% macro listo_toggle(etapa) %}
-  {% if prox and prox[0] == etapa %}
+  {% if prox and prox[0] == etapa and puede('etapas') and (yo.admin or prox[2] in mis_sectores) %}
     <label style="display:inline-flex;gap:6px;align-items:center;margin:0">
       <input type="checkbox" name="y_listo" value="1"> y marcar <b>{{ NOMBRE_ETAPA[etapa] }}</b> como lista ({{ yo.iniciales }})
     </label>
@@ -33,7 +33,7 @@
   <div class="traza-enc">
     <div><b>Fecha de recolección:</b>
       {% if traza_enc.recoleccion %}{{ traza_enc.recoleccion | larga }}{% else %}<span class="lt">sin cargar (se usa la fecha de ingreso)</span>{% endif %}
-      <a class="mini" href="{{ url_for('protocolo_editar', pid=e.protocolo_id) }}">✎ modificar</a></div>
+      {% if puede('protocolo_editar') %}<a class="mini" href="{{ url_for('protocolo_editar', pid=e.protocolo_id) }}">✎ modificar</a>{% endif %}</div>
     <div><b>Fecha estimada informe:</b> <i>{{ traza_enc.estimada | larga }}</i> <i class="muted">{{ traza_enc.estimada_habiles }} días hábiles</i></div>
     <div><b>Fecha informe:</b>
       {% if traza_enc.informe %}{{ traza_enc.informe | larga }} <span class="muted">{{ traza_enc.informe_habiles }} días hábiles</span>{% else %}<span class="muted">—</span>{% endif %}</div>
@@ -52,15 +52,17 @@
       <td>{% if f.estado == 'OT' %}<span class="ot">◷ OT</span>{% elif f.estado == 'LT' %}<span class="lt">◷ LT {{ f.atraso }}</span>{% endif %}</td>
       <td class="muted">{{ f.demora }}</td>
       <td>{% if f.proxima and not e.anulado %}
+        {% if puede('etapas') and (yo.admin or prox[2] in mis_sectores) %}
         <form method="post" action="{{ url_for('marcar_listo', eid=e.id, etapa=f.clave) }}">
           <input type="hidden" name="_csrf" value="{{ csrf }}">
           <button class="btn listo" style="padding:4px 10px">✔ Completar ({{ yo.iniciales }})</button>
-        </form>{% endif %}</td>
+        </form>
+        {% else %}<span class="muted">La marca {{ SECTORES[prox[2]] }}</span>{% endif %}{% endif %}</td>
     </tr>
     {% endfor %}
   </table>
   </div>
-  {% if ultima and (ultima.usuario_id == yo.id or yo.admin) %}
+  {% if ultima and puede('etapas') and (ultima.usuario_id == yo.id or puede('etapas_deshacer')) %}
   <form method="post" action="{{ url_for('deshacer', eid=e.id) }}" class="acciones" data-confirmar="¿Deshacer la última etapa registrada ({{ NOMBRE_ETAPA[ultima.etapa] }})?">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <button class="btn sec">Deshacer última etapa ({{ NOMBRE_ETAPA[ultima.etapa] }})</button>
@@ -124,11 +126,14 @@
     <h2>IHQ</h2>
     <form method="post" action="{{ url_for('guardar_ihq', eid=e.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
+      {% if not puede('micro') %}<div class="aviso">🔒 No tenés permiso para cargar esta sección.</div>{% endif %}
+      <fieldset class="seccion" {{ 'disabled' if not puede('micro') }}>
       <div class="grilla">
         <div class="ancho"><label>Marcadores / anticuerpos</label><textarea name="marcadores" style="min-height:60px">{{ ihq.marcadores if ihq else '' }}</textarea></div>
         <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq else '' }}</textarea></div>
       </div>
       <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('interp_ihq') }}</div>
+      </fieldset>
     </form>
   </div>
   {% endif %}
@@ -145,7 +150,7 @@
       {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
     {% endfor %}
     <div class="acciones">
-      <a class="btn sec" href="{{ url_for('estudio_editar', eid=e.id) }}">Editar estudio</a>
+      {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudio_editar', eid=e.id) }}">Editar estudio</a>{% endif %}
       <a class="btn sec" href="{{ url_for('protocolo', pid=e.protocolo_id) }}">Ver protocolo</a>
     </div>
   </div>
@@ -155,11 +160,13 @@
     <div class="historial">
       {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
     </div>
+    {% if puede('estudio_anular') %}
     <form method="post" action="{{ url_for('anular', eid=e.id) }}" class="acciones" data-confirmar="{{ '¿Reactivar este estudio?' if e.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       {% if not e.anulado %}<input name="motivo" placeholder="Motivo de anulación" style="flex:1">{% endif %}
       <button class="btn peligro">{{ 'Reactivar estudio' if e.anulado else 'Anular estudio' }}</button>
     </form>
+    {% endif %}
   </div>
 </div>
 </div>

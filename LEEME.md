@@ -48,7 +48,6 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 | `CONTINGENCIA_PUERTO` | Puerto web | `8000` |
 | `CONTINGENCIA_DB` | Ruta de la base | `data/contingencia.db` |
 | `CONTINGENCIA_RESPALDO` | Carpeta extra de respaldos | — |
-| `CONTINGENCIA_ESTRICTO` | `1` = cada etapa solo la marca su sector | `0` |
 
 ## Actualizar templates / catálogo / usuarios
 
