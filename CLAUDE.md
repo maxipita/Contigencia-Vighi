@@ -64,8 +64,9 @@ py app.py                                 # servidor real en :8000 (equivale a "
      tantas como su `cantidad` ("1/2" de PAP = 1). No consumen numeración. Al confirmar se marca `lab_etiquetado_en`. Con `/etiquetas?lote=<id>` (botón
      en la página del lote) se abre la pestaña con ese lote elegido.
   Reglas generales: el **servidor manda** (numeración, validaciones, historial; `POST /api/etiquetas/confirmar`); Imprimir
-  solo se habilita tras confirmar; la página es **independiente** de `base.html` a propósito (su CSS y su barra cambiarían
-  las medidas de impresión: no tocar los px de las etiquetas); la fuente Finlandica está en `static/fonts/` para imprimir sin
+  solo se habilita tras confirmar; la página usa `base.html` como el resto, pero **la vista previa va en un shadow DOM** (`#etiquetas`) con su propio CSS
+  (`#css-etiquetas`): así el CSS del sistema no altera las medidas de impresión. No tocar los px de las etiquetas ni sacar la vista
+  previa del shadow DOM; la fuente Finlandica está en `static/fonts/` para imprimir sin
   internet. Las listas salen del sistema: citotécnicos y patólogos de `usuarios` (sectores `citotecnico` / `firmante`), tipos
   de lote de `tipos_lote_fijos()` + `LOTES_ETIQUETA_EXTRA`; los códigos de muestra PAP (`MUESTRAS_PAP`) son fijos.
 

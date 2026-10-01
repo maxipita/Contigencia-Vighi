@@ -1,28 +1,141 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Etiquetas · CAP Vighi</title>
+{% extends "base.html" %}
+{% block titulo %}Etiquetas{% endblock %}
+{% block head %}
 <style>
-    [hidden] { display: none !important; }
-    /* Fuente guardada en el proyecto: las etiquetas se imprimen igual sin internet */
-    @font-face {
-        font-family: Finlandica;
-        src: url('{{ url_for("static", filename="fonts/Finlandica-latin.woff2") }}') format('woff2');
-        font-weight: 400 700;
-        font-display: swap;
-    }
-    /* Inter solo para el panel de control (no se imprime); las etiquetas siguen usando Finlandica */
-    @font-face {
-        font-family: "Inter";
-        src: url('{{ url_for("static", filename="fonts/Inter-latin.woff2") }}') format('woff2');
-        font-weight: 300 800;
-        font-display: swap;
-    }
-    :root { color-scheme: light; }
-    body { margin: 0; background: #fff; color: #000; }
+  /* Fuente de las etiquetas impresas (guardada en el proyecto: se imprime igual sin internet) */
+  @font-face {
+    font-family: Finlandica;
+    src: url('{{ url_for("static", filename="fonts/Finlandica-latin.woff2") }}') format('woff2');
+    font-weight: 400 700;
+    font-display: swap;
+  }
+  /* pasos del flujo */
+  .pasos-etq { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 16px; }
+  .pasos-etq .paso-et { display: inline-flex; align-items: center; gap: 8px; }
+  .pasos-etq label, .pasos-etq a.paso-et { margin: 0; cursor: pointer; text-decoration: none; }
+  .pasos-etq input { display: none; }
+  .pasos-etq .pill { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 16px; border-radius: 999px; background: #fff;
+                     border: 1px solid var(--borde); color: var(--pizarra); font-size: 13px; font-weight: 600; transition: border-color .15s, color .15s, background .15s; }
+  .pasos-etq .pill em { font: 700 10px var(--mono); font-style: normal; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+                        background: var(--superficie); color: var(--primario); }
+  .pasos-etq .pill:hover { border-color: var(--acento); color: var(--primario); }
+  .pasos-etq input:checked + .pill { background: var(--primario); border-color: var(--primario); color: #fff; box-shadow: 0 2px 10px rgba(67, 24, 102, .25); }
+  .pasos-etq input:checked + .pill em { background: var(--acento); color: #fff; }
+  .pasos-etq input:disabled + .pill { opacity: .55; cursor: not-allowed; }
+  .pasos-etq input:checked:disabled + .pill { opacity: 1; cursor: default; }
+  .pasos-etq .flecha { color: var(--borde); font-weight: 700; }
+  /* datos de las etiquetas */
+  .controles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 16px; align-items: end; }
+  .nota { font-size: 12px; color: var(--pizarra); }
+  .seleccion { margin-top: 4px; }
+  .sel-cab { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 10px; }
+  .sel-cab label { margin: 0; min-width: 200px; }
+  .sel-tabla { max-height: 280px; overflow: auto; border-radius: var(--radio); }
+  .sel-tabla table { box-shadow: none; }
+  .sel-tabla th { position: sticky; top: 0; z-index: 1; }
+  .sel-tabla td, .sel-tabla th { white-space: nowrap; padding-top: 7px; padding-bottom: 7px; }
+  .sel-tabla tr.hecho td { color: var(--pizarra); }
+  .sel-tabla input[type=checkbox] { width: 16px; height: 16px; }
+  .sel-vacio { padding: 14px 16px; font-size: 13px; color: var(--pizarra); background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); }
+  /* aviso de estado del lote de etiquetas */
+  .lote-info { margin-bottom: 16px; padding: 11px 16px; border: 1px solid var(--borde); border-left: 3px solid var(--acento); border-radius: 10px; background: #fff;
+               font-size: 13px; line-height: 1.6; box-shadow: var(--sombra); }
+  .lote-info.ok { background: var(--ok-fondo); border-color: #bbf7d0; border-left-color: var(--ok); color: #14532d; }
+  .lote-info.err { background: var(--error-fondo); border-color: #fecaca; border-left-color: var(--error); color: #991b1b; }
+  .lote-info.aviso { background: var(--aviso-fondo); border-color: #fde68a; border-left-color: #d97706; color: var(--aviso); }
+  .lote-info a { color: inherit; font-weight: 600; }
+  details.historial-etq { padding: 0; }
+  details.historial-etq > summary { cursor: pointer; padding: 12px 16px; font: 700 10px var(--fuente); letter-spacing: .1em; text-transform: uppercase; color: var(--pizarra); }
+  details.historial-etq[open] > summary { border-bottom: 1px solid var(--borde); background: var(--superficie); border-radius: var(--radio) var(--radio) 0 0; }
+  details.historial-etq > div { padding: 12px 16px 16px; overflow-x: auto; }
+  /* vista previa: fondo blanco y sin adornos al imprimir */
+  #vistaPrevia { padding: 0; overflow: hidden; }
+  #vistaPrevia h2 { margin: 0; padding: 10px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde); font-size: 10px; letter-spacing: .1em; }
+  #etiquetas { min-height: 80px; padding: 8px 12px 16px; }
+  @media print {
+    #vistaPrevia { border: 0; box-shadow: none; border-radius: 0; overflow: visible; }
+    #etiquetas { padding: 0; min-height: 0; }
+  }
+</style>
+{% endblock %}
+{% block contenido %}
+<div class="no-imprimir">
+  <div class="eyebrow">Recepción y laboratorio</div>
+  <h1>Etiquetas</h1>
+  <p class="muted">Primero se generan las etiquetas de Recepción (crean los protocolos), después se cargan los pacientes en
+    <a href="{{ url_for('completar') }}">Por completar</a> y por último se imprimen las de laboratorio de cada protocolo.</p>
 
+  {# cada paso solo con su permiso (el servidor también lo controla al confirmar) #}
+  {% set rec, lab = puede('etiquetas_recepcion'), puede('etiquetas_lab') %}
+  {% macro sin(ok) %}{{ ' data-sin-permiso disabled' if not ok }}{% endmacro %}
+  <div class="pasos-etq">
+    <label class="paso-et"{{ ' style="display:none"' | safe if not rec }}><input type="radio" name="tipo" value="bp"{{ ' checked' if rec }}{{ sin(rec) }}><span class="pill"><em>1</em>Recepción</span></label>
+    {% if rec and lab %}<span class="flecha">›</span>{% endif %}
+    <label class="paso-et"{{ ' style="display:none"' | safe if not lab }}><input type="radio" name="tipo" value="pap"{{ ' checked' if not rec and lab }}{{ sin(lab) }}><span class="pill"><em>2</em>PAP-Laboratorio</span></label>
+    <label class="paso-et"{{ ' style="display:none"' | safe if not lab }}><input type="radio" name="tipo" value="lab"{{ sin(lab) }}><span class="pill"><em>2</em>BP-Laboratorio</span></label>
+  </div>
+
+  <div class="tarjeta" id="panelEtq">
+    <h2>Datos de las etiquetas</h2>
+    <div class="controles">
+      <!-- Recepción: genera los números y los protocolos a completar -->
+      <label data-tipos="bp">Cantidad de protocolos
+        <input type="number" id="cantidad" min="1" max="1000" value="10">
+      </label>
+      <label data-tipos="bp">Primer número (C…)
+        <input type="number" id="inicio" min="1" max="999999" value="1">
+      </label>
+      <label data-tipos="bp">Tipo de lote
+        <select id="lote"></select>
+      </label>
+      <label data-tipos="bp" data-solo-paps>Citotécnico
+        <select id="cito"></select>
+      </label>
+      <label data-tipos="bp">Fecha de recolección
+        <input type="date" id="fecha">
+      </label>
+      <!-- Laboratorio: protocolos ya completos -->
+      <label data-tipos="pap">Tipo de muestra para todas
+        <select id="lotePap"></select>
+      </label>
+      <label data-tipos="lab">Patólogo para todas (opcional)
+        <select id="pato"></select>
+      </label>
+    </div>
+    <div class="seleccion" data-tipos="pap lab">
+      <div class="sel-cab">
+        <label>Lote
+          <select id="origen"></select>
+        </label>
+        <button type="button" class="btn sec mini" id="selTodos">Marcar todos</button>
+        <button type="button" class="btn sec mini" id="selNinguno">Ninguno</button>
+        <span class="nota" id="selResumen"></span>
+      </div>
+      <div class="sel-tabla" id="selTabla"></div>
+    </div>
+    <div class="acciones">
+      <button type="button" class="btn" id="confirmar">Confirmar etiquetas</button>
+      <button type="button" class="btn" id="imprimir" disabled>Imprimir</button>
+      <button type="button" class="btn sec oculto" id="nueva">Nueva generación</button>
+      <span class="nota" id="nota"></span>
+    </div>
+  </div>
+
+  <div class="lote-info" id="loteInfo"></div>
+
+  <details class="tarjeta historial-etq" id="historial">
+    <summary>Historial de lotes de etiquetas (<span id="histCant">0</span>)</summary>
+    <div id="histTabla"></div>
+  </details>
+</div>
+
+<div class="tarjeta" id="vistaPrevia">
+  <h2 class="no-imprimir">Vista previa</h2>
+  <div id="etiquetas"></div>
+</div>
+
+<!-- CSS de las etiquetas: se inyecta en el shadow DOM de la vista previa (no lo toca el CSS del sistema) -->
+<script type="text/plain" id="css-etiquetas">
     /* ===== Recepción: estilos idénticos a etiqueta.css del sistema ===== */
     .table-etiqueta {
         color: #000 !important;
@@ -66,142 +179,7 @@
         font: inherit; font-size: 12px; font-weight: 500; height: 16px; padding: 0; margin: 0;
         border: 1px solid #c9c2d4; border-radius: 3px; background: #fff; color: #000; vertical-align: top;
     }
-
-    /* ===== Panel de control (no se imprime) ===== */
-    .panel {
-        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-        background: #f8f5fb;
-        border-bottom: 1px solid #e3e8ee;
-        padding: 14px 20px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 16px;
-        align-items: flex-end;
-    }
-    .panel label { display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #333; gap: 4px; }
-    .panel input, .panel select {
-        font: inherit; font-size: 15px; padding: 7px 9px; border: 1px solid #cdd5df;
-        border-radius: 8px; background: #fff; min-width: 150px; box-sizing: border-box; height: 36px;
-    }
-    .panel input[type=number] { width: 100px; min-width: 0; }
-    .panel button {
-        font: inherit; font-size: 15px; font-weight: 600; padding: 8px 18px; border: 0;
-        border-radius: 999px; background: #431866; color: #fff; cursor: pointer; height: 36px;
-    }
-    .panel button:hover { background: #2f0f49; }
-    .panel .nota { font-size: 12px; color: #666; align-self: center; }
-    .panel .volver { width: 100%; font-size: 13px; font-weight: 600; color: #431866; text-decoration: none; }
-    .panel .volver:hover { text-decoration: underline; }
-    .panel .tipos { display: flex; border: 1px solid #431866; border-radius: 6px; overflow: hidden; height: 36px; }
-    .panel .tipos label { flex-direction: row; align-items: center; margin: 0; }
-    .panel .tipos input { display: none; }
-    .panel .tipos span {
-        display: block; padding: 0 14px; line-height: 34px; font-size: 14px; font-weight: 600;
-        color: #431866; cursor: pointer; background: #fff;
-    }
-    .panel .tipos input:checked + span { background: #431866; color: #fff; }
-    .panel .tipos-wrap { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; color: #333; width: 100%; }
-    .oculto { display: none !important; }
-
-    .panel button:disabled { background: #b9b2c4; cursor: not-allowed; }
-    .panel button.secundario { background: #fff; color: #431866; border: 1px solid #431866; }
-    .panel button.secundario:hover { background: #f1e9f9; }
-    .panel button.mini { font-size: 12px; padding: 3px 10px; height: auto; }
-    .lote-info { width: 100%; box-sizing: border-box; font-size: 13px; line-height: 1.5; padding: 9px 12px;
-        border-radius: 6px; background: #fff; border: 1px solid #e3e8ee; color: #333; }
-    .lote-info.ok { background: #e9f6ec; border-color: #9fd3ac; color: #1d4a2a; }
-    .lote-info.err { background: #fdecec; border-color: #e5a3a3; color: #7a1f1f; }
-    .lote-info.aviso { background: #fff6e0; border-color: #e6c877; color: #6b4e00; }
-    .lote-info a { color: inherit; font-weight: 600; }
-    .historial { width: 100%; font-size: 13px; color: #333; }
-    .historial summary { cursor: pointer; font-weight: 600; color: #431866; }
-    .historial table { border-collapse: collapse; margin-top: 8px; background: #fff; }
-    .historial th, .historial td { border: 1px solid #e3e8ee; padding: 4px 10px; text-align: left; }
-    .historial th { background: #f1e9f9; }
-
-    /* selección de protocolos para las etiquetas de laboratorio */
-    .seleccion { width: 100%; }
-    .sel-cab { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
-    .sel-tabla { max-height: 260px; overflow: auto; background: #fff; border: 1px solid #e3e8ee; border-radius: 6px; }
-    .sel-tabla table { border-collapse: collapse; width: 100%; font-size: 13px; }
-    .sel-tabla th, .sel-tabla td { padding: 4px 10px; border-bottom: 1px solid #f1e9f9; text-align: left; white-space: nowrap; }
-    .sel-tabla th { background: #f1e9f9; position: sticky; top: 0; }
-    .sel-tabla tr.hecho td { color: #888; }
-    .panel .sel-tabla input[type=checkbox] { width: auto; min-width: 0; height: auto; }
-    .sel-vacio { padding: 10px 12px; font-size: 13px; color: #666; }
-
-    .panel input:focus, .panel select:focus { outline: none; border-color: #a657ed; box-shadow: 0 0 0 3px rgba(166, 87, 237, .15); }
-    .panel { border-top: 2px solid #a657ed; }
-
-    @media print {
-        .panel { display: none !important; }
-    }
-</style>
-</head>
-<body>
-
-<div class="panel">
-    <a class="volver" href="{{ url_for('tablero') }}">← Volver al sistema</a>
-    <div class="tipos-wrap">Tipo de etiqueta
-        <div class="tipos">
-            {# cada pestaña solo con su permiso (el servidor también lo controla al confirmar) #}
-            {% set rec, lab = puede('etiquetas_recepcion'), puede('etiquetas_lab') %}
-            <label {{ 'hidden' if not rec }}><input type="radio" name="tipo" value="bp" {{ 'checked' if rec else 'disabled' }}><span>Recepción</span></label>
-            <label {{ 'hidden' if not lab }}><input type="radio" name="tipo" value="pap" {{ 'checked' if not rec else '' }} {{ 'disabled' if not lab }}><span>PAP-Laboratorio</span></label>
-            <label {{ 'hidden' if not lab }}><input type="radio" name="tipo" value="lab" {{ 'disabled' if not lab }}><span>BP-Laboratorio</span></label>
-        </div>
-    </div>
-
-    <!-- Recepción: genera los números y los protocolos a completar -->
-    <label data-tipos="bp">Cantidad de protocolos
-        <input type="number" id="cantidad" min="1" max="1000" value="10">
-    </label>
-    <label data-tipos="bp">Primer número (C…)
-        <input type="number" id="inicio" min="1" max="999999" value="1">
-    </label>
-    <label data-tipos="bp">Tipo de lote
-        <select id="lote"></select>
-    </label>
-    <label data-tipos="bp" data-solo-paps>Citotécnico
-        <select id="cito"></select>
-    </label>
-    <label data-tipos="bp">Fecha de recolección
-        <input type="date" id="fecha">
-    </label>
-
-    <!-- Laboratorio: protocolos ya completos -->
-    <label data-tipos="pap">Tipo de muestra para todas
-        <select id="lotePap"></select>
-    </label>
-    <label data-tipos="lab">Patólogo para todas (opcional)
-        <select id="pato"></select>
-    </label>
-    <div class="seleccion" data-tipos="pap lab">
-        <div class="sel-cab">
-            <label>Lote
-                <select id="origen"></select>
-            </label>
-            <button type="button" class="secundario mini" id="selTodos">Marcar todos</button>
-            <button type="button" class="secundario mini" id="selNinguno">Ninguno</button>
-            <span class="nota" id="selResumen"></span>
-        </div>
-        <div class="sel-tabla" id="selTabla"></div>
-    </div>
-
-    <button type="button" id="confirmar">Confirmar etiquetas</button>
-    <button type="button" id="imprimir" disabled>Imprimir</button>
-    <button type="button" id="nueva" class="secundario oculto">Nueva generación</button>
-    <span class="nota" id="nota"></span>
-    <span class="nota" style="margin-left:auto;">v19 · flujo Recepción → Por completar → Laboratorio</span>
-
-    <div class="lote-info" id="loteInfo"></div>
-    <details class="historial" id="historial">
-        <summary>Historial de lotes de etiquetas (<span id="histCant">0</span>)</summary>
-        <div id="histTabla"></div>
-    </details>
-</div>
-
-<div id="etiquetas"></div>
+</script>
 
 <script>
 window.CSRF = {{ csrf|tojson }};
@@ -239,6 +217,11 @@ window.ETIQUETAS = {{ datos|tojson }};
 
     /* ---------- Datos que vienen del servidor ---------- */
     var DATOS = window.ETIQUETAS;
+    // La vista previa va en un shadow DOM: el CSS del sistema (tablas, tipografías, interlineado) no la toca,
+    // así las etiquetas miden exactamente lo mismo que en el sistema original.
+    var sombra = $('etiquetas').attachShadow({mode: 'open'});
+    sombra.innerHTML = '<style>:host { all: initial; display: block; background: #fff; }\n' + $('css-etiquetas').textContent + '</style><div id="lienzo"></div>';
+    var lienzo = sombra.getElementById('lienzo');
     var NOMBRES = DATOS.nombres;            // {bp: 'Recepción', pap: 'PAP-Laboratorio', lab: 'BP-Laboratorio'}
     var historial = DATOS.historial;        // lotes de etiquetas confirmados; los guarda el servidor (numeración única para todas las PCs)
     var casos = DATOS.casos;                // protocolos ya completos: candidatos a etiquetas de laboratorio
@@ -494,7 +477,7 @@ window.ETIQUETAS = {{ datos|tojson }};
                 ? '<td>' + numero(b.desde) + '</td><td>' + numero(b.hasta) + '</td>'
                 : '<td colspan="2">Protocolos ya completos</td>';
             var accion = (b.tipo === 'bp' || (b.params && b.params.items))
-                ? '<button type="button" class="secundario mini" data-reimprimir="' + b.id + '">Ver / reimprimir</button>' : '';
+                ? '<button type="button" class="btn sec mini" data-reimprimir="' + b.id + '">Ver / reimprimir</button>' : '';
             h += '<tr><td>' + b.id + '</td><td>' + fechaHora(b.creadoEn) + '</td><td>' + esc(b.creador) + '</td><td>' + esc(NOMBRES[b.tipo]) +
                 (b.loteCodigo ? '<div style="color:#666">lote ' + esc(b.loteCodigo) + '</div>' : '') + '</td>' +
                 rango + '<td>' + b.n + '</td><td>' + b.etiquetas + '</td><td>' + (b.completados != null ? b.completados + ' de ' + b.n : '—') +
@@ -506,9 +489,10 @@ window.ETIQUETAS = {{ datos|tojson }};
     // Con un lote confirmado todo queda bloqueado: lo que se imprime es exactamente lo confirmado.
     function aplicarBloqueo() {
         var bloq = !!loteActual;
-        Array.prototype.forEach.call(document.querySelectorAll('.panel input, .panel select, #etiquetas select'), function (el) {
-            el.disabled = bloq;
+        Array.prototype.forEach.call(document.querySelectorAll('#panelEtq input, #panelEtq select, .pasos-etq input'), function (el) {
+            el.disabled = bloq || el.hasAttribute('data-sin-permiso');
         });
+        Array.prototype.forEach.call(lienzo.querySelectorAll('select'), function (el) { el.disabled = bloq; });
         $('confirmar').classList.toggle('oculto', bloq);
         $('nueva').classList.toggle('oculto', !bloq);
         $('imprimir').disabled = !bloq;
@@ -589,7 +573,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     // Vuelve a mostrar un lote de etiquetas ya confirmado, tal como se imprimió
     function verLote(id) {
         var b = buscarLote(id);
-        if (!b || document.querySelector('input[name=tipo][value=' + b.tipo + ']').disabled) return;
+        if (!b || document.querySelector('input[name=tipo][value=' + b.tipo + ']').hasAttribute('data-sin-permiso')) return;
         loteActual = null;
         reiniciarLab();
         if (b.tipo !== 'bp') {
@@ -663,7 +647,7 @@ window.ETIQUETAS = {{ datos|tojson }};
                 if (elec.muestra[p.key] === undefined) elec.muestra[p.key] = $('lotePap').value;
             });
         }
-        $('etiquetas').innerHTML = RENDER[t](d);
+        lienzo.innerHTML = RENDER[t](d);
 
         if (t === 'bp') {
             var ultimo = d.inicio + d.n - 1;
@@ -700,7 +684,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         try {
             var tg = localStorage.getItem('etiquetas_tipo');
             var radio = tg && document.querySelector('input[name=tipo][value=' + tg + ']');
-            if (radio && !radio.disabled) radio.checked = true;
+            if (radio && !radio.hasAttribute('data-sin-permiso')) radio.checked = true;
         } catch (e) {}
     }
 
@@ -738,7 +722,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         generar();
     });
     // Elección en una etiqueta puntual (sin volver a dibujar todo, para no perder el foco)
-    $('etiquetas').addEventListener('change', function (e) {
+    sombra.addEventListener('change', function (e) {
         var sel = e.target;
         if (!sel.classList) return;
         var key = sel.getAttribute('data-key');
@@ -773,5 +757,4 @@ window.ETIQUETAS = {{ datos|tojson }};
     cambiarTipo();
 })();
 </script>
-</body>
-</html>
+{% endblock %}
