@@ -15,6 +15,7 @@
   </select>
 {% endmacro %}
 {% block contenido %}
+<div class="eyebrow">Estudio</div>
 <p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
 <h1>{{ e.numero }} · {{ etiqueta }}
@@ -24,6 +25,8 @@
   {% for h in hermanos %}<a href="{{ url_for('estudio', eid=h.id) }}" class="{{ 'activo' if h.id == e.id }}{{ ' bloqueado' if h.anulado }}">{{ h.etiqueta }}</a>{% endfor %}
 </div>
 {% endif %}
+{% if e.borrador %}<div class="aviso">Protocolo a completar: faltan los datos del paciente y la cantidad.
+  <a href="{{ url_for('protocolo_editar', pid=e.protocolo_id) }}">Completar datos</a>.</div>{% endif %}
 
 <div class="tarjeta">
   <h2>Trazabilidad</h2>

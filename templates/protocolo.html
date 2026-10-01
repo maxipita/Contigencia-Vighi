@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block titulo %}Protocolo {{ p.numero }}{% endblock %}
 {% block contenido %}
+<div class="eyebrow">Protocolo</div>
 <h1>Protocolo {{ p.numero }}</h1>
+{% if p.borrador %}<div class="aviso">Protocolo generado desde Recepción: faltan los datos del paciente y la cantidad de cada estudio.
+  <a href="{{ url_for('protocolo_editar', pid=p.id) }}">Completar datos</a>.</div>{% endif %}
 <div class="cols">
 <div>
   <div class="tarjeta">

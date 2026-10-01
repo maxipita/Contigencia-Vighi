@@ -4,10 +4,12 @@ Corre en una PC del laboratorio; el resto entra por la red interna con el navega
 Iniciar:  py app.py   (o "Iniciar contingencia.bat")
 """
 import io
+import json
 import os
+import re
 import secrets
 import socket
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template, request, send_file,
@@ -81,7 +83,9 @@ def verificar_csrf():
 @app.context_processor
 def globales():
     u = usuario_actual()
+    pendientes = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1")["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
+            "n_borradores": pendientes,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
@@ -207,15 +211,16 @@ def responsables(tipo):
 
 
 # ---------------------------------------------------------------- estudios (listados)
-def cargar_estudios(where="1=1", params=()):
-    """Estudios con los datos de su protocolo, estado, próxima etapa y vencimiento."""
-    filas = db.q(f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema,
+def cargar_estudios(where="1=1", params=(), borradores=False):
+    """Estudios con los datos de su protocolo, estado, próxima etapa y vencimiento. Los de protocolos en borrador
+    (generados desde Recepción, sin los datos del paciente) quedan afuera salvo que se pidan."""
+    filas = db.q(f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
                             u.iniciales AS responsable, l.codigo AS lote, COALESCE(m.solicita_ihq, 0) AS solicita_ihq,
                             (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                      LEFT JOIN micro m ON m.estudio_id=e.id
-                     WHERE {where} ORDER BY p.id DESC, e.id""", params)
+                     WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id""", params)
     hechas = {}
     for r in db.q("SELECT estudio_id, etapa FROM etapas"):
         hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
@@ -224,6 +229,8 @@ def cargar_estudios(where="1=1", params=()):
         d = dict(f)
         tipo = REGISTRO[f["tipo"]]
         d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), bool(f["solicita_ihq"]), bool(f["anulado"]))
+        if f["borrador"]:
+            d["estado"] = "A completar"
         d["proxima"] = prox
         d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer) if prox else None
         d["atrasado"] = bool(d["vence"] and d["vence"] < ahora_)
@@ -237,6 +244,13 @@ def etiqueta(e):
     if e["tipo"] == "PAP" or not e["sitio"]:
         return TIPOS[e["tipo"]]
     return f"{TIPOS[e['tipo']]} · {e['sitio']}"
+
+
+def tipos_lote_fijos():
+    """Tipos de lote que no son iniciales de citotécnico: los de la base más los que exige cada estudio
+    (así una base creada antes de sumar un tipo, como HPM, no necesita migración)."""
+    fijos = listas().get("tipo_lote", [])
+    return fijos + [t for e in REGISTRO.values() for t in e.lotes if t not in fijos]
 
 
 @app.route("/")
@@ -284,7 +298,7 @@ def tablero():
 # ---------------------------------------------------------------- lotes (asignación)
 def tipos_lote(tipo=None):
     """Tipos de lote válidos para un tipo de estudio (o todos si no se indica)."""
-    fijos = listas().get("tipo_lote", [])
+    fijos = tipos_lote_fijos()
     cito = [u["iniciales"] for u in responsables("PAP")]
     if tipo:
         return REGISTRO[tipo].tipos_lote(fijos, cito)
@@ -377,7 +391,8 @@ def leer_estudio(prefijo, tipo):
             "citologia_hormonal": campo("citologia_hormonal") if t.citologia_hormonal else None,
             "observaciones": campo("observaciones"),
             "responsable_id": int(campo("responsable_id")) if campo("responsable_id").isdigit() else None,
-            "lote_sel": campo("lote_id")}
+            "lote_sel": campo("lote_id"),
+            "id": int(campo("id")) if campo("id").isdigit() else None}
 
 
 def estudios_del_formulario():
@@ -435,7 +450,10 @@ def protocolo_nuevo():
         lotes, error = validar_estudios(lista)
         if not p["numero"]:
             error = "Falta el N° de protocolo."
-        elif db.uno("SELECT 1 FROM protocolos WHERE numero=?", (p["numero"],)):
+        elif (dup := db.uno("SELECT id, borrador FROM protocolos WHERE numero=?", (p["numero"],))) and dup["borrador"]:
+            flash(f"El protocolo {p['numero']} ya fue generado desde Recepción y falta completarlo: cargá los datos acá.", "ok")
+            return redirect(url_for("protocolo_editar", pid=dup["id"]))
+        elif dup:
             error = f"El protocolo {p['numero']} ya existe: para sumarle un estudio usá «+ Agregar estudio» en su ficha."
         elif not lista:
             error = "Agregá al menos un estudio (PAP, Biopsia o Citología)."
@@ -449,6 +467,8 @@ def protocolo_nuevo():
             for e, valor in zip(lista, lotes):
                 crear_estudio(pid, e, concretar_lote(valor, yo["id"]), yo["id"])
             flash(f"Protocolo {p['numero']} ingresado con {len(lista)} estudio(s).", "ok")
+            if not numero_emitido(p["numero"]):
+                flash(f"Atención: {p['numero']} no figura en ningún lote de etiquetas confirmado (menú Etiquetas).", "error")
             return redirect(url_for("protocolo", pid=pid))
     elif request.args.get("tipo") in REGISTRO:
         lista = [{"tipo": request.args["tipo"]}]
@@ -456,25 +476,70 @@ def protocolo_nuevo():
     return render_template("protocolo_form.html", p=p, estudios=lista, nuevo=True, ultimos=ultimos, **contexto_formulario())
 
 
+def completo(p, estudios):
+    """Un protocolo generado desde Recepción queda completo con apellido, nombre y la cantidad de cada estudio."""
+    return bool(p["apellido"] and p["nombre"] and estudios and all(e["cantidad"] for e in estudios if not e["anulado"]))
+
+
 @app.route("/protocolo/<int:pid>/editar", methods=["GET", "POST"])
 @requiere_login
 def protocolo_editar(pid):
+    """Datos del protocolo. Si está en borrador (generado desde Recepción) también se completan sus estudios."""
     yo = usuario_actual()
     p = protocolo_o_404(pid)
+    borrador = bool(p["borrador"])
+    actuales = {e["id"]: e for e in db.q("SELECT * FROM estudios WHERE protocolo_id=? ORDER BY id", (pid,))}
+    lista = [{**dict(e), "lote_sel": str(e["lote_id"] or "")} for e in actuales.values() if not e["anulado"]] if borrador else []
     if request.method == "POST":
         d = leer_protocolo()
+        error = None
+        if borrador:
+            lista = [e for e in estudios_del_formulario() if e["id"] is None or e["id"] in actuales]
+            error = validar_combinacion(lista) if lista else "El protocolo tiene que tener al menos un estudio."
+            lotes = []
+            for e in lista:
+                if error:
+                    break
+                valor, error = validar_lote(e["lote_sel"], e["tipo"], actuales[e["id"]]["lote_id"] if e["id"] else None)
+                lotes.append(valor)
         if not d["numero"]:
-            flash("Falta el N° de protocolo.", "error")
+            error = "Falta el N° de protocolo."
         elif db.uno("SELECT 1 FROM protocolos WHERE numero=? AND id<>?", (d["numero"], pid)):
-            flash(f"Ya existe otro protocolo {d['numero']}.", "error")
+            error = f"Ya existe otro protocolo {d['numero']}."
+        if error:
+            flash(error, "error")
         else:
             cols = ["numero"] + CAMPOS_PROTOCOLO
             db.ex(f"UPDATE protocolos SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [d[c] for c in cols] + [pid])
             db.auditar(yo["id"], pid, "editar_protocolo")
-            flash("Datos del protocolo actualizados.", "ok")
-            return redirect(url_for("protocolo", pid=pid))
+            if not borrador:
+                flash("Datos del protocolo actualizados.", "ok")
+                return redirect(url_for("protocolo", pid=pid))
+            for e, valor in zip(lista, lotes):
+                lote = concretar_lote(valor, yo["id"])
+                if e["id"]:
+                    db.ex(f"UPDATE estudios SET {', '.join(k + '=?' for k in CAMPOS_ESTUDIO)} WHERE id=?",
+                          [e[k] for k in CAMPOS_ESTUDIO] + [e["id"]])
+                    asignar_lote(e["id"], lote, yo["id"])
+                else:
+                    crear_estudio(pid, e, lote, yo["id"])
+            quitados = [k for k, e in actuales.items() if k not in {x["id"] for x in lista} and not e["anulado"]]
+            for k in quitados:          # un bloque quitado se anula (no se borra: queda en el historial)
+                db.ex("UPDATE estudios SET anulado=1, motivo_anulacion=? WHERE id=?", ("Quitado al completar el protocolo", k))
+                db.auditar(yo["id"], pid, "anular", "Quitado al completar el protocolo", k)
+            if completo(d, [dict(x) for x in db.q("SELECT cantidad, anulado FROM estudios WHERE protocolo_id=?", (pid,))]):
+                db.ex("UPDATE protocolos SET borrador=0 WHERE id=?", (pid,))
+                db.auditar(yo["id"], pid, "completar", d["numero"])
+                flash(f"Protocolo {d['numero']} completo.", "ok")
+                return redirect(url_for("protocolo", pid=pid))
+            flash("Datos guardados. Para completar el protocolo faltan apellido, nombre y la cantidad de cada estudio.", "ok")
+            return redirect(url_for("protocolo_editar", pid=pid))
         p = {**dict(p), **d}
-    return render_template("protocolo_form.html", p=p, estudios=[], nuevo=False, ultimos=[], **contexto_formulario())
+    ctx = contexto_formulario()
+    for e in actuales.values():             # que el lote actual de cada estudio figure aunque no sea de hoy
+        if e["lote_id"] and all(l["id"] != e["lote_id"] for l in ctx["lotes_abiertos"][e["tipo"]]):
+            ctx["lotes_abiertos"][e["tipo"]].insert(0, db.uno("SELECT * FROM lotes WHERE id=?", (e["lote_id"],)))
+    return render_template("protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, ultimos=[], **ctx)
 
 
 @app.route("/protocolo/<int:pid>")
@@ -483,7 +548,7 @@ def protocolo(pid):
     p = protocolo_o_404(pid)
     historial = db.q("""SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
                         WHERE protocolo_id=? ORDER BY a.id DESC""", (pid,))
-    return render_template("protocolo.html", p=p, estudios=cargar_estudios("e.protocolo_id=?", (pid,)), historial=historial)
+    return render_template("protocolo.html", p=p, estudios=cargar_estudios("e.protocolo_id=?", (pid,), borradores=True), historial=historial)
 
 
 @app.route("/protocolo/<int:pid>/estudio/nuevo", methods=["GET", "POST"])
@@ -538,7 +603,7 @@ def estudio_editar(eid):
 
 # ---------------------------------------------------------------- ficha del estudio (trazabilidad y carga)
 def ficha(eid):
-    e = db.uno("""SELECT e.*, p.numero, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
+    e = db.uno("""SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
                          u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote
                   FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                   LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN usuarios u2 ON u2.id=e.creado_por
@@ -582,7 +647,7 @@ def estudio(eid):
     tpl = lambda clase: db.q("SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo", (clase,))
     pasos = tipo.flujo(solicita)
     traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados())
-    hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],))
+    hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
     return render_template("estudio.html", e=e, tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e),
@@ -660,6 +725,9 @@ def guardar_ihq(eid):
 def marcar_listo(eid, etapa):
     yo = usuario_actual()
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
+    if e["borrador"]:
+        flash("Primero completá los datos del paciente de este protocolo.", "error")
+        return redirect(url_for("protocolo_editar", pid=e["protocolo_id"]))
     tipo = REGISTRO[e["tipo"]]
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     if not prox or prox[0] != etapa:
@@ -764,11 +832,13 @@ def lote_o_404(lote_id):
 @requiere_login
 def lote(lote_id):
     l = lote_o_404(lote_id)
-    del_lote = cargar_estudios("e.lote_id=?", (lote_id,))
+    del_lote = cargar_estudios("e.lote_id=?", (lote_id,), borradores=True)
     del_lote.sort(key=lambda x: x["id"])                      # en orden de ingreso
     sin_lote = [x for x in cargar_estudios("e.lote_id IS NULL AND e.anulado=0")
                 if l["tipo_lote"] in tipos_lote(x["tipo"])][:300]
-    return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote)
+    return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote,
+                           etiquetas_lab=(l["tipo_lote"] in tipos_lote("BP") or l["tipo_lote"] in tipos_lote("PAP"))
+                           and any(not x["anulado"] and not x["borrador"] for x in del_lote))
 
 
 @app.route("/lotes/<int:lote_id>/agregar", methods=["POST"])
@@ -940,6 +1010,263 @@ def feriados():
             flash("Feriado guardado.", "ok")
         return redirect(url_for("feriados"))
     return render_template("feriados.html", feriados=db.q("SELECT * FROM feriados ORDER BY fecha"))
+
+
+# ---------------------------------------------------------------- etiquetas
+# Flujo de contingencia:
+#   1) Recepción: se generan las etiquetas (números C000001…). Al confirmar, el servidor crea los protocolos "a completar"
+#      (protocolos en borrador, con un estudio según el tipo de lote) dentro del lote abierto del día.
+#   2) "Por completar": se cargan el paciente y la cantidad de cada protocolo.
+#   3) Laboratorio (PAP-Laboratorio / BP-Laboratorio): se imprimen las etiquetas de los protocolos ya completos, con
+#      tantas etiquetas como indique su cantidad. No consumen numeración.
+# El servidor es el dueño de la numeración (una sola para todas las PCs) y del historial de lotes de etiquetas.
+TIPOS_ETIQUETA = {"bp": "Recepción", "pap": "PAP-Laboratorio", "lab": "BP-Laboratorio"}
+GRUPO_NUMERACION = ("bp", "pap")          # ('pap' por los lotes de la versión anterior, que también numeraban)
+ESTUDIO_LAB = {"lab": "BP", "pap": "PAP"}  # estudio de los protocolos que rotula cada pestaña de laboratorio
+# Tipos que trae el desplegable "Tipo" de southernbits y que no son un tipo de lote de este sistema
+LOTES_ETIQUETA_EXTRA = ["PAPS"]
+# Códigos que lleva la etiqueta PAP (no coinciden con los tipos de muestra del catálogo, que son más descriptivos)
+MUESTRAS_PAP = ["EXO", "ENDO", "ENDO/EXO", "PAPURG", "CUPULA", "DERRAME"]
+MAX_PROTOCOLO = 999999
+DIAS_ETIQUETADOS = 3                       # cuánto tiempo siguen apareciendo los ya etiquetados (por si hay que reimprimir)
+
+
+def numero_protocolo(n):
+    return f"C{n:06d}"
+
+
+def estudio_de_lote(tipo_lote):
+    """Estudio de los protocolos que genera Recepción según el tipo de lote: PAPS = PAP, CT = citologías y el resto
+    (ENDO, ONCO, NO ONCO, PAPURG, TACOS, HPM) biopsias."""
+    return {"PAPS": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
+
+
+def numero_emitido(protocolo):
+    """True si el protocolo no es de contingencia (C + 6 dígitos) o si figura en un lote de etiquetas confirmado."""
+    m = re.fullmatch(r"C(\d{6})", protocolo or "")
+    if not m:
+        return True
+    n = int(m.group(1))
+    return db.uno("SELECT 1 FROM etiquetas_lotes WHERE tipo IN ('bp','pap') AND desde <= ? AND hasta >= ?", (n, n)) is not None
+
+
+def personal(sector):
+    """Usuarios activos de un sector, para los desplegables (el nombre solo si es distinto de las iniciales)."""
+    filas = db.q("SELECT iniciales, nombre, sectores FROM usuarios WHERE activo=1 ORDER BY iniciales")
+    return [{"iniciales": u["iniciales"], "nombre": u["nombre"] if (u["nombre"] or u["iniciales"]) != u["iniciales"] else ""}
+            for u in filas if sector in (u["sectores"] or "").split(",")]
+
+
+def tipos_lote_etiqueta():
+    return sorted(set(tipos_lote_fijos()) | set(LOTES_ETIQUETA_EXTRA), key=str.casefold)
+
+
+def listas_etiquetas():
+    return {"tiposLote": tipos_lote_etiqueta(), "muestrasPap": MUESTRAS_PAP,
+            "citotecnicos": personal("citotecnico"), "patologos": personal("firmante")}
+
+
+def etiquetas_historial():
+    """Lotes de etiquetas confirmados, del más viejo al más nuevo. Para los de Recepción, 'completados' = cuántos de los
+    protocolos que generó ya tienen los datos del paciente."""
+    progreso = {r["etiqueta_lote_id"]: r["ok"] for r in db.q(
+        "SELECT etiqueta_lote_id, SUM(CASE WHEN borrador=0 THEN 1 ELSE 0 END) AS ok FROM protocolos "
+        "WHERE etiqueta_lote_id IS NOT NULL GROUP BY etiqueta_lote_id")}
+    out = []
+    for f in db.q("""SELECT e.*, u.iniciales AS creador, l.codigo AS lote_codigo FROM etiquetas_lotes e
+                     LEFT JOIN usuarios u ON u.id=e.creado_por LEFT JOIN lotes l ON l.id=e.lote_id ORDER BY e.id"""):
+        out.append({"id": f["id"], "tipo": f["tipo"], "desde": f["desde"], "hasta": f["hasta"], "loteId": f["lote_id"],
+                    "loteCodigo": f["lote_codigo"], "n": f["n"], "porProto": f["por_proto"], "etiquetas": f["etiquetas"],
+                    "creadoEn": f["creado_en"], "creador": f["creador"] or "", "params": json.loads(f["params"]),
+                    "completados": progreso.get(f["id"]) if f["tipo"] == "bp" else None})
+    return out
+
+
+def etiquetas_cantidad(cantidad):
+    """Cuántas etiquetas de laboratorio lleva un estudio según su cantidad ("1/2" de PAP = 1)."""
+    return int(cantidad) if (cantidad or "").isdigit() else (1 if cantidad else 0)
+
+
+def etiquetas_casos():
+    """Estudios (BP y PAP) de protocolos con los datos del paciente y la cantidad ya cargados, candidatos a etiquetas de
+    laboratorio. Los ya etiquetados se ofrecen unos días más por si hay que reimprimir."""
+    limite = (datetime.now() - timedelta(days=DIAS_ETIQUETADOS)).strftime("%Y-%m-%d")
+    filas = db.q("""SELECT e.id, e.tipo, p.numero, p.apellido, p.nombre, e.cantidad, e.lote_id, l.codigo AS lote,
+                           p.fecha_recoleccion, e.lab_etiquetado_en, u.iniciales AS resp
+                    FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
+                    LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
+                    WHERE p.borrador=0 AND e.anulado=0 AND e.tipo IN ('BP','PAP') AND e.cantidad IS NOT NULL AND e.cantidad<>''
+                      AND (e.lab_etiquetado_en IS NULL OR e.lab_etiquetado_en >= ?) ORDER BY e.lote_id, e.id""", (limite,))
+    return [{"id": f["id"], "estudio": f["tipo"], "protocolo": f["numero"], "apellido": f["apellido"] or "",
+             "nombre": f["nombre"] or "", "cantidad": etiquetas_cantidad(f["cantidad"]), "loteId": f["lote_id"],
+             "loteCodigo": f["lote"] or "", "fechaRec": f["fecha_recoleccion"] or "", "resp": f["resp"] or "",
+             "etiquetado": bool(f["lab_etiquetado_en"])}
+            for f in filas]
+
+
+def siguiente_libre():
+    marcas = ",".join("?" * len(GRUPO_NUMERACION))
+    fila = db.uno(f"SELECT MAX(hasta) AS m FROM etiquetas_lotes WHERE tipo IN ({marcas})", GRUPO_NUMERACION)
+    return (fila["m"] or 0) + 1
+
+
+def _entero(valor, minimo, maximo):
+    try:
+        n = int(valor)
+    except (TypeError, ValueError):
+        return None
+    return n if minimo <= n <= maximo else None
+
+
+def _lista_valida(valor, total, permitidos):
+    return isinstance(valor, list) and len(valor) == total and all(v in permitidos for v in valor)
+
+
+def datos_etiquetas():
+    return {"listas": listas_etiquetas(), "historial": etiquetas_historial(), "casos": etiquetas_casos()}
+
+
+@app.route("/etiquetas")
+@requiere_login
+def etiquetas():
+    """Generador de etiquetas de contingencia. Pantalla aparte, sin la barra del sistema, para que imprima con
+    las medidas exactas de las etiquetas. Con ?lote=<id> abre la pestaña de laboratorio con ese lote elegido."""
+    preset = None
+    if request.args.get("lote"):
+        lote = db.uno("SELECT * FROM lotes WHERE id=?", (int(request.args["lote"]),)) if request.args["lote"].isdigit() else None
+        if not lote:
+            flash("El lote no existe.", "error")
+            return redirect(url_for("lotes"))
+        if lote["tipo_lote"] in tipos_lote("BP"):
+            preset = {"tab": "lab", "loteId": lote["id"]}
+        elif lote["tipo_lote"] in tipos_lote("PAP"):
+            preset = {"tab": "pap", "loteId": lote["id"]}
+        else:
+            flash("Las etiquetas de laboratorio son para lotes de biopsias y de PAP.", "error")
+            return redirect(url_for("lote", lote_id=lote["id"]))
+    return render_template("etiquetas.html", datos={**datos_etiquetas(), "nombres": TIPOS_ETIQUETA, "preset": preset})
+
+
+@app.route("/api/etiquetas/estado")
+@requiere_login
+def api_etiquetas_estado():
+    return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos()})
+
+
+@app.route("/api/etiquetas/confirmar", methods=["POST"])
+@requiere_login
+def api_etiquetas_confirmar():
+    """Valida y registra un lote de etiquetas. El servidor decide si el rango está libre (es lo que evita que dos PCs
+    impriman los mismos números) y, en Recepción, crea los protocolos a completar."""
+    yo = usuario_actual()
+    d = request.get_json(silent=True) or {}
+    p = d.get("params") if isinstance(d.get("params"), dict) else {}
+    tipo = d.get("tipo")
+
+    def error(texto, estado=400, **extra):
+        return jsonify({"ok": False, "error": texto, **datos_etiquetas(), **extra}), estado
+
+    if tipo not in TIPOS_ETIQUETA:
+        return error("Tipo de etiqueta inválido.")
+    firmantes = {x["iniciales"] for x in personal("firmante")}
+    citos = {x["iniciales"] for x in personal("citotecnico")}
+    desde = hasta = None
+    borradores = etiquetados = None
+
+    if tipo == "bp":
+        # ---- Recepción: reserva números y genera los protocolos a completar
+        n = _entero(d.get("n"), 1, 1000)
+        desde = _entero(d.get("inicio"), 1, MAX_PROTOCOLO)
+        if not n or not desde:
+            return error("Cargá la cantidad de protocolos (1 a 1000) y el primer número.")
+        hasta = desde + n - 1
+        if hasta > MAX_PROTOCOLO:
+            return error(f"El rango se pasa de {numero_protocolo(MAX_PROTOCOLO)}. Bajá la cantidad o el primer número.")
+        try:
+            datetime.strptime(str(p.get("fecha", "")), "%Y-%m-%d")
+        except ValueError:
+            return error("Elegí la fecha de recolección antes de confirmar.")
+        if p.get("lote") not in tipos_lote_etiqueta():
+            return error("Tipo de lote inválido.")
+        paps = p["lote"] == "PAPS"
+        if paps and p.get("cito") not in citos:
+            return error("Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.")
+        cito = p["cito"] if paps else ""
+        params = {"fecha": p["fecha"], "lote": p["lote"], "cito": cito}
+        est = REGISTRO[estudio_de_lote(p["lote"])]
+        borradores = {"estudio": est.clave, "categoria": est.categoria, "subcategoria": est.subcategoria_fija,
+                      "sitio": est.sitio_fijo, "tipo_lote": cito if paps else p["lote"], "fecha_lote": hoy(),
+                      "fecha_rec": p["fecha"], "protocolos": [numero_protocolo(k) for k in range(desde, hasta + 1)],
+                      "responsable_id": (db.uno("SELECT id FROM usuarios WHERE iniciales=?", (cito,))["id"] if paps else None)}
+        por_proto, total = 2, n * 2
+    else:
+        # ---- Laboratorio: protocolos ya completos; la cantidad de etiquetas de cada uno es su "cantidad"
+        ids = d.get("items")
+        if not isinstance(ids, list) or not ids or len(ids) > 500 or len(set(ids)) != len(ids) or \
+                not all(isinstance(i, int) for i in ids):
+            return error("Marcá al menos un protocolo para etiquetar.")
+        filas = {f["id"]: f for f in db.q(
+            f"""SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, u.iniciales AS resp, l.codigo AS lote_codigo
+                FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
+                LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
+                WHERE e.id IN ({','.join('?' * len(ids))})""", ids)}
+        items = []
+        for i in ids:
+            f = filas.get(i)
+            if not f or f["anulado"] or f["borrador"] or f["tipo"] != ESTUDIO_LAB[tipo] or not etiquetas_cantidad(f["cantidad"]):
+                return error(f"El protocolo {f['numero'] if f else i} no está listo para {TIPOS_ETIQUETA[tipo]}: "
+                             "tiene que estar completo (paciente y cantidad) y ser del estudio que corresponde.")
+            items.append({"casoId": f["id"], "protocolo": f["numero"], "cantidad": etiquetas_cantidad(f["cantidad"]),
+                          "loteCodigo": f["lote_codigo"] or "", "resp": f["resp"] or "", "fechaRec": f["fecha_recoleccion"] or ""})
+        n, total, por_proto = len(items), sum(i["cantidad"] for i in items), 1
+        params = {"items": items}
+        if tipo == "lab":
+            if not _lista_valida(p.get("patos"), total, firmantes | {""}):
+                return error("Patólogo inválido en alguna etiqueta.")
+            params.update(patos=p["patos"], pato=p.get("pato") if p.get("pato") in firmantes else "")
+        else:
+            if not _lista_valida(p.get("muestras"), total, MUESTRAS_PAP):
+                return error("Falta elegir el tipo de muestra de cada etiqueta.")
+            params.update(muestras=p["muestras"], lotePap=p.get("lotePap") if p.get("lotePap") in MUESTRAS_PAP else "")
+        etiquetados = ids
+
+    r = db.etiquetas_confirmar(tipo, GRUPO_NUMERACION, desde, hasta, n, por_proto, total,
+                               json.dumps(params, ensure_ascii=False), yo["id"], borradores, etiquetados)
+    if r.get("error") == "choque":
+        f = r["fila"]
+        return error(f"Ese rango se pisa con el lote de etiquetas N° {f['id']} ({TIPOS_ETIQUETA[f['tipo']]}), ya confirmado: "
+                     f"{numero_protocolo(f['desde'])} a {numero_protocolo(f['hasta'])}. Cambiá el primer número: el siguiente "
+                     f"libre es {numero_protocolo(siguiente_libre())}.", 409, conflicto=True)
+    if r.get("error") == "existentes":
+        ej = ", ".join(r["protocolos"][:3]) + ("…" if len(r["protocolos"]) > 3 else "")
+        return error(f"Ya existen protocolos con esos números ({ej}), cargados a mano. "
+                     "Elegí otro primer número.", 409)
+    if r["lote"]:
+        if r["lote"]["nuevo"]:
+            db.auditar(yo["id"], None, "nuevo_lote", r["lote"]["codigo"])
+        detalle = f"{numero_protocolo(desde)} a {numero_protocolo(hasta)} → lote {r['lote']['codigo']}"
+    else:
+        detalle = f"{n} protocolos"
+    db.auditar(yo["id"], None, "etiquetas", f"{TIPOS_ETIQUETA[tipo]} {detalle} ({total} etiquetas)")
+    return jsonify({"ok": True, "id": r["id"], **datos_etiquetas()})
+
+
+# ---------------------------------------------------------------- protocolos a completar
+@app.route("/completar")
+@requiere_login
+def completar():
+    """Protocolos generados desde Recepción a los que les faltan los datos. Cada uno se completa con el formulario
+    del protocolo (paciente + estudios); con apellido, nombre y la cantidad de cada estudio deja de ser borrador."""
+    lote_sel = request.args.get("lote", "")
+    filtro = ("e.lote_id=?", (int(lote_sel),)) if lote_sel.isdigit() else ("1=1", ())
+    protocolos = {}
+    for e in cargar_estudios("p.borrador=1 AND " + filtro[0], filtro[1], borradores=True):
+        protocolos.setdefault(e["protocolo_id"], {"id": e["protocolo_id"], "numero": e["numero"],
+                                                  "fecha_recoleccion": e["fecha_recoleccion"], "estudios": []})["estudios"].append(e)
+    lotes_con = db.q("""SELECT l.id, l.codigo, COUNT(DISTINCT p.id) AS n FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
+                        JOIN lotes l ON l.id=e.lote_id WHERE p.borrador=1 GROUP BY l.id, l.codigo, l.fecha ORDER BY l.fecha DESC, l.codigo""")
+    return render_template("completar.html", protocolos=sorted(protocolos.values(), key=lambda x: x["numero"]),
+                           lotes_con=lotes_con, lote_sel=lote_sel)
 
 
 # ---------------------------------------------------------------- exportar

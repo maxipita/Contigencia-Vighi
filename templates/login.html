@@ -2,6 +2,7 @@
 {% block titulo %}Ingresar{% endblock %}
 {% block contenido %}
 <div class="tarjeta login">
+  <img class="logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="CAP Vighi">
   <h1>Ingresar</h1>
   <form method="post">
     <input type="hidden" name="_csrf" value="{{ csrf }}">

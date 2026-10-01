@@ -15,7 +15,7 @@ class Biopsia(Estudio):
     sector_responsable = "firmante"
     etiqueta_responsable = "Médico firmante"
     etiqueta_cantidad = "frascos"
-    lotes = ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS"]
+    lotes = ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "HPM"]
 
 
 ESTUDIO = Biopsia()

@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% import "estudios/_bloque.html" as b with context %}
 {% macro v(k) %}{{ p[k] if p and p[k] is not none else '' }}{% endmacro %}
-{% block titulo %}{{ 'Nuevo protocolo' if nuevo else 'Editar protocolo ' ~ p.numero }}{% endblock %}
+{% macro titulo() %}{{ 'Nuevo protocolo' if nuevo else ('Completar protocolo ' if completar else 'Editar protocolo ') ~ (p.numero or '') }}{% endmacro %}
+{% block titulo %}{{ titulo() }}{% endblock %}
 {% block contenido %}
-<h1>{{ 'Nuevo protocolo' if nuevo else 'Editar protocolo ' ~ p.numero }}</h1>
+<div class="eyebrow">{{ 'Recepción' if completar else 'Ingreso de muestras' }}</div>
+<h1>{{ titulo() }}</h1>
+{% if completar %}<p class="muted">Protocolo generado desde las etiquetas de Recepción. Queda completo con apellido, nombre y la cantidad
+  de cada estudio; con eso se habilitan las etiquetas de laboratorio y aparece en el tablero.</p>{% endif %}
 <form method="post" class="form-estudios">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <div class="tarjeta">
@@ -36,7 +40,7 @@
     </div>
   </div>
 
-  {% if nuevo %}
+  {% if nuevo or completar %}
   <h2 class="titulo-seccion">Estudios</h2>
   <p class="muted">Con un PAP solo pueden ir muestras ginecológicas. Las demás muestras se pueden combinar entre sí (ej. biopsia + citología de líquido).</p>
   <div class="bloques">
@@ -46,8 +50,8 @@
   {% endif %}
 
   <div class="acciones">
-    <button class="btn">{{ 'Ingresar protocolo' if nuevo else 'Guardar cambios' }}</button>
-    <a class="btn sec" href="{{ url_for('tablero') if nuevo else url_for('protocolo', pid=p.id) }}">Cancelar</a>
+    <button class="btn">{{ 'Ingresar protocolo' if nuevo else ('Guardar' if completar else 'Guardar cambios') }}</button>
+    <a class="btn sec" href="{{ url_for('tablero') if nuevo else (url_for('completar') if completar else url_for('protocolo', pid=p.id)) }}">Cancelar</a>
   </div>
 </form>
 {% endblock %}

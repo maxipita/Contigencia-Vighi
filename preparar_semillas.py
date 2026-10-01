@@ -65,7 +65,7 @@ def catalogo():
     guardar("listas.json", {
         "cobertura": coberturas(),
         "sexo": columna(ws, "C"),
-        "tipo_lote": ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "CT"],
+        "tipo_lote": ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "HPM", "CT"],
         "bethesda": ["NILM", "ASC-US", "ASC-H", "LSIL", "HSIL", "Carcinoma escamoso", "AGC", "AIS",
                      "Adenocarcinoma", "Insatisfactoria"],
     })

@@ -2,8 +2,9 @@
 {% block titulo %}Lote {{ l.codigo }}{% endblock %}
 {% block contenido %}
 <p class="no-imprimir"><a href="{{ url_for('lotes', fecha=l.fecha) }}">← Lotes del {{ l.fecha | f }}</a></p>
+<div class="eyebrow">Laboratorio</div>
 <h1>Lote {{ l.codigo }}
-  {% if l.cerrado %}<span class="chip informado">Cerrado</span>{% else %}<span class="chip">Abierto</span>{% endif %}</h1>
+  {% if l.cerrado %}<span class="chip cerrado">Cerrado</span>{% else %}<span class="chip activo">Abierto</span>{% endif %}</h1>
 <p class="muted">Fecha {{ l.fecha | f }} · creado {{ l.creado_en | fh }} por {{ l.creador or '?' }}
   {% if l.cerrado %} · cerrado {{ l.cerrado_en | fh }} por {{ l.cerrador or '?' }}{% endif %} · {{ estudios | length }} estudio(s)</p>
 
@@ -14,7 +15,7 @@
     {% for c in estudios %}
     <tr class="{{ 'bloqueado' if c.anulado }}">
       <td class="muted">{{ loop.index }}</td>
-      <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a></td>
+      <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.borrador %} <a class="mini" href="{{ url_for('protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
       <td><a href="{{ url_for('estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
@@ -57,6 +58,7 @@
     </form>
     <div class="acciones">
       <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
+      {% if etiquetas_lab %}<a class="btn sec" href="{{ url_for('etiquetas', lote=l.id) }}">Etiquetas de laboratorio</a>{% endif %}
       {% if not l.cerrado or yo.admin %}
       <form method="post" action="{{ url_for('lote_cerrar', lote_id=l.id) }}" data-confirmar="{{ '¿Reabrir el lote?' if l.cerrado else '¿Cerrar el lote? Ya no se podrán agregar ni quitar estudios.' }}">
         <input type="hidden" name="_csrf" value="{{ csrf }}">

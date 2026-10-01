@@ -127,3 +127,30 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
 // Confirmaciones
 document.querySelectorAll("form[data-confirmar]").forEach(f =>
   f.addEventListener("submit", e => { if (!confirm(f.dataset.confirmar)) e.preventDefault(); }));
+
+// Barra superior: menú desplegable en pantallas angostas, listas desplegables y menú del usuario
+(function () {
+  var html = document.documentElement, boton = document.getElementById("alternarMenu");
+  var desplegables = document.querySelectorAll(".desplegable");
+  var avatar = document.getElementById("menuUsuario"), lista = document.getElementById("menuUsuarioLista");
+  function cerrarListas(salvo) {
+    desplegables.forEach(function (d) { if (d !== salvo) d.classList.remove("abierto"); });
+    if (lista && salvo !== lista) lista.classList.remove("abierto");
+  }
+  if (boton) boton.addEventListener("click", function (e) { e.stopPropagation(); html.classList.toggle("menu-abierto"); });
+  desplegables.forEach(function (d) {
+    d.querySelector("[data-abre]").addEventListener("click", function (e) {
+      e.stopPropagation();
+      cerrarListas(d);
+      d.classList.toggle("abierto");
+    });
+  });
+  if (avatar && lista) {
+    avatar.addEventListener("click", function (e) { e.stopPropagation(); cerrarListas(lista); lista.classList.toggle("abierto"); });
+  }
+  document.addEventListener("click", function (e) {
+    cerrarListas(null);
+    var menu = document.getElementById("menuPrincipal");
+    if (menu && !menu.contains(e.target)) html.classList.remove("menu-abierto");
+  });
+})();

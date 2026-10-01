@@ -9,6 +9,7 @@
 {% macro val(k) %}{{ e[k] if e and e[k] is not none else '' }}{% endmacro %}
 <div class="tarjeta estudio-bloque" data-tipo="{{ tipo }}">
   <input type="hidden" name="{{ p }}tipo" value="{{ tipo }}">
+  {% if e and e.id %}<input type="hidden" name="{{ p }}id" value="{{ e.id }}">{% endif %}
   <div class="bloque-cab">
     <h2>{{ t.nombre }}</h2>
     {% if quitar %}<button type="button" class="btn sec mini-btn" data-quitar-bloque>✕ Quitar</button>{% endif %}

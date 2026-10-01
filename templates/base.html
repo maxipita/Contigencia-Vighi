@@ -4,20 +4,60 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block titulo %}Contingencia{% endblock %} · CAP Vighi</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
-<body>
+<body class="{{ 'con-sesion' if yo else 'sin-sesion' }}">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol><symbol id="i-buscar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol><symbol id="i-tablero" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol><symbol id="i-mas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></symbol><symbol id="i-etiqueta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol><symbol id="i-completar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></symbol><symbol id="i-lotes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol><symbol id="i-descargar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol><symbol id="i-usuarios" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="i-calendario" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol><symbol id="i-llave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="M17 6l3 3"/></symbol><symbol id="i-salir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol><symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol><symbol id="i-mas-sin-circulo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol><symbol id="i-puntos" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol></svg>
+  {% set ep = request.endpoint %}
   <header class="barra">
-    <a class="marca" href="{{ url_for('tablero') }}">Contingencia <span>CAP Vighi</span></a>
+    {% if yo %}<button class="b-menu" id="alternarMenu" type="button" aria-label="Mostrar u ocultar el menú"><svg class="ic"><use href="#i-menu"/></svg></button>{% endif %}
+    <a class="marca" href="{{ url_for('tablero') if yo else url_for('login') }}">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="">
+      <span><b>CAP Vighi</b><small>Sistema de contingencia</small></span>
+    </a>
     {% if yo %}
-    <nav>
-      <a href="{{ url_for('tablero') }}">Tablero</a>
-      <a href="{{ url_for('protocolo_nuevo') }}">+ Nuevo protocolo</a>
-      <a href="{{ url_for('lotes') }}">Lotes</a>
-      <a href="{{ url_for('exportar') }}">Exportar Excel</a>
-      {% if yo.admin %}<a href="{{ url_for('usuarios') }}">Usuarios</a><a href="{{ url_for('feriados') }}">Feriados</a>{% endif %}
+    <nav class="menu" id="menuPrincipal" aria-label="Menú principal">
+      <a class="it {{ 'activo' if ep in ('tablero', 'protocolo', 'estudio') }}" href="{{ url_for('tablero') }}" title="Tablero"><svg class="ic"><use href="#i-tablero"/></svg><span class="t">Tablero</span></a>
+      <a class="it {{ 'activo' if ep == 'completar' }}" href="{{ url_for('completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg><span class="t">Por completar</span>{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>
+      <a class="it" href="{{ url_for('etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>
+      <a class="it {{ 'activo' if ep in ('lotes', 'lote') }}" href="{{ url_for('lotes') }}" title="Lotes"><svg class="ic"><use href="#i-lotes"/></svg><span class="t">Lotes</span></a>
+      <div class="desplegable">
+        <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <div class="lista">
+          <div class="rotulo">Nuevo protocolo</div>
+          <a href="{{ url_for('protocolo_nuevo', tipo='BP') }}"><svg class="ic"><use href="#i-mas"/></svg> Con biopsia</a>
+          <a href="{{ url_for('protocolo_nuevo', tipo='PAP') }}"><svg class="ic"><use href="#i-mas"/></svg> Con PAP</a>
+          <a href="{{ url_for('protocolo_nuevo', tipo='CT') }}"><svg class="ic"><use href="#i-mas"/></svg> Con citología</a>
+        </div>
+      </div>
+      <div class="desplegable">
+        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <div class="lista">
+          <a href="{{ url_for('exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>
+          {% if yo.admin %}
+          <div class="sep"></div>
+          <div class="rotulo">Administración</div>
+          <a href="{{ url_for('usuarios') }}"><svg class="ic"><use href="#i-usuarios"/></svg> Usuarios</a>
+          <a href="{{ url_for('feriados') }}"><svg class="ic"><use href="#i-calendario"/></svg> Feriados</a>
+          {% endif %}
+        </div>
+      </div>
     </nav>
-    <div class="quien">{{ yo.iniciales }} · <a href="{{ url_for('cambiar_clave') }}">Clave</a> · <a href="{{ url_for('logout') }}">Salir</a></div>
+    <form class="buscar" action="{{ url_for('tablero') }}" method="get" role="search">
+      <input type="hidden" name="ver" value="todos">
+      <input name="q" placeholder="#Protocolo" autocomplete="off" aria-label="Buscar protocolo, paciente o DNI">
+      <button aria-label="Buscar"><svg class="ic"><use href="#i-buscar"/></svg></button>
+    </form>
+    <div class="quien">
+      <div class="persona"><b>{{ yo.nombre or yo.iniciales }}</b><small>{{ 'Administrador' if yo.admin else yo.iniciales }}</small></div>
+      <button class="avatar" id="menuUsuario" type="button" aria-label="Usuario">{{ yo.iniciales[:2] }}</button>
+      <div class="menu-usuario" id="menuUsuarioLista">
+        <div class="cab"><b>{{ yo.nombre or yo.iniciales }}</b><span>{{ yo.iniciales }}{{ ' · Administrador' if yo.admin }}</span></div>
+        <a href="{{ url_for('cambiar_clave') }}"><svg class="ic"><use href="#i-llave"/></svg> Cambiar clave</a>
+        <a href="{{ url_for('logout') }}"><svg class="ic"><use href="#i-salir"/></svg> Salir</a>
+      </div>
+    </div>
     {% endif %}
   </header>
   <main>

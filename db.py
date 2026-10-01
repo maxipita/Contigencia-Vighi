@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS protocolos (         -- un paciente / una solicitud: 
     medico VARCHAR(150), lugar_recoleccion VARCHAR(120), lugar_entrega VARCHAR(120),
     observaciones TEXT,
     protocolo_sistema VARCHAR(40), cargado_sistema INTEGER NOT NULL DEFAULT 0,
+    borrador INTEGER NOT NULL DEFAULT 0,             -- 1 = generado desde Recepción (etiquetas), faltan los datos del paciente
+    etiqueta_lote_id INTEGER,                        -- lote de etiquetas de Recepción que lo generó (etiquetas_lotes)
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS estudios (           -- PAP / BP / CT de un protocolo, cada uno con su flujo
@@ -58,6 +60,7 @@ CREATE TABLE IF NOT EXISTS estudios (           -- PAP / BP / CT de un protocolo
     responsable_id INTEGER REFERENCES usuarios(id),
     lote_id INTEGER REFERENCES lotes(id),
     anulado INTEGER NOT NULL DEFAULT 0, motivo_anulacion VARCHAR(200),
+    lab_etiquetado_en VARCHAR(19),                   -- cuándo se imprimieron sus etiquetas de laboratorio
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS etapas (
@@ -103,6 +106,19 @@ CREATE INDEX IF NOT EXISTS ix_estudios_protocolo ON estudios(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_lote ON estudios(lote_id);
 CREATE INDEX IF NOT EXISTS ix_etapas_estudio ON etapas(estudio_id);
 CREATE INDEX IF NOT EXISTS ix_auditoria_protocolo ON auditoria(protocolo_id);
+-- Lotes de etiquetas confirmados (generador de etiquetas). tipo: bp = Recepción, pap = PAP-Laboratorio,
+-- lab = BP-Laboratorio. desde/hasta = rango de números C000001...; quedan en NULL cuando las etiquetas
+-- salen de un lote del sistema (lote_id) con sus protocolos reales.
+CREATE TABLE IF NOT EXISTS etiquetas_lotes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo VARCHAR(10) NOT NULL,
+    desde INTEGER, hasta INTEGER,
+    lote_id INTEGER REFERENCES lotes(id),
+    n INTEGER NOT NULL, por_proto INTEGER NOT NULL, etiquetas INTEGER NOT NULL,
+    params TEXT NOT NULL,                         -- JSON con lo confirmado, para poder reimprimir igual
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
 """
 
 
@@ -166,11 +182,19 @@ def inicializar():
         c.backup(copia)
         copia.close()
         c.execute("PRAGMA foreign_keys = OFF")
-        for tabla in ("ihq", "micro", "macro", "etapas", "casos", "lotes", "auditoria"):
+        for tabla in ("ihq", "micro", "macro", "etapas", "casos", "etiquetas_lotes", "lotes", "auditoria"):
             c.execute(f"DROP TABLE IF EXISTS {tabla}")
         c.commit()
         c.execute("PRAGMA foreign_keys = ON")
     c.executescript(SCHEMA)
+    # columnas sumadas después de crear la tabla
+    cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
+    for tabla, col, definicion in (("protocolos", "borrador", "INTEGER NOT NULL DEFAULT 0"),
+                                   ("protocolos", "etiqueta_lote_id", "INTEGER"),
+                                   ("estudios", "lab_etiquetado_en", "VARCHAR(19)")):
+        if col not in cols(tabla):
+            c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
     seed = os.path.join(BASE, "seed")
 
     def cargar(nombre):
@@ -245,3 +269,71 @@ def iniciar_respaldos(minutos=10):
 
 def copiar_archivo_db(destino):
     shutil.copy2(DB_PATH, destino)
+
+
+# ---------------------------------------------------------------- etiquetas
+def _lote_abierto(c, tipo_lote, fecha, usuario_id):
+    """Lote abierto del día para ese tipo (el último) o, si no hay, uno nuevo con el próximo número.
+    Mismo criterio de código que app.crear_lote(): TIPO-MMDD.N"""
+    f = c.execute("SELECT id, codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1",
+                  (tipo_lote, fecha)).fetchone()
+    if f:
+        return {"id": f["id"], "codigo": f["codigo"], "nuevo": False}
+    n = (c.execute("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (tipo_lote, fecha)).fetchone()["m"] or 0) + 1
+    codigo = f"{tipo_lote}-{fecha[5:7]}{fecha[8:10]}.{n}"
+    lid = c.execute("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
+                    (codigo, tipo_lote, fecha, n, usuario_id, ahora())).lastrowid
+    return {"id": lid, "codigo": codigo, "nuevo": True}
+
+
+def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id,
+                        borradores=None, etiquetados=None):
+    """Registra un lote de etiquetas en una sola transacción.
+    - Recepción (desde/hasta): reserva el rango de números y crea los protocolos a completar (borradores) dentro del
+      lote abierto del día. borradores = {estudio, categoria, subcategoria, sitio, tipo_lote, fecha_lote, fecha_rec, responsable_id, protocolos}.
+    - Laboratorio: marca como etiquetados los estudios (etiquetados = ids).
+    Devuelve {"id", "lote"} o {"error": "choque" | "existentes", ...}.
+    Bloquea las escrituras mientras verifica e inserta, así dos PCs no pueden tomar el mismo rango a la vez.
+    (BEGIN IMMEDIATE es de SQLite; en MySQL sería una transacción con SELECT ... FOR UPDATE.)"""
+    c = con()
+    c.execute("BEGIN IMMEDIATE")
+    try:
+        if desde is not None:
+            marcas = ",".join("?" * len(grupo))
+            choque = c.execute(f"SELECT id, tipo, desde, hasta FROM etiquetas_lotes WHERE tipo IN ({marcas}) "
+                               "AND desde IS NOT NULL AND desde <= ? AND hasta >= ? ORDER BY id LIMIT 1",
+                               list(grupo) + [hasta, desde]).fetchone()
+            if choque:
+                c.rollback()
+                return {"error": "choque", "fila": dict(choque)}
+        lote = None
+        if borradores:
+            ya = {r["numero"] for r in c.execute("SELECT numero FROM protocolos WHERE numero LIKE 'C%'")}
+            repetidos = [p for p in borradores["protocolos"] if p in ya]
+            if repetidos:
+                c.rollback()
+                return {"error": "existentes", "protocolos": repetidos, "estudio": borradores["estudio"]}
+            lote = _lote_abierto(c, borradores["tipo_lote"], borradores["fecha_lote"], usuario_id)
+        cur = c.execute("INSERT INTO etiquetas_lotes (tipo, desde, hasta, lote_id, n, por_proto, etiquetas, params, "
+                        "creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (tipo, desde, hasta, lote["id"] if lote else None, n, por_proto, etiquetas, params_json,
+                         usuario_id, ahora()))
+        nuevo = cur.lastrowid
+        if borradores:
+            # cada número es un protocolo a completar con un estudio del tipo que corresponde al lote
+            est, ahora_ = borradores["estudio"], ahora()
+            for p in borradores["protocolos"]:
+                pid = c.execute("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) "
+                                "VALUES (?,?,1,?,?,?)", (p, borradores["fecha_rec"], nuevo, usuario_id, ahora_)).lastrowid
+                c.execute("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, responsable_id, lote_id, "
+                          "creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
+                          (pid, est, borradores["categoria"], borradores["subcategoria"], borradores["sitio"],
+                           borradores["responsable_id"], lote["id"], usuario_id, ahora_))
+        if etiquetados:
+            c.execute(f"UPDATE estudios SET lab_etiquetado_en=? WHERE id IN ({','.join('?' * len(etiquetados))})",
+                      [ahora()] + list(etiquetados))
+        c.commit()
+        return {"id": nuevo, "lote": lote}
+    except Exception:
+        c.rollback()
+        raise

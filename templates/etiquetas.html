@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etiquetas · CAP Vighi</title>
+<style>
+    /* Fuente guardada en el proyecto: las etiquetas se imprimen igual sin internet */
+    @font-face {
+        font-family: Finlandica;
+        src: url('{{ url_for("static", filename="fonts/Finlandica-latin.woff2") }}') format('woff2');
+        font-weight: 400 700;
+        font-display: swap;
+    }
+    /* Inter solo para el panel de control (no se imprime); las etiquetas siguen usando Finlandica */
+    @font-face {
+        font-family: "Inter";
+        src: url('{{ url_for("static", filename="fonts/Inter-latin.woff2") }}') format('woff2');
+        font-weight: 300 800;
+        font-display: swap;
+    }
+    :root { color-scheme: light; }
+    body { margin: 0; background: #fff; color: #000; }
+
+    /* ===== Recepción: estilos idénticos a etiqueta.css del sistema ===== */
+    .table-etiqueta {
+        color: #000 !important;
+        font-weight: 600;
+        font-family: Finlandica, sans-serif;
+    }
+    .table-etiqueta-protocolo {
+        margin-left: 20px;
+        color: #000 !important;
+        font-weight: 600;
+        font-size: 16px;
+        font-family: Finlandica, sans-serif;
+    }
+    .table-etiqueta-lote {
+        margin-left: 20px;
+        color: #000 !important;
+        font-weight: 600;
+        font-size: 14px;
+        font-family: Finlandica, sans-serif;
+    }
+    .table-etiqueta-procedencia {
+        margin-left: 20px;
+        color: #000 !important;
+        font-weight: 600;
+        font-size: 14px;
+        font-family: Finlandica, sans-serif;
+    }
+    /* En el original el ancho lo da el texto de la procedencia (~110px + 20px de margen).
+       Se fija ese ancho mínimo para que las celdas midan igual aunque no haya procedencia. */
+    .etiqueta { min-width: 129.61px; }
+
+    /* ===== BP-Laboratorio: una etiqueta por página ===== */
+    .lab-pagina { margin: 10px; font-family: Finlandica, sans-serif; color: #000; page-break-after: always; }
+    .lab-pagina:last-child { page-break-after: auto; }
+    .lab-l1 { font-size: 14px; font-weight: 500; }
+    .lab-l2, .lab-l3 { font-size: 12px; font-weight: 500; }
+    @media screen { .lab-pagina { outline: 1px dashed #c9c2d4; } .lab-pato-txt, .pap-muestra-txt { display: none; } }
+    @media print { .lab-pato-sel, .pap-muestra-sel { display: none; } }
+    /* Desplegable de patólogo / tipo de muestra dentro de cada etiqueta (solo en pantalla; al imprimir sale el texto) */
+    .lab-pato-sel, .pap-muestra-sel {
+        font: inherit; font-size: 12px; font-weight: 500; height: 16px; padding: 0; margin: 0;
+        border: 1px solid #c9c2d4; border-radius: 3px; background: #fff; color: #000; vertical-align: top;
+    }
+
+    /* ===== Panel de control (no se imprime) ===== */
+    .panel {
+        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+        background: #f8f5fb;
+        border-bottom: 1px solid #e3e8ee;
+        padding: 14px 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-end;
+    }
+    .panel label { display: flex; flex-direction: column; font-size: 13px; font-weight: 500; color: #333; gap: 4px; }
+    .panel input, .panel select {
+        font: inherit; font-size: 15px; padding: 7px 9px; border: 1px solid #cdd5df;
+        border-radius: 8px; background: #fff; min-width: 150px; box-sizing: border-box; height: 36px;
+    }
+    .panel input[type=number] { width: 100px; min-width: 0; }
+    .panel button {
+        font: inherit; font-size: 15px; font-weight: 600; padding: 8px 18px; border: 0;
+        border-radius: 999px; background: #431866; color: #fff; cursor: pointer; height: 36px;
+    }
+    .panel button:hover { background: #2f0f49; }
+    .panel .nota { font-size: 12px; color: #666; align-self: center; }
+    .panel .volver { width: 100%; font-size: 13px; font-weight: 600; color: #431866; text-decoration: none; }
+    .panel .volver:hover { text-decoration: underline; }
+    .panel .tipos { display: flex; border: 1px solid #431866; border-radius: 6px; overflow: hidden; height: 36px; }
+    .panel .tipos label { flex-direction: row; align-items: center; margin: 0; }
+    .panel .tipos input { display: none; }
+    .panel .tipos span {
+        display: block; padding: 0 14px; line-height: 34px; font-size: 14px; font-weight: 600;
+        color: #431866; cursor: pointer; background: #fff;
+    }
+    .panel .tipos input:checked + span { background: #431866; color: #fff; }
+    .panel .tipos-wrap { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 500; color: #333; width: 100%; }
+    .oculto { display: none !important; }
+
+    .panel button:disabled { background: #b9b2c4; cursor: not-allowed; }
+    .panel button.secundario { background: #fff; color: #431866; border: 1px solid #431866; }
+    .panel button.secundario:hover { background: #f1e9f9; }
+    .panel button.mini { font-size: 12px; padding: 3px 10px; height: auto; }
+    .lote-info { width: 100%; box-sizing: border-box; font-size: 13px; line-height: 1.5; padding: 9px 12px;
+        border-radius: 6px; background: #fff; border: 1px solid #e3e8ee; color: #333; }
+    .lote-info.ok { background: #e9f6ec; border-color: #9fd3ac; color: #1d4a2a; }
+    .lote-info.err { background: #fdecec; border-color: #e5a3a3; color: #7a1f1f; }
+    .lote-info.aviso { background: #fff6e0; border-color: #e6c877; color: #6b4e00; }
+    .lote-info a { color: inherit; font-weight: 600; }
+    .historial { width: 100%; font-size: 13px; color: #333; }
+    .historial summary { cursor: pointer; font-weight: 600; color: #431866; }
+    .historial table { border-collapse: collapse; margin-top: 8px; background: #fff; }
+    .historial th, .historial td { border: 1px solid #e3e8ee; padding: 4px 10px; text-align: left; }
+    .historial th { background: #f1e9f9; }
+
+    /* selección de protocolos para las etiquetas de laboratorio */
+    .seleccion { width: 100%; }
+    .sel-cab { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
+    .sel-tabla { max-height: 260px; overflow: auto; background: #fff; border: 1px solid #e3e8ee; border-radius: 6px; }
+    .sel-tabla table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    .sel-tabla th, .sel-tabla td { padding: 4px 10px; border-bottom: 1px solid #f1e9f9; text-align: left; white-space: nowrap; }
+    .sel-tabla th { background: #f1e9f9; position: sticky; top: 0; }
+    .sel-tabla tr.hecho td { color: #888; }
+    .panel .sel-tabla input[type=checkbox] { width: auto; min-width: 0; height: auto; }
+    .sel-vacio { padding: 10px 12px; font-size: 13px; color: #666; }
+
+    .panel input:focus, .panel select:focus { outline: none; border-color: #a657ed; box-shadow: 0 0 0 3px rgba(166, 87, 237, .15); }
+    .panel { border-top: 2px solid #a657ed; }
+
+    @media print {
+        .panel { display: none !important; }
+    }
+</style>
+</head>
+<body>
+
+<div class="panel">
+    <a class="volver" href="{{ url_for('tablero') }}">← Volver al sistema</a>
+    <div class="tipos-wrap">Tipo de etiqueta
+        <div class="tipos">
+            <label><input type="radio" name="tipo" value="bp" checked><span>Recepción</span></label>
+            <label><input type="radio" name="tipo" value="pap"><span>PAP-Laboratorio</span></label>
+            <label><input type="radio" name="tipo" value="lab"><span>BP-Laboratorio</span></label>
+        </div>
+    </div>
+
+    <!-- Recepción: genera los números y los protocolos a completar -->
+    <label data-tipos="bp">Cantidad de protocolos
+        <input type="number" id="cantidad" min="1" max="1000" value="10">
+    </label>
+    <label data-tipos="bp">Primer número (C…)
+        <input type="number" id="inicio" min="1" max="999999" value="1">
+    </label>
+    <label data-tipos="bp">Tipo de lote
+        <select id="lote"></select>
+    </label>
+    <label data-tipos="bp" data-solo-paps>Citotécnico
+        <select id="cito"></select>
+    </label>
+    <label data-tipos="bp">Fecha de recolección
+        <input type="date" id="fecha">
+    </label>
+
+    <!-- Laboratorio: protocolos ya completos -->
+    <label data-tipos="pap">Tipo de muestra para todas
+        <select id="lotePap"></select>
+    </label>
+    <label data-tipos="lab">Patólogo para todas (opcional)
+        <select id="pato"></select>
+    </label>
+    <div class="seleccion" data-tipos="pap lab">
+        <div class="sel-cab">
+            <label>Lote
+                <select id="origen"></select>
+            </label>
+            <button type="button" class="secundario mini" id="selTodos">Marcar todos</button>
+            <button type="button" class="secundario mini" id="selNinguno">Ninguno</button>
+            <span class="nota" id="selResumen"></span>
+        </div>
+        <div class="sel-tabla" id="selTabla"></div>
+    </div>
+
+    <button type="button" id="confirmar">Confirmar etiquetas</button>
+    <button type="button" id="imprimir" disabled>Imprimir</button>
+    <button type="button" id="nueva" class="secundario oculto">Nueva generación</button>
+    <span class="nota" id="nota"></span>
+    <span class="nota" style="margin-left:auto;">v19 · flujo Recepción → Por completar → Laboratorio</span>
+
+    <div class="lote-info" id="loteInfo"></div>
+    <details class="historial" id="historial">
+        <summary>Historial de lotes de etiquetas (<span id="histCant">0</span>)</summary>
+        <div id="histTabla"></div>
+    </details>
+</div>
+
+<div id="etiquetas"></div>
+
+<script>
+window.CSRF = {{ csrf|tojson }};
+window.URLS = {"confirmar": {{ url_for('api_etiquetas_confirmar')|tojson }}, "estado": {{ url_for('api_etiquetas_estado')|tojson }},
+               "completar": {{ url_for('completar')|tojson }}};
+window.ETIQUETAS = {{ datos|tojson }};
+</script>
+<script>
+(function () {
+    var $ = function (id) { return document.getElementById(id); };
+    // QR institucional (con el logo Vighi en el centro, recortado sin borde blanco), 70x70 px
+    var QR = 'data:image/png;base64,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';
+
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function dos(n) { return ('0' + n).slice(-2); }
+
+    function formatearFecha(iso) {          // dd/mm (sin año, se sobreentiende)
+        if (!iso) return '';
+        var p = iso.split('-');
+        return p[2] + '/' + p[1];
+    }
+    var fechaCorta = formatearFecha;        // mismo formato en los tres tipos
+    function hoyISO() {
+        var d = new Date();
+        return d.getFullYear() + '-' + dos(d.getMonth() + 1) + '-' + dos(d.getDate());
+    }
+    function numero(n) {                    // C000001
+        return 'C' + ('000000' + n).slice(-6);
+    }
+    function tipoActual() {
+        return document.querySelector('input[name=tipo]:checked').value;
+    }
+
+    /* ---------- Datos que vienen del servidor ---------- */
+    var DATOS = window.ETIQUETAS;
+    var NOMBRES = DATOS.nombres;            // {bp: 'Recepción', pap: 'PAP-Laboratorio', lab: 'BP-Laboratorio'}
+    var historial = DATOS.historial;        // lotes de etiquetas confirmados; los guarda el servidor (numeración única para todas las PCs)
+    var casos = DATOS.casos;                // protocolos ya completos: candidatos a etiquetas de laboratorio
+    var ESTUDIO = {pap: 'PAP', lab: 'BP'};  // estudio de los protocolos que rotula cada pestaña de laboratorio
+    var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;   // viene de la página de un lote: se elige ese lote
+
+    /* ---------- Estado de la pantalla ---------- */
+    var elec = {pato: {}, muestra: {}};     // elección por etiqueta ("idCaso:k" -> valor), para laboratorio
+    var seleccion = {};                     // idCaso -> true/false, lo que marcó la persona (si no, se marcan los no etiquetados)
+    var itemsFijos = null;                  // al ver un lote de etiquetas confirmado: los protocolos tal como se imprimieron
+    var loteActual = null;                  // lote de etiquetas confirmado que se está viendo (habilita Imprimir); null = sin confirmar
+    var enviando = false;
+
+    /* ---------- Recepción: 2 etiquetas por fila, con QR/logo a la derecha de cada una ---------- */
+    function bpEtiqueta(proto, lote, fecha, estilo) {
+        return '' +
+        '<td style="width: 100px;">' +
+            '<div class="etiqueta"' + (estilo ? ' style="' + estilo + '"' : '') + '>' +
+                '<div class="table-etiqueta-protocolo">' + esc(proto) + '</div>' +
+                '<div class="table-etiqueta-lote">' + esc(lote) + '</div>' +
+                '<div class="table-etiqueta-procedencia">' + esc(fecha) + '</div>' +
+            '</div>' +
+        '</td>';
+    }
+    // ancho: ancho útil de la celda (89px y 74px totales en el sistema, menos borde y padding).
+    // La imagen va como bloque centrado horizontal y verticalmente dentro del recuadro.
+    function bpQr(ancho) {
+        return '<td style="width: ' + ancho + 'px; height: 74px; vertical-align: middle;">' +
+            '<img style="display:block; width:70px; height:70px; margin:0 auto;" src="' + QR + '" width="70" height="70" alt="QR Vighi"></td>';
+    }
+    function renderBp(d) {
+        var html = '';
+        // Lote PAPS: en la segunda línea va el citotécnico (para todas las etiquetas) en lugar del nombre del lote
+        var linea2 = (d.lote === 'PAPS') ? d.cito : d.lote;
+        for (var i = 0; i < d.n; i++) {
+            var proto = '#' + numero(d.inicio + i);
+            html += '<div style="margin-top:20px;"></div>' +
+                '<table class="table-etiqueta" border="1"><tbody><tr>' +
+                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQr(85) +
+                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQr(70) +
+                '</tr></tbody></table>';
+        }
+        return html;
+    }
+
+    /* ---------- PAP-Laboratorio: tabla de 3 etiquetas por fila, sin bordes ---------- */
+    var PAP_TD = 'font-family: Finlandica, sans-serif; color: #000; padding-left: 10px; width: 110px; height: 50px; padding-top:10px;';
+    function opcionesMuestra(sel) {         // mismas opciones que el desplegable general
+        var o = $('lotePap').options, h = '';
+        for (var i = 0; i < o.length; i++) {
+            h += '<option' + (o[i].value === sel ? ' selected' : '') + '>' + esc(o[i].value) + '</option>';
+        }
+        return h;
+    }
+    function renderPap(d) {
+        var html = '<table cellspacing="0" cellpadding="0" style="padding-left:20px; width:400px;"><tbody>';
+        for (var j = 0; j < d.pos.length; j += 3) {
+            html += '<tr>';
+            for (var c = 0; c < 3; c++) {
+                var p = d.pos[j + c];
+                if (p) {
+                    var mu = elec.muestra[p.key] || '';
+                    // línea 3: citotécnico del caso y fecha de recolección
+                    var linea3 = (p.item.resp ? p.item.resp + ' ' : '') + fechaCorta(p.item.fechaRec);
+                    html += '<td style="' + PAP_TD + '">' +
+                        '<div style="font-size: 14px; font-weight: 500;">' + esc(p.item.protocolo) + '</div>' +
+                        // línea 2: tipo de muestra de ESTA etiqueta (desplegable en pantalla, texto al imprimir)
+                        '<div style="font-size: 14px; font-weight: 500;"><select class="pap-muestra-sel" data-key="' + esc(p.key) + '">' +
+                            opcionesMuestra(mu) + '</select><span class="pap-muestra-txt">' + esc(mu) + '</span></div>' +
+                        '<div style="font-size: 12px; font-weight: 500;">' + esc(linea3) + '</div>' +
+                        '</td>';
+                } else {
+                    html += '<td style="width: 110px; padding-left: 10px;"></td>';
+                }
+            }
+            html += '</tr>';
+        }
+        return html + '</tbody></table>';
+    }
+
+    /* ---------- BP-Laboratorio: una etiqueta por página ---------- */
+    function opcionesPato(sel) {            // mismas siglas que el desplegable general
+        var o = $('pato').options, h = '';
+        for (var i = 0; i < o.length; i++) {
+            h += '<option value="' + esc(o[i].value) + '"' + (o[i].value === sel ? ' selected' : '') + '>' +
+                 (o[i].value ? esc(o[i].value) : '—') + '</option>';
+        }
+        return h;
+    }
+    function renderLab(d) {
+        var html = '';
+        d.pos.forEach(function (p) {
+            var pa = elec.pato[p.key] || '';
+            html += '<div class="lab-pagina">' +
+                '<div class="lab-l1">' + esc(p.item.protocolo) + '</div>' +
+                // línea 2: patólogo de ESTA etiqueta (desplegable en pantalla, texto al imprimir)
+                '<div class="lab-l2"><select class="lab-pato-sel" data-key="' + esc(p.key) + '">' + opcionesPato(pa) + '</select>' +
+                    '<span class="lab-pato-txt">' + (pa ? esc(pa) : '&nbsp;') + '</span></div>' +
+                // línea 3: código del lote del sistema (TIPO-MMDD.N)
+                '<div class="lab-l3">' + esc(p.item.loteCodigo) + '</div>' +
+                '</div>';
+        });
+        return html;
+    }
+
+    var RENDER = { bp: renderBp, pap: renderPap, lab: renderLab };
+
+    /* ---------- Listas del sistema ---------- */
+    function etiquetaPersona(p) { return p.iniciales + (p.nombre ? ' · ' + p.nombre : ''); }
+    function rellenar(sel, valores, textoVacio) {
+        var h = (textoVacio !== undefined) ? '<option value="">' + esc(textoVacio) + '</option>' : '';
+        valores.forEach(function (x) {
+            var esTexto = typeof x === 'string';
+            h += '<option value="' + esc(esTexto ? x : x.iniciales) + '">' + esc(esTexto ? x : etiquetaPersona(x)) + '</option>';
+        });
+        sel.innerHTML = h;
+    }
+    function cargarListas() {               // los desplegables salen del sistema (Usuarios, tipos de lote)
+        var L = DATOS.listas;
+        rellenar($('lote'), L.tiposLote);
+        if (L.tiposLote.indexOf('ENDO') !== -1) $('lote').value = 'ENDO';
+        rellenar($('lotePap'), L.muestrasPap);
+        rellenar($('cito'), L.citotecnicos, '(sin citotécnico)');
+        rellenar($('pato'), L.patologos, '(en blanco)');
+    }
+    function existePato(v) {
+        var o = $('pato').options;
+        for (var i = 0; i < o.length; i++) if (o[i].value === v) return true;
+        return false;
+    }
+
+    /* ---------- Numeración de Recepción ---------- */
+    function ultimoUsado() {                // último número usado en los lotes de Recepción (0 = ninguno)
+        var u = 0;
+        for (var i = 0; i < historial.length; i++) {
+            var h = historial[i];
+            if ((h.tipo === 'bp' || h.tipo === 'pap') && h.hasta != null && h.hasta > u) u = h.hasta;
+        }
+        return u;
+    }
+    function proximo() { return ultimoUsado() + 1; }
+
+    function fechaHora(s) {                 // 'AAAA-MM-DD HH:MM:SS' -> 'DD/MM/AAAA HH:MM'
+        var p = String(s).split(/[- :]/);
+        return p[2] + '/' + p[1] + '/' + p[0] + ' ' + p[3] + ':' + p[4];
+    }
+    function buscarLote(id) {
+        for (var i = 0; i < historial.length; i++) if (historial[i].id === id) return historial[i];
+        return null;
+    }
+
+    /* ---------- Selección de protocolos (laboratorio) ---------- */
+    function marcado(c) { return seleccion[c.id] === undefined ? !c.etiquetado : seleccion[c.id]; }
+    function candidatos(t) {
+        var origen = $('origen').value;
+        return casos.filter(function (c) {
+            return c.estudio === ESTUDIO[t] && (!origen || String(c.loteId) === origen);
+        });
+    }
+    function itemsSeleccionados(t) { return candidatos(t).filter(marcado); }
+    function pendientes(t) {
+        return casos.filter(function (c) { return c.estudio === ESTUDIO[t] && !c.etiquetado; }).length;
+    }
+    function cargarOrigenes() {             // lotes que tienen protocolos completos para el estudio de la pestaña
+        var t = tipoActual();
+        if (t === 'bp') return;
+        var previo = $('origen').value, vistos = {}, h = '<option value="">Todos los lotes</option>';
+        casos.forEach(function (c) {
+            if (c.estudio === ESTUDIO[t] && c.loteId && !vistos[c.loteId]) {
+                vistos[c.loteId] = true;
+                h += '<option value="' + c.loteId + '">' + esc(c.loteCodigo) + '</option>';
+            }
+        });
+        $('origen').innerHTML = h;
+        if (previo && $('origen').querySelector('option[value="' + previo + '"]')) $('origen').value = previo;
+    }
+    function resumenSeleccion() {
+        var t = tipoActual();
+        if (t === 'bp' || itemsFijos) return;
+        var sel = itemsSeleccionados(t), etiquetas = 0;
+        sel.forEach(function (c) { etiquetas += c.cantidad; });
+        $('selResumen').textContent = sel.length + ' protocolos marcados · ' + etiquetas + ' etiquetas';
+    }
+    function renderSeleccion() {
+        var t = tipoActual();
+        if (t === 'bp') return;
+        if (itemsFijos) {
+            $('selTabla').innerHTML = '<div class="sel-vacio">Mostrando el lote de etiquetas tal como se imprimió. Para armar otro, usá “Nueva generación”.</div>';
+            $('selResumen').textContent = '';
+            return;
+        }
+        var lista = candidatos(t), h;
+        if (!lista.length) {
+            h = '<div class="sel-vacio">No hay protocolos completos para etiquetar. Se completan en <a href="' + window.URLS.completar +
+                '">Por completar</a> (paciente y cantidad).</div>';
+        } else {
+            h = '<table><thead><tr><th></th><th>Protocolo</th><th>Paciente</th><th>Cant.</th><th>Responsable</th><th>Lote</th><th>Etiquetas</th></tr></thead><tbody>';
+            lista.forEach(function (c) {
+                h += '<tr class="' + (c.etiquetado ? 'hecho' : '') + '"><td><input type="checkbox" data-caso="' + c.id + '"' + (marcado(c) ? ' checked' : '') + '></td>' +
+                    '<td><b>' + esc(c.protocolo) + '</b></td><td>' + esc(c.apellido) + (c.nombre ? ', ' + esc(c.nombre) : '') + '</td>' +
+                    '<td>' + c.cantidad + '</td><td>' + esc(c.resp) + '</td><td>' + esc(c.loteCodigo) + '</td>' +
+                    '<td>' + (c.etiquetado ? 'ya impresas' : 'pendientes') + '</td></tr>';
+            });
+            h += '</tbody></table>';
+        }
+        $('selTabla').innerHTML = h;
+        resumenSeleccion();
+    }
+
+    /* ---------- Aviso e historial ---------- */
+    function aviso(html, clase) {
+        $('loteInfo').className = 'lote-info ' + (clase || '');
+        $('loteInfo').innerHTML = html;
+    }
+    function resumenNumeracion(t) {
+        if (t === 'bp') {
+            var ult = ultimoUsado();
+            return 'Numeración de protocolos de contingencia. ' + (ult
+                ? 'Último número usado: <b>' + numero(ult) + '</b> · La próxima generación arranca en <b>' + numero(ult + 1) + '</b>.'
+                : 'Todavía no hay protocolos generados. La primera generación arranca en <b>' + numero(1) + '</b>.') +
+                '<br>Al confirmar se crean los protocolos <b>a completar</b> y quedan asignados al lote abierto de hoy del tipo elegido.';
+        }
+        return 'Etiquetas de laboratorio de protocolos que ya tienen paciente y cantidad (una etiqueta por cada unidad de la cantidad). ' +
+            'No consumen numeración. Protocolos pendientes de etiquetar: <b>' + pendientes(t) + '</b>.';
+    }
+    function descripcionLote(b) {
+        if (b.desde != null) return numero(b.desde) + ' a ' + numero(b.hasta);
+        return 'protocolos ya completos';
+    }
+    function mostrarInfo() {
+        var t = tipoActual();
+        if (loteActual) {
+            var b = loteActual, extra = '';
+            if (b.tipo === 'bp') {
+                extra = '<br>Se crearon <b>' + b.n + '</b> protocolos a completar en el lote <b>' + esc(b.loteCodigo || '') + '</b>. ' +
+                    '<a href="' + window.URLS.completar + (b.loteId ? '?lote=' + b.loteId : '') + '">Cargar pacientes y cantidades →</a>';
+            }
+            aviso('<b>Lote de etiquetas N° ' + b.id + ' confirmado</b> (' + fechaHora(b.creadoEn) + ' · ' + esc(b.creador) + ') · ' +
+                esc(NOMBRES[b.tipo]) + ' · ' + descripcionLote(b) + ' (' + b.n + ' protocolos, ' + b.etiquetas + ' etiquetas).' + extra +
+                '<br>Ya podés imprimir. Para generar otras etiquetas usá “Nueva generación”.', 'ok');
+        } else {
+            aviso(resumenNumeracion(t) + '<br>Revisá la vista previa y confirmá las etiquetas para habilitar la impresión.', '');
+        }
+    }
+    function renderHistorial() {
+        $('histCant').textContent = historial.length;
+        if (!historial.length) { $('histTabla').innerHTML = '<div style="margin-top:6px;">Todavía no hay lotes de etiquetas confirmados.</div>'; return; }
+        var h = '<table><thead><tr><th>Lote</th><th>Confirmado</th><th>Por</th><th>Tipo</th><th>Desde</th><th>Hasta</th>' +
+                '<th>Protocolos</th><th>Etiquetas</th><th>Completados</th><th></th></tr></thead><tbody>';
+        for (var i = historial.length - 1; i >= 0; i--) {
+            var b = historial[i];
+            var rango = (b.desde != null)
+                ? '<td>' + numero(b.desde) + '</td><td>' + numero(b.hasta) + '</td>'
+                : '<td colspan="2">Protocolos ya completos</td>';
+            var accion = (b.tipo === 'bp' || (b.params && b.params.items))
+                ? '<button type="button" class="secundario mini" data-reimprimir="' + b.id + '">Ver / reimprimir</button>' : '';
+            h += '<tr><td>' + b.id + '</td><td>' + fechaHora(b.creadoEn) + '</td><td>' + esc(b.creador) + '</td><td>' + esc(NOMBRES[b.tipo]) +
+                (b.loteCodigo ? '<div style="color:#666">lote ' + esc(b.loteCodigo) + '</div>' : '') + '</td>' +
+                rango + '<td>' + b.n + '</td><td>' + b.etiquetas + '</td><td>' + (b.completados != null ? b.completados + ' de ' + b.n : '—') +
+                '</td><td>' + accion + '</td></tr>';
+        }
+        $('histTabla').innerHTML = h + '</tbody></table>';
+    }
+
+    // Con un lote confirmado todo queda bloqueado: lo que se imprime es exactamente lo confirmado.
+    function aplicarBloqueo() {
+        var bloq = !!loteActual;
+        Array.prototype.forEach.call(document.querySelectorAll('.panel input, .panel select, #etiquetas select'), function (el) {
+            el.disabled = bloq;
+        });
+        $('confirmar').classList.toggle('oculto', bloq);
+        $('nueva').classList.toggle('oculto', !bloq);
+        $('imprimir').disabled = !bloq;
+        mostrarInfo();
+    }
+
+    /* ---------- Confirmación (contra el servidor) ---------- */
+    function refrescar(j) {                 // el servidor devuelve el estado completo después de cada operación
+        if (j.historial) historial = j.historial;
+        if (j.casos) casos = j.casos;
+        renderHistorial();
+    }
+    // El servidor es quien decide si el rango está libre y, en Recepción, crea los protocolos a completar.
+    function enviarConfirmacion(payload) {
+        enviando = true;
+        $('confirmar').disabled = true;
+        fetch(window.URLS.confirmar, {
+            method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json', 'X-CSRF': window.CSRF},
+            body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (j) {
+            enviando = false;
+            $('confirmar').disabled = false;
+            refrescar(j);
+            if (j.ok) {
+                loteActual = buscarLote(j.id);
+                aplicarBloqueo();
+            } else if (j.conflicto) {
+                // otra PC tomó esos números: se pasa al siguiente libre y se muestra la vista previa nueva para revisar
+                $('inicio').value = proximo();
+                generar();
+                aviso(esc(j.error) + '<br>Se actualizó el primer número a <b>' + numero(parseInt($('inicio').value, 10)) +
+                    '</b>: revisá la vista previa y confirmá de nuevo.', 'err');
+            } else {
+                if (tipoActual() !== 'bp') { cargarOrigenes(); renderSeleccion(); generar(); }
+                aviso(esc(j.error || 'No se pudo confirmar.').replace(/\n/g, '<br>'), 'err');
+            }
+        }).catch(function () {
+            enviando = false;
+            $('confirmar').disabled = false;
+            aviso('No se pudo confirmar: no hay conexión con la PC servidor o venció la sesión. Recargá la página e intentá de nuevo.', 'err');
+        });
+    }
+
+    function confirmar() {
+        if (enviando) return;
+        var t = tipoActual(), d = armarDatos(), payload;
+        if (t === 'bp') {
+            if (!d.n) { aviso('Cargá al menos 1 protocolo para confirmar.', 'err'); return; }
+            if (!d.fecha) { aviso('Elegí la fecha de recolección antes de confirmar.', 'err'); return; }
+            if (d.lote === 'PAPS' && !d.cito) {
+                aviso('Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.', 'err'); return;
+            }
+            if (d.inicio + d.n - 1 > 999999) { aviso('El rango se pasa de ' + numero(999999) + '. Bajá la cantidad o el primer número.', 'err'); return; }
+            payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito}};
+        } else {
+            if (!d.n) { aviso('Marcá al menos un protocolo para etiquetar.', 'err'); return; }
+            payload = {tipo: t, items: d.items.map(function (i) { return i.id; }),
+                       params: {pato: $('pato').value, lotePap: $('lotePap').value,
+                                patos: d.pos.map(function (p) { return elec.pato[p.key] || ''; }),
+                                muestras: d.pos.map(function (p) { return elec.muestra[p.key] || ''; })}};
+        }
+        enviarConfirmacion(payload);
+    }
+
+    function reiniciarLab() {
+        itemsFijos = null; elec = {pato: {}, muestra: {}}; seleccion = {};
+    }
+    function nuevaGeneracion() {
+        loteActual = null;
+        reiniciarLab();
+        if (tipoActual() === 'bp') $('inicio').value = proximo();
+        cargarOrigenes();
+        renderSeleccion();
+        generar();
+    }
+
+    // Vuelve a mostrar un lote de etiquetas ya confirmado, tal como se imprimió
+    function verLote(id) {
+        var b = buscarLote(id);
+        if (!b) return;
+        loteActual = null;
+        reiniciarLab();
+        if (b.tipo !== 'bp') {
+            itemsFijos = b.params.items.map(function (i) {
+                return {id: i.casoId, protocolo: i.protocolo, cantidad: i.cantidad, loteCodigo: i.loteCodigo, resp: i.resp, fechaRec: i.fechaRec};
+            });
+            posicionesDe(itemsFijos).forEach(function (p, i) {
+                elec.pato[p.key] = (b.params.patos || [])[i] || '';
+                elec.muestra[p.key] = (b.params.muestras || [])[i] || '';
+            });
+        }
+        aplicarBloqueo();                          // habilita los campos para poder cargarlos
+        document.querySelector('input[name=tipo][value=' + b.tipo + ']').checked = true;
+        mostrarCampos();
+        cargarOrigenes();
+        renderSeleccion();
+        if (b.tipo === 'bp') {
+            var p = b.params;
+            $('cantidad').value = b.n; $('inicio').value = b.desde; $('fecha').value = p.fecha;
+            $('lote').value = p.lote; $('cito').value = p.cito || '';
+        }
+        loteActual = b;
+        generar();
+        window.scrollTo(0, 0);
+    }
+
+    /* ---------- Armado de la vista previa ---------- */
+    function mostrarCampos() {
+        var t = tipoActual();
+        var els = document.querySelectorAll('[data-tipos]');
+        for (var i = 0; i < els.length; i++) {
+            var visible = els[i].getAttribute('data-tipos').split(' ').indexOf(t) !== -1;
+            // en Recepción el citotécnico solo se pide cuando el tipo de lote es PAPS
+            if (visible && els[i].hasAttribute('data-solo-paps') && $('lote').value !== 'PAPS') visible = false;
+            els[i].classList.toggle('oculto', !visible);
+        }
+    }
+
+    function posicionesDe(items) {          // una posición por etiqueta: cada protocolo lleva tantas como su cantidad
+        var pos = [];
+        items.forEach(function (it) {
+            for (var k = 0; k < it.cantidad; k++) pos.push({item: it, key: it.id + ':' + k});
+        });
+        return pos;
+    }
+
+    function armarDatos() {
+        var t = tipoActual(), items = null;
+        if (t !== 'bp') items = itemsFijos || itemsSeleccionados(t);
+        return {
+            n: items ? items.length : Math.max(0, Math.min(1000, parseInt($('cantidad').value, 10) || 0)),
+            inicio: Math.max(1, Math.min(999999, parseInt($('inicio').value, 10) || 1)),
+            fecha: $('fecha').value,
+            lote: $('lote').value.trim().toUpperCase(),
+            cito: $('cito').value,
+            items: items,
+            pos: items ? posicionesDe(items) : null
+        };
+    }
+
+    function generar() {
+        mostrarCampos();
+        var t = tipoActual(), d = armarDatos();
+        // las etiquetas nuevas arrancan con el patólogo del caso (BP) o con el tipo de muestra general (PAP)
+        if (t === 'lab') {
+            d.pos.forEach(function (p) {
+                if (elec.pato[p.key] === undefined) elec.pato[p.key] = (p.item.resp && existePato(p.item.resp)) ? p.item.resp : $('pato').value;
+            });
+        } else if (t === 'pap') {
+            d.pos.forEach(function (p) {
+                if (elec.muestra[p.key] === undefined) elec.muestra[p.key] = $('lotePap').value;
+            });
+        }
+        $('etiquetas').innerHTML = RENDER[t](d);
+
+        if (t === 'bp') {
+            var ultimo = d.inicio + d.n - 1;
+            $('nota').textContent = d.n ? 'De ' + numero(d.inicio) + ' a ' + numero(ultimo) + ' (' + d.n + ' protocolos, ' + (d.n * 2) + ' etiquetas).' : '';
+        } else {
+            $('nota').textContent = d.n ? d.n + ' protocolos (' + d.pos.length + ' etiquetas). ' +
+                (t === 'lab' ? 'Elegí el patólogo de cada etiqueta en su segunda línea.' : 'Elegí el tipo de muestra de cada etiqueta en su segunda línea.') : '';
+            resumenSeleccion();
+        }
+        aplicarBloqueo();
+    }
+
+    // Al cambiar de pestaña: en Recepción el primer número es el siguiente al último confirmado
+    function cambiarTipo() {
+        var t = tipoActual();
+        mostrarCampos();
+        if (t === 'bp') $('inicio').value = proximo();
+        cargarOrigenes();
+        if (presetPendiente && t !== 'bp') {
+            if ($('origen').querySelector('option[value="' + presetPendiente + '"]')) $('origen').value = String(presetPendiente);
+            presetPendiente = null;
+        }
+        renderSeleccion();
+        try { localStorage.setItem('etiquetas_tipo', t); } catch (e) {}
+        generar();
+    }
+
+    /* ---------- Arranque ---------- */
+    cargarListas();
+    $('fecha').value = hoyISO();
+    if (DATOS.preset) {
+        document.querySelector('input[name=tipo][value=' + DATOS.preset.tab + ']').checked = true;
+    } else {
+        try {
+            var tg = localStorage.getItem('etiquetas_tipo');
+            var radio = tg && document.querySelector('input[name=tipo][value=' + tg + ']');
+            if (radio) radio.checked = true;
+        } catch (e) {}
+    }
+
+    ['cantidad', 'inicio', 'lote', 'cito', 'fecha'].forEach(function (id) {
+        $(id).addEventListener('input', generar);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=tipo]'), function (r) {
+        r.addEventListener('change', cambiarTipo);
+    });
+    $('origen').addEventListener('change', function () { renderSeleccion(); generar(); });
+    $('selTodos').addEventListener('click', function () {
+        candidatos(tipoActual()).forEach(function (c) { seleccion[c.id] = true; });
+        renderSeleccion(); generar();
+    });
+    $('selNinguno').addEventListener('click', function () {
+        candidatos(tipoActual()).forEach(function (c) { seleccion[c.id] = false; });
+        renderSeleccion(); generar();
+    });
+    $('selTabla').addEventListener('change', function (e) {
+        var id = e.target.getAttribute && e.target.getAttribute('data-caso');
+        if (!id) return;
+        seleccion[parseInt(id, 10)] = e.target.checked;
+        generar();
+    });
+    // "Patólogo para todas": pisa la elección de todas las etiquetas visibles
+    $('pato').addEventListener('input', function () {
+        var d = armarDatos();
+        if (d.pos) d.pos.forEach(function (p) { elec.pato[p.key] = $('pato').value; });
+        generar();
+    });
+    // "Tipo de muestra para todas" (PAP): pisa la elección de todas las etiquetas visibles
+    $('lotePap').addEventListener('input', function () {
+        var d = armarDatos();
+        if (d.pos) d.pos.forEach(function (p) { elec.muestra[p.key] = $('lotePap').value; });
+        generar();
+    });
+    // Elección en una etiqueta puntual (sin volver a dibujar todo, para no perder el foco)
+    $('etiquetas').addEventListener('change', function (e) {
+        var sel = e.target;
+        if (!sel.classList) return;
+        var key = sel.getAttribute('data-key');
+        if (sel.classList.contains('lab-pato-sel')) {
+            elec.pato[key] = sel.value;
+            sel.parentNode.querySelector('.lab-pato-txt').innerHTML = sel.value ? esc(sel.value) : '&nbsp;';
+        } else if (sel.classList.contains('pap-muestra-sel')) {
+            elec.muestra[key] = sel.value;
+            sel.parentNode.querySelector('.pap-muestra-txt').textContent = sel.value;
+        }
+    });
+    $('confirmar').addEventListener('click', confirmar);
+    $('nueva').addEventListener('click', nuevaGeneracion);
+    $('imprimir').addEventListener('click', function () { if (loteActual) window.print(); });
+    $('histTabla').addEventListener('click', function (e) {
+        var id = e.target.getAttribute && e.target.getAttribute('data-reimprimir');
+        if (id) verLote(parseInt(id, 10));
+    });
+    // Otra PC pudo confirmar lotes o completar protocolos mientras esta pantalla estaba en segundo plano:
+    // al volver se actualizan la numeración y los protocolos disponibles
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden || loteActual || enviando) return;
+        fetch(window.URLS.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || !j.historial) return;
+            var t = tipoActual(), antes = proximo();
+            refrescar(j);
+            if (t === 'bp' && parseInt($('inicio').value, 10) === antes) $('inicio').value = proximo();
+            cargarOrigenes(); renderSeleccion(); generar();
+        }).catch(function () {});
+    });
+    renderHistorial();
+    cambiarTipo();
+})();
+</script>
+</body>
+</html>
