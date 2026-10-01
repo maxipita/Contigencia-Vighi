@@ -863,12 +863,18 @@ def lote_o_404(lote_id):
     return l
 
 
+def orden_numero(numero):
+    """Clave para ordenar números de protocolo como personas: C000009 < C000010, 9 < 10 < 100 (letras primero, después los dígitos)."""
+    m = re.fullmatch(r"(\D*)(\d+)(.*)", numero or "")
+    return (m.group(1), int(m.group(2)), m.group(3)) if m else (numero or "", 0, "")
+
+
 @app.route("/lotes/<int:lote_id>")
 @requiere_login
 def lote(lote_id):
     l = lote_o_404(lote_id)
     del_lote = cargar_estudios("e.lote_id=?", (lote_id,), borradores=True)
-    del_lote.sort(key=lambda x: x["id"])                      # en orden de ingreso
+    del_lote.sort(key=lambda x: (orden_numero(x["numero"]), x["id"]))     # por número de protocolo
     sin_lote = [x for x in cargar_estudios("e.lote_id IS NULL AND e.anulado=0")
                 if l["tipo_lote"] in tipos_lote(x["tipo"])][:300]
     return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote,

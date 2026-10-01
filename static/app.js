@@ -16,8 +16,11 @@ async function prepararBloque(bloque) {
   const campo = c => bloque.querySelector(`[data-cat="${c}"]`);
   const [sub, sitio, tm] = ["subcategoria", "sitio", "tipo_muestra"].map(campo);
   const arbol = await catalogo(bloque.dataset.tipo);
-  const llenar = (sel, opciones, actual) => {
-    sel.innerHTML = '<option value=""></option>' + opciones.map(o =>
+  // Sin opciones (falta elegir el paso anterior) el campo queda deshabilitado y dice qué elegir primero
+  const llenar = (sel, opciones, actual, falta) => {
+    sel.disabled = !opciones.length;
+    const aviso = opciones.length ? "Seleccionar…" : (falta ? `Elegí ${falta} primero` : "Sin opciones");
+    sel.innerHTML = `<option value="" hidden>${aviso}</option>` + opciones.map(o =>
       `<option${o === actual ? " selected" : ""}>${o.replace(/</g, "&lt;")}</option>`).join("");
   };
   const fijo = !sub;                                    // PAP: subcategoría y sitio fijos
@@ -26,8 +29,9 @@ async function prepararBloque(bloque) {
   const actualizar = desde => {
     if (!fijo && desde === "inicio") llenar(sub, Object.keys(arbol), sub.dataset.actual);
     const sitios = arbol[subVal()] || {};
-    if (!fijo && desde !== "sitio") llenar(sitio, Object.keys(sitios), desde === "inicio" ? sitio.dataset.actual : "");
-    llenar(tm, sitios[sitioVal()] || [], desde === "inicio" ? tm.dataset.actual : "");
+    if (!fijo && desde !== "sitio") llenar(sitio, Object.keys(sitios), desde === "inicio" ? sitio.dataset.actual : "",
+                                           !subVal() && "la subcategoría");
+    llenar(tm, sitios[sitioVal()] || [], desde === "inicio" ? tm.dataset.actual : "", !sitioVal() && "el sitio");
   };
   if (!fijo) {
     sub.addEventListener("change", () => actualizar("sub"));

@@ -39,7 +39,7 @@
     <form method="post" action="{{ url_for('lote_agregar', lote_id=l.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <label>Estudios sin lote que van en {{ l.tipo_lote }}</label>
-      <select name="estudio_id"><option value=""></option>
+      <select name="estudio_id"><option value="" hidden>Seleccionar…</option>
         {% for s in sin_lote %}<option value="{{ s.id }}">{{ s.numero }} · {{ s.etiqueta }}{% if s.apellido %} — {{ s.apellido }}{% endif %}</option>{% endfor %}</select>
       <label style="margin-top:8px">o escribí el N° de protocolo</label>
       <input name="protocolo" autocomplete="off">

@@ -1,6 +1,6 @@
 {# Piezas de formulario compartidas. Importar con: {% import "estudios/_bloque.html" as b with context %} #}
 
-{% macro opciones(lista, actual) %}<option value=""></option>{% if actual and actual|string not in lista|map('string') %}<option selected>{{ actual }}</option>{% endif %}{% for o in lista %}<option {{ 'selected' if o|string == actual|string }}>{{ o }}</option>{% endfor %}{% endmacro %}
+{% macro opciones(lista, actual) %}<option value="" hidden>Seleccionar…</option>{% if actual and actual|string not in lista|map('string') %}<option selected>{{ actual }}</option>{% endif %}{% for o in lista %}<option {{ 'selected' if o|string == actual|string }}>{{ o }}</option>{% endfor %}{% endmacro %}
 
 {# Bloque de un estudio (PAP / BP / CT). Los campos se llaman e-N-campo; lo que cambia entre tipos sale del módulo del estudio. #}
 {% macro bloque(tipo, i, e, quitar=True) %}
@@ -28,7 +28,7 @@
       <div><label>Citología hormonal</label><select name="{{ p }}citologia_hormonal">{{ opciones(['Si', 'No'], val('citologia_hormonal')) }}</select></div>
     {% endif %}
     <div><label>{{ t.etiqueta_responsable }}</label>
-      <select name="{{ p }}responsable_id"{% if t.lote_por_citotecnico %} data-lote-cito{% endif %}><option value=""></option>
+      <select name="{{ p }}responsable_id"{% if t.lote_por_citotecnico %} data-lote-cito{% endif %}><option value="" hidden>Seleccionar…</option>
         {% for r in resp[tipo] %}<option value="{{ r.id }}" data-ini="{{ r.iniciales }}" {{ 'selected' if r.id|string == val('responsable_id') }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} — {{ r.nombre }}{% endif %}</option>{% endfor %}
       </select></div>
     <div><label>Lote</label>

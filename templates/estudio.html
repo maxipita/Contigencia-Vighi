@@ -100,7 +100,7 @@
       <fieldset class="seccion" {{ 'disabled' if not edita_micro[0] }}>
       <div class="grilla">
         {% if tipo.bethesda %}
-          <div><label>Resultado (Bethesda)</label><select name="bethesda"><option value=""></option>
+          <div><label>Resultado (Bethesda)</label><select name="bethesda"><option value="" hidden>Seleccionar…</option>
             {% for x in bethesda %}<option {{ 'selected' if micro and micro.bethesda == x }}>{{ x }}</option>{% endfor %}</select></div>
         {% endif %}
         <div class="ancho"><label>Template micro</label>{{ select_template(tpl_micro, micro.template if micro else '', 'desc_micro', 'concl_micro') }}</div>
