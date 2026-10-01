@@ -23,10 +23,12 @@
       </tr>
       {% endfor %}
     </table>
+    {% if puede('protocolo_editar') %}
     <div class="acciones">
       <span class="muted">Agregar estudio:</span>
       {% for k, t in REGISTRO.items() %}<a class="btn sec" href="{{ url_for('estudio_nuevo', pid=p.id, tipo=k) }}">+ {{ t.nombre }}</a>{% endfor %}
     </div>
+    {% endif %}
   </div>
 
   <div class="tarjeta">
@@ -48,7 +50,7 @@
       {% if valor %}<div class="dato"><b>{{ etiqueta }}</b> {{ valor }}</div>{% endif %}
     {% endfor %}
     {% if not p.fecha_recoleccion %}<div class="dato lt">Falta la fecha de recolección (los plazos se cuentan desde el ingreso).</div>{% endif %}
-    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolo_editar', pid=p.id) }}">Editar datos</a></div>
+    {% if puede('protocolo_editar') %}<div class="acciones"><a class="btn sec" href="{{ url_for('protocolo_editar', pid=p.id) }}">Editar datos</a></div>{% endif %}
   </div>
 
   <div class="tarjeta">
@@ -58,7 +60,7 @@
       <label>N° de protocolo en southernbits</label><input name="protocolo_sistema" value="{{ p.protocolo_sistema or '' }}">
       <label style="margin-top:8px;display:flex;gap:6px;align-items:center">
         <input type="checkbox" name="cargado_sistema" value="1" {{ 'checked' if p.cargado_sistema }}> Protocolo cargado en el sistema</label>
-      <div class="acciones"><button class="btn sec">Guardar</button></div>
+      <fieldset class="seccion" {{ 'disabled' if not puede('sistema') }}><div class="acciones"><button class="btn sec">Guardar</button></div></fieldset>
     </form>
   </div>
 </div>

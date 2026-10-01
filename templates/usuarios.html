@@ -3,14 +3,17 @@
 {% block contenido %}
 <div class="eyebrow">Administración</div>
 <h1>Usuarios</h1>
-<div class="acciones" style="margin:0 0 12px"><a class="btn" href="{{ url_for('usuario') }}">+ Nuevo usuario</a></div>
+<div class="acciones" style="margin:0 0 12px"><a class="btn" href="{{ url_for('usuario') }}">+ Nuevo usuario</a>
+  <a class="btn sec" href="{{ url_for('perfiles') }}">Perfiles y permisos</a></div>
 <table>
-  <tr><th>Iniciales</th><th>Nombre</th><th>Sectores</th><th>Clave</th><th>Estado</th><th></th></tr>
+  <tr><th>Iniciales</th><th>Nombre</th><th>Sectores</th><th>Perfil</th><th>Clave</th><th>Estado</th><th></th></tr>
   {% for u in usuarios %}
   <tr class="{{ '' if u.activo else 'bloqueado' }}">
     <td><b>{{ u.iniciales }}</b>{% if u.admin %} <span class="chip">admin</span>{% endif %}</td>
     <td>{{ u.nombre or '' }}</td>
     <td>{% for s in (u.sectores or '').split(',') if s %}<span class="chip">{{ SECTORES.get(s, s) }}</span> {% endfor %}</td>
+    <td>{{ 'Administrador' if u.admin else (u.perfil or '—') }}{% if u.permisos_mas or u.permisos_menos %}
+      <span class="muted" title="Tiene permisos sumados o quitados respecto del perfil">· con ajustes</span>{% endif %}</td>
     <td>{% if not u.clave_hash %}<span class="muted">sin clave</span>{% elif u.debe_cambiar_clave %}<span class="muted">temporal</span>{% else %}✔{% endif %}</td>
     <td>{{ 'Activo' if u.activo else 'Inactivo' }}</td>
     <td><a href="{{ url_for('usuario', uid=u.id) }}">Editar</a></td>

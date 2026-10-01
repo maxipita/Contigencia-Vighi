@@ -22,7 +22,7 @@
 </div>
 
 <div>
-  {% if es_hoy %}
+  {% if es_hoy and puede('lotes_armar') %}
   <div class="tarjeta">
     <h2>Nuevo lote</h2>
     <form method="post" action="{{ url_for('nuevo_lote') }}">

@@ -20,9 +20,10 @@
     {% if yo %}
     <nav class="menu" id="menuPrincipal" aria-label="Menú principal">
       <a class="it {{ 'activo' if ep in ('tablero', 'protocolo', 'estudio') }}" href="{{ url_for('tablero') }}" title="Tablero"><svg class="ic"><use href="#i-tablero"/></svg><span class="t">Tablero</span></a>
-      <a class="it {{ 'activo' if ep == 'completar' }}" href="{{ url_for('completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg><span class="t">Por completar</span>{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>
-      <a class="it {{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>
+      {% if puede('protocolo_crear') %}<a class="it {{ 'activo' if ep == 'completar' }}" href="{{ url_for('completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg><span class="t">Por completar</span>{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>{% endif %}
+      {% if puede('etiquetas_recepcion') or puede('etiquetas_lab') %}<a class="it {{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>{% endif %}
       <a class="it {{ 'activo' if ep in ('lotes', 'lote') }}" href="{{ url_for('lotes') }}" title="Lotes"><svg class="ic"><use href="#i-lotes"/></svg><span class="t">Lotes</span></a>
+      {% if puede('protocolo_crear') %}
       <div class="desplegable">
         <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
@@ -32,15 +33,19 @@
           <a href="{{ url_for('protocolo_nuevo', tipo='CT') }}"><svg class="ic"><use href="#i-mas"/></svg> Con citología</a>
         </div>
       </div>
+      {% endif %}
       <div class="desplegable">
-        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados', 'perfiles', 'perfil') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
-          <a href="{{ url_for('exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>
-          {% if yo.admin %}
+          {% if puede('exportar') %}<a href="{{ url_for('exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>{% endif %}
+          {% if yo.admin or puede('feriados') %}
           <div class="sep"></div>
           <div class="rotulo">Administración</div>
+          {% if yo.admin %}
           <a href="{{ url_for('usuarios') }}"><svg class="ic"><use href="#i-usuarios"/></svg> Usuarios</a>
-          <a href="{{ url_for('feriados') }}"><svg class="ic"><use href="#i-calendario"/></svg> Feriados</a>
+          <a href="{{ url_for('perfiles') }}"><svg class="ic"><use href="#i-llave"/></svg> Perfiles y permisos</a>
+          {% endif %}
+          {% if puede('feriados') %}<a href="{{ url_for('feriados') }}"><svg class="ic"><use href="#i-calendario"/></svg> Feriados</a>{% endif %}
           {% endif %}
         </div>
       </div>

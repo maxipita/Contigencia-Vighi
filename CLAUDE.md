@@ -23,7 +23,7 @@ py app.py                                 # servidor real en :8000 (equivale a "
   (plantillas y CSS se ven al refrescar; un cambio en `.py` reinicia solo), escucha solo en `127.0.0.1` y no hace respaldos.
   El `.bat` usa waitress (producción) y **no** recarga: es para la PC servidor, no para desarrollar.
 - Variables de entorno: `CONTINGENCIA_PUERTO`, `CONTINGENCIA_DB`, `CONTINGENCIA_RESPALDO` (carpeta extra de
-  respaldos), `CONTINGENCIA_ESTRICTO=1` (cada etapa solo la marca su sector).
+  respaldos).
 - `py preparar_semillas.py` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
   concreta** (ver constantes al inicio del script): no corre en otra máquina sin ajustarlas.
 
@@ -40,6 +40,10 @@ py app.py                                 # servidor real en :8000 (equivale a "
 - `estudios/` — un módulo por tipo de estudio (`pap.py`, `bp.py`, `ct.py`) con su flujo de etapas, plazos, tipos de lote,
   cantidades, responsable y requisitos; `base.py` tiene sectores, etapas y la clase `Estudio`; `__init__.py` el registro
   (`REGISTRO`). Los formularios se arman desde ahí: un tipo nuevo es un módulo nuevo.
+- `permisos.py` — catálogo de permisos (`PERMISOS`) y perfiles iniciales. Cada usuario tiene un perfil (tabla
+  `perfiles`) más ajustes propios (`usuarios.permisos_mas` / `permisos_menos`); el admin puede todo. En `app.py` las
+  rutas se protegen con `@requiere_permiso(...)` y las plantillas usan `puede('clave')` para ocultar lo que no corresponde.
+  Las etapas además las marca solo el sector que las realiza. Un permiso nuevo = clave en `PERMISOS` + decorador + `puede`.
 - `trazabilidad.py` — fecha límite de cada etapa en días hábiles desde la recolección (plazos de cada estudio, `FERIADOS_2026`),
   para mostrar OT/LT como southernbits. Horario hábil 8–20.
 - `templates/` (Jinja) y `static/` — interfaz. `seed/` — datos iniciales en JSON.

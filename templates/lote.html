@@ -20,7 +20,7 @@
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
       <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span></td>
-      <td class="no-imprimir">{% if not l.cerrado %}
+      <td class="no-imprimir">{% if not l.cerrado and puede('lotes_armar') %}
         <form method="post" action="{{ url_for('lote_quitar', lote_id=l.id, eid=c.id) }}" data-confirmar="¿Quitar {{ c.numero }} · {{ c.etiqueta }} del lote?">
           <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec" style="padding:3px 8px">Quitar</button></form>
       {% endif %}</td>
@@ -33,7 +33,7 @@
 </div>
 
 <div class="no-imprimir">
-  {% if not l.cerrado %}
+  {% if not l.cerrado and puede('lotes_armar') %}
   <div class="tarjeta">
     <h2>Agregar estudio</h2>
     <form method="post" action="{{ url_for('lote_agregar', lote_id=l.id) }}">
@@ -54,17 +54,17 @@
     <form method="post" action="{{ url_for('lote_observaciones', lote_id=l.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <label>Observaciones</label><textarea name="observaciones" style="min-height:60px">{{ l.observaciones or '' }}</textarea>
-      <div class="acciones"><button class="btn sec">Guardar</button></div>
+      <fieldset class="seccion" {{ 'disabled' if not puede('lotes_armar') }}><div class="acciones"><button class="btn sec">Guardar</button></div></fieldset>
     </form>
     <div class="acciones">
       <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
-      {% if etiquetas_lab %}<a class="btn sec" href="{{ url_for('etiquetas', lote=l.id) }}">Etiquetas de laboratorio</a>{% endif %}
-      {% if not l.cerrado or yo.admin %}
+      {% if etiquetas_lab and puede('etiquetas_lab') %}<a class="btn sec" href="{{ url_for('etiquetas', lote=l.id) }}">Etiquetas de laboratorio</a>{% endif %}
+      {% if puede('lotes_cerrar') %}
       <form method="post" action="{{ url_for('lote_cerrar', lote_id=l.id) }}" data-confirmar="{{ '¿Reabrir el lote?' if l.cerrado else '¿Cerrar el lote? Ya no se podrán agregar ni quitar estudios.' }}">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
         <button class="btn">{{ 'Reabrir lote' if l.cerrado else 'Cerrar lote' }}</button></form>
       {% endif %}
-      {% if not estudios %}
+      {% if not estudios and puede('lotes_cerrar') %}
       <form method="post" action="{{ url_for('lote_eliminar', lote_id=l.id) }}" data-confirmar="¿Eliminar el lote vacío {{ l.codigo }}?">
         <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn peligro">Eliminar</button></form>
       {% endif %}

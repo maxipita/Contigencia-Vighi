@@ -15,6 +15,11 @@ DATA = os.path.join(BASE, "data")
 DB_PATH = os.environ.get("CONTINGENCIA_DB", os.path.join(DATA, "contingencia.db"))
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS perfiles (           -- conjunto de permisos que se asigna a los usuarios (permisos.py)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre VARCHAR(60) NOT NULL UNIQUE,
+    permisos VARCHAR(500) NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS usuarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     iniciales VARCHAR(10) NOT NULL UNIQUE,
@@ -23,7 +28,10 @@ CREATE TABLE IF NOT EXISTS usuarios (
     admin INTEGER NOT NULL DEFAULT 0,
     activo INTEGER NOT NULL DEFAULT 1,
     clave_hash VARCHAR(255),
-    debe_cambiar_clave INTEGER NOT NULL DEFAULT 1
+    debe_cambiar_clave INTEGER NOT NULL DEFAULT 1,
+    perfil_id INTEGER REFERENCES perfiles(id),
+    permisos_mas VARCHAR(500) NOT NULL DEFAULT '',      -- permisos que se le suman a su perfil (claves separadas por coma)
+    permisos_menos VARCHAR(500) NOT NULL DEFAULT ''     -- permisos que se le quitan a su perfil
 );
 CREATE TABLE IF NOT EXISTS lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +197,10 @@ def inicializar():
     c.executescript(SCHEMA)
     # columnas sumadas después de crear la tabla
     cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
-    for tabla, col, definicion in (("protocolos", "borrador", "INTEGER NOT NULL DEFAULT 0"),
+    for tabla, col, definicion in (("usuarios", "perfil_id", "INTEGER REFERENCES perfiles(id)"),
+                                   ("usuarios", "permisos_mas", "VARCHAR(500) NOT NULL DEFAULT ''"),
+                                   ("usuarios", "permisos_menos", "VARCHAR(500) NOT NULL DEFAULT ''"),
+                                   ("protocolos", "borrador", "INTEGER NOT NULL DEFAULT 0"),
                                    ("protocolos", "etiqueta_lote_id", "INTEGER"),
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)")):
         if col not in cols(tabla):
@@ -227,6 +238,16 @@ def inicializar():
     if not c.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone():
         c.executemany("INSERT INTO usuarios (iniciales, nombre, sectores) VALUES (?,?,?)",
                       [(u["iniciales"], u["iniciales"], ",".join(u["sectores"])) for u in cargar("usuarios.json")])
+    # perfiles iniciales; los usuarios que ya existen arrancan con el perfil de su sector
+    if not c.execute("SELECT 1 FROM perfiles LIMIT 1").fetchone():
+        import permisos
+        perfiles = {}
+        for nombre, (sector, lista) in permisos.PERFILES_INICIALES.items():
+            pid = c.execute("INSERT INTO perfiles (nombre, permisos) VALUES (?,?)", (nombre, permisos.texto(lista))).lastrowid
+            perfiles[nombre] = (pid, sector, set(lista))
+        for uid, sectores in c.execute("SELECT id, sectores FROM usuarios WHERE perfil_id IS NULL").fetchall():
+            pid, extra = permisos.perfil_por_sectores(sectores, perfiles)
+            c.execute("UPDATE usuarios SET perfil_id=?, permisos_mas=? WHERE id=?", (pid, permisos.texto(extra), uid))
     c.commit()
     c.close()
 

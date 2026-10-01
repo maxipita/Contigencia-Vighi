@@ -65,11 +65,14 @@
   <p class="muted">Primero se generan las etiquetas de Recepción (crean los protocolos), después se cargan los pacientes en
     <a href="{{ url_for('completar') }}">Por completar</a> y por último se imprimen las de laboratorio de cada protocolo.</p>
 
+  {# cada paso solo con su permiso (el servidor también lo controla al confirmar) #}
+  {% set rec, lab = puede('etiquetas_recepcion'), puede('etiquetas_lab') %}
+  {% macro sin(ok) %}{{ ' data-sin-permiso disabled' if not ok }}{% endmacro %}
   <div class="pasos-etq">
-    <label class="paso-et"><input type="radio" name="tipo" value="bp" checked><span class="pill"><em>1</em>Recepción</span></label>
-    <span class="flecha">›</span>
-    <label class="paso-et"><input type="radio" name="tipo" value="pap"><span class="pill"><em>2</em>PAP-Laboratorio</span></label>
-    <label class="paso-et"><input type="radio" name="tipo" value="lab"><span class="pill"><em>2</em>BP-Laboratorio</span></label>
+    <label class="paso-et"{{ ' style="display:none"' | safe if not rec }}><input type="radio" name="tipo" value="bp"{{ ' checked' if rec }}{{ sin(rec) }}><span class="pill"><em>1</em>Recepción</span></label>
+    {% if rec and lab %}<span class="flecha">›</span>{% endif %}
+    <label class="paso-et"{{ ' style="display:none"' | safe if not lab }}><input type="radio" name="tipo" value="pap"{{ ' checked' if not rec and lab }}{{ sin(lab) }}><span class="pill"><em>2</em>PAP-Laboratorio</span></label>
+    <label class="paso-et"{{ ' style="display:none"' | safe if not lab }}><input type="radio" name="tipo" value="lab"{{ sin(lab) }}><span class="pill"><em>2</em>BP-Laboratorio</span></label>
   </div>
 
   <div class="tarjeta" id="panelEtq">
@@ -487,7 +490,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     function aplicarBloqueo() {
         var bloq = !!loteActual;
         Array.prototype.forEach.call(document.querySelectorAll('#panelEtq input, #panelEtq select, .pasos-etq input'), function (el) {
-            el.disabled = bloq;
+            el.disabled = bloq || el.hasAttribute('data-sin-permiso');
         });
         Array.prototype.forEach.call(lienzo.querySelectorAll('select'), function (el) { el.disabled = bloq; });
         $('confirmar').classList.toggle('oculto', bloq);
@@ -570,7 +573,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     // Vuelve a mostrar un lote de etiquetas ya confirmado, tal como se imprimió
     function verLote(id) {
         var b = buscarLote(id);
-        if (!b) return;
+        if (!b || document.querySelector('input[name=tipo][value=' + b.tipo + ']').hasAttribute('data-sin-permiso')) return;
         loteActual = null;
         reiniciarLab();
         if (b.tipo !== 'bp') {
@@ -681,7 +684,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         try {
             var tg = localStorage.getItem('etiquetas_tipo');
             var radio = tg && document.querySelector('input[name=tipo][value=' + tg + ']');
-            if (radio) radio.checked = true;
+            if (radio && !radio.hasAttribute('data-sin-permiso')) radio.checked = true;
         } catch (e) {}
     }
 

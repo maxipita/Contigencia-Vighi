@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Perfil ' ~ p.nombre if p and p.id else 'Nuevo perfil' }}{% endblock %}
+{% block contenido %}
+<p><a href="{{ url_for('perfiles') }}">← Perfiles y permisos</a></p>
+<div class="eyebrow">Administración</div>
+<h1>{{ 'Perfil ' ~ p.nombre if p and p.id else 'Nuevo perfil' }}</h1>
+<div class="cols">
+<form method="post" class="tarjeta">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <h2>Permisos</h2>
+  <label>Nombre del perfil *</label>
+  <input name="nombre" value="{{ p.nombre if p else '' }}" required style="max-width:320px">
+  {% for grupo in GRUPOS %}
+  <div class="permisos-grupo">
+    <div class="rotulo-grupo">{{ grupo }}</div>
+    {% for k, (g, desc) in PERMISOS.items() if g == grupo %}
+    <label class="casilla"><input type="checkbox" name="p_{{ k }}" value="1" {{ 'checked' if k in marcados }}> {{ desc }}</label>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  <div class="acciones"><button class="btn">Guardar</button><a class="btn sec" href="{{ url_for('perfiles') }}">Cancelar</a></div>
+</form>
+{% if p and p.id %}
+<div class="tarjeta">
+  <h2>Usuarios con este perfil</h2>
+  {% for u in usuarios %}<div class="dato {{ 'bloqueado' if not u.activo }}"><b>{{ u.iniciales }}</b> {{ u.nombre if u.nombre != u.iniciales else '' }}{{ ' (inactivo)' if not u.activo }}</div>
+  {% else %}<p class="muted">Ningún usuario lo tiene.</p>{% endfor %}
+  <p class="muted">Los cambios de permisos se aplican a todos estos usuarios en su próxima acción.</p>
+  {% if not usuarios %}
+  <form method="post" class="acciones" data-confirmar="¿Eliminar el perfil {{ p.nombre }}?">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="eliminar" value="1">
+    <button class="btn peligro">Eliminar perfil</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+</div>
+{% endblock %}
