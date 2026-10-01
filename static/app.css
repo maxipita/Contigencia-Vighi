@@ -185,6 +185,10 @@ textarea { min-height: 110px; resize: vertical; }
 .btn.peligro:hover { background: var(--error-fondo); opacity: 1; color: var(--error); }
 .mini { font-size: 12px; margin-left: 6px; }
 
+.oculto { display: none !important; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.mini { min-height: 26px; padding: 2px 12px; margin-left: 0; font-size: 11px; }
+
 /* ---------- tablas ---------- */
 table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio);
         overflow: hidden; box-shadow: var(--sombra); }
