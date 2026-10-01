@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Protocolo {{ p.numero }}{% endblock %}
+{% block contenido %}
+<h1>Protocolo {{ p.numero }}</h1>
+<div class="cols">
+<div>
+  <div class="tarjeta">
+    <h2>Estudios</h2>
+    <table>
+      <tr><th>Estudio</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th></tr>
+      {% for e in estudios %}
+      <tr class="{{ 'bloqueado' if e.anulado }}">
+        <td><a href="{{ url_for('estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>
+        <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
+        <td>{% if e.lote_id %}<a href="{{ url_for('lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
+        <td>{{ e.responsable or '' }}</td>
+        <td><span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
+          {% if e.proxima %}<div class="muted">{{ SECTORES[e.proxima[2]] }}</div>{% endif %}</td>
+        <td>{% if e.vence %}<span class="{{ 'lt' if e.atrasado else 'muted' }}">{{ '⚑ ' if e.atrasado }}{{ e.vence | dh }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="acciones">
+      <span class="muted">Agregar estudio:</span>
+      {% for k, t in REGISTRO.items() %}<a class="btn sec" href="{{ url_for('estudio_nuevo', pid=p.id, tipo=k) }}">+ {{ t.nombre }}</a>{% endfor %}
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Historial</h2>
+    <div class="historial">
+      {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="tarjeta">
+    <h2>Paciente</h2>
+    {% for etiqueta, valor in [("Paciente", (p.apellido or '') ~ (', ' ~ p.nombre if p.nombre else '')), ("DNI", p.dni),
+        ("Nacimiento", p.fecha_nacimiento | f), ("Sexo", p.sexo), ("Cobertura", p.cobertura), ("N° afiliado", p.n_afiliado),
+        ("Exento", p.exento), ("E-mail", p.email), ("Teléfono", p.telefono), ("Médico solicitante", p.medico),
+        ("Recolección", p.fecha_recoleccion | f), ("Lugar recolección", p.lugar_recoleccion), ("Lugar entrega", p.lugar_entrega),
+        ("Observaciones", p.observaciones), ("Ingresado", (p.creado_en | fh) ~ ' · ' ~ (p.creador or ''))] %}
+      {% if valor %}<div class="dato"><b>{{ etiqueta }}</b> {{ valor }}</div>{% endif %}
+    {% endfor %}
+    {% if not p.fecha_recoleccion %}<div class="dato lt">Falta la fecha de recolección (los plazos se cuentan desde el ingreso).</div>{% endif %}
+    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolo_editar', pid=p.id) }}">Editar datos</a></div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Vuelta al sistema</h2>
+    <form method="post" action="{{ url_for('cargado_sistema', pid=p.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>N° de protocolo en southernbits</label><input name="protocolo_sistema" value="{{ p.protocolo_sistema or '' }}">
+      <label style="margin-top:8px;display:flex;gap:6px;align-items:center">
+        <input type="checkbox" name="cargado_sistema" value="1" {{ 'checked' if p.cargado_sistema }}> Protocolo cargado en el sistema</label>
+      <div class="acciones"><button class="btn sec">Guardar</button></div>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}

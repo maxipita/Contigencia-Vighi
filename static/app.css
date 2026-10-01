@@ -83,4 +83,21 @@ tr:hover td { background: var(--lila-2); }
   th { background: #fff !important; color: #000; border-bottom: 2px solid #000; }
   a { color: #000; text-decoration: none; }
 }
+fieldset.seccion { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.seccion[disabled] textarea, fieldset.seccion[disabled] select, fieldset.seccion[disabled] input { background: var(--lila-2); color: var(--gris); }
+fieldset.seccion[disabled] .acciones { display: none; }
+.buscador { position: relative; }
+.sugerencias { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 2px); max-height: 260px; overflow-y: auto;
+               background: #fff; border: 1px solid var(--violeta-2); border-radius: 6px; box-shadow: 0 4px 14px rgba(91, 44, 131, .15); }
+.sugerencias div { padding: 6px 9px; cursor: pointer; font-size: 13px; }
+.sugerencias div:hover, .sugerencias div.activo { background: var(--lila); color: var(--violeta); }
+.sugerencias .nada { color: var(--gris); cursor: default; font-style: italic; }
+.sugerencias .nada:hover { background: #fff; color: var(--gris); }
 .historial { font-size: 12px; color: var(--gris); max-height: 260px; overflow: auto; }
+.bloque-cab { display: flex; justify-content: space-between; align-items: center; }
+.bloque-cab h2 { margin: 0 0 10px; }
+.estudio-bloque { border-left: 4px solid var(--violeta-2); }
+.mini-btn { padding: 3px 9px; font-size: 12px; }
+.titulo-seccion { margin-top: 6px; }
+.agregar-estudio { margin: 0 0 18px; }
+.tabs a.bloqueado { text-decoration: line-through; }

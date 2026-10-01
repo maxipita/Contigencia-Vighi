@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "estudios/_bloque.html" as b with context %}
+{% block titulo %}{{ 'Editar estudio' if editando else 'Agregar estudio' }} · {{ p.numero }}{% endblock %}
+{% block contenido %}
+<p><a href="{{ url_for('estudio', eid=editando) if editando else url_for('protocolo', pid=p.id) }}">← Protocolo {{ p.numero }}</a></p>
+<h1>{{ 'Editar estudio' if editando else 'Agregar estudio' }} — Protocolo {{ p.numero }}</h1>
+<p class="muted">{{ p.apellido or '' }}{% if p.nombre %}, {{ p.nombre }}{% endif %}{% if p.dni %} · DNI {{ p.dni }}{% endif %}</p>
+<form method="post" class="form-estudios">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="bloques">
+    {% for e in estudios %}{{ b.bloque(e.tipo, loop.index0, e, quitar=not editando) }}{% endfor %}
+  </div>
+  {% if not editando %}{{ b.agregar_estudios() }}{% endif %}
+  <div class="acciones">
+    <button class="btn">{{ 'Guardar cambios' if editando else 'Agregar al protocolo' }}</button>
+    <a class="btn sec" href="{{ url_for('estudio', eid=editando) if editando else url_for('protocolo', pid=p.id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

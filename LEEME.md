@@ -16,15 +16,22 @@ Si Windows pregunta por el firewall, permitir el acceso en **redes privadas**.
 
 ## Uso
 
-- **Ingreso:** `+ PAP`, `+ Biopsia`, `+ Citología`. En "Lote" se elige un lote abierto del día o se crea uno nuevo.
-- **Lotes:** los lotes del día (`TIPO-MMDD.N`, ej. `ONCO-0930.2`, el número sigue solo), con sus protocolos.
-  Se agregan protocolos escribiendo el número, se quitan, se imprime la lista y se **cierra** el lote al despacharlo
-  (cerrado no admite cambios; un administrador lo puede reabrir). Se pueden consultar lotes de otros días.
-- **Tablero:** pendientes, informados, sin cargar al sistema; filtros por estudio y sector; búsqueda.
-- **Ficha del caso:** recorrido de etapas con el botón **✔ Listo** (queda registrado quién y cuándo),
-  macroscopía y microscopía con **templates** (el texto aparece editable), IHQ, y "Vuelta al sistema".
+Un **protocolo** es un paciente/solicitud con un número. Adentro tiene uno o más **estudios** (PAP, Biopsia,
+Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad propios.
+
+- **+ Nuevo protocolo:** datos del paciente (una sola vez, con la fecha de recolección) y abajo los estudios con
+  los botones `+ PAP`, `+ Biopsia`, `+ Citología` (puede haber varias biopsias). Regla: **con un PAP solo pueden ir
+  muestras ginecológicas**; las demás se combinan libremente (ej. biopsia + citología de líquido).
+- **Ficha del protocolo:** paciente, lista de estudios, `+ Agregar estudio` y "Vuelta al sistema" (por protocolo).
+- **Ficha del estudio:** **trazabilidad** (fecha límite de cada etapa en días hábiles desde la recolección, OT/LT,
+  demora) con el botón **✔ Completar**; macroscopía / microscopía con **templates** (solo editables mientras el
+  estudio está en esa etapa), IHQ, y "Anular estudio" (anula solo ese estudio).
+- **Lotes:** los lotes del día (`TIPO-MMDD.N`, ej. `ONCO-0930.2`; en PAP las iniciales del citotécnico, ej.
+  `MAD-0930.1`), con sus estudios. Se imprimen y se **cierran** al despacharlos (un administrador los puede reabrir).
+- **Tablero:** una fila por estudio: pendientes, informados, sin cargar al sistema; filtros y búsqueda.
 - **Deshacer:** la última etapa la puede deshacer quien la registró o un administrador.
-- **Exportar Excel:** todos los casos con sus etapas, para re-cargarlos en southernbits.
+- **Feriados** (administrador): se descuentan de los plazos. Verificar la lista cada año.
+- **Exportar Excel:** una fila por estudio con los datos del protocolo, para re-cargarlos en southernbits.
 
 ## Datos y respaldos
 
@@ -50,6 +57,9 @@ solo en una base nueva (vacía).
 
 ## Estructura
 
-- `app.py` — pantallas y reglas · `flujos.py` — etapas de PAP / BP (+IHQ) / CT
+- `app.py` — pantallas y reglas comunes (protocolo, lotes, usuarios, tablero)
+- `estudios/` — **un módulo por tipo de estudio** (`pap.py`, `bp.py`, `ct.py`): etapas, plazos, lotes, cantidades,
+  responsable y requisitos. Para sumar un tipo nuevo se agrega un módulo y se registra en `estudios/__init__.py`.
+- `trazabilidad.py` — fechas límite, OT/LT y demoras
 - `db.py` — **todo el acceso a datos** (SQL estándar; para migrar a MySQL se cambia solo este módulo)
 - `templates/`, `static/` — interfaz · `seed/` — datos iniciales

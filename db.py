@@ -37,45 +37,48 @@ CREATE TABLE IF NOT EXISTS lotes (
     cerrado_por INTEGER REFERENCES usuarios(id), cerrado_en VARCHAR(19),
     UNIQUE (tipo_lote, fecha, numero)
 );
-CREATE TABLE IF NOT EXISTS casos (
+CREATE TABLE IF NOT EXISTS protocolos (         -- un paciente / una solicitud: datos que comparten sus estudios
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tipo VARCHAR(3) NOT NULL,
-    protocolo VARCHAR(30) NOT NULL,
-    lote VARCHAR(40), tipo_lote VARCHAR(20), n_lote INTEGER,
-    lote_id INTEGER REFERENCES lotes(id),
+    numero VARCHAR(30) NOT NULL UNIQUE,
     fecha_recoleccion VARCHAR(10),
-    dni VARCHAR(20), cobertura VARCHAR(40), n_afiliado VARCHAR(40),
+    dni VARCHAR(20), cobertura VARCHAR(80), n_afiliado VARCHAR(40),
     nombre VARCHAR(80), apellido VARCHAR(80), sexo VARCHAR(10), exento VARCHAR(3),
     fecha_nacimiento VARCHAR(10), email VARCHAR(120), telefono VARCHAR(40),
-    medico VARCHAR(120), lugar_recoleccion VARCHAR(120), lugar_entrega VARCHAR(120),
-    categoria VARCHAR(40), subcategoria VARCHAR(60), sitio VARCHAR(80), tipo_muestra VARCHAR(80),
-    cantidad INTEGER, citologia_hormonal VARCHAR(3),
-    responsable_id INTEGER REFERENCES usuarios(id),
+    medico VARCHAR(150), lugar_recoleccion VARCHAR(120), lugar_entrega VARCHAR(120),
     observaciones TEXT,
     protocolo_sistema VARCHAR(40), cargado_sistema INTEGER NOT NULL DEFAULT 0,
-    anulado INTEGER NOT NULL DEFAULT 0,
-    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19),
-    UNIQUE (tipo, protocolo)
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
+);
+CREATE TABLE IF NOT EXISTS estudios (           -- PAP / BP / CT de un protocolo, cada uno con su flujo
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    tipo VARCHAR(3) NOT NULL,
+    categoria VARCHAR(40), subcategoria VARCHAR(60), sitio VARCHAR(80), tipo_muestra VARCHAR(80),
+    cantidad VARCHAR(5), citologia_hormonal VARCHAR(3), observaciones TEXT,
+    responsable_id INTEGER REFERENCES usuarios(id),
+    lote_id INTEGER REFERENCES lotes(id),
+    anulado INTEGER NOT NULL DEFAULT 0, motivo_anulacion VARCHAR(200),
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS etapas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    caso_id INTEGER NOT NULL REFERENCES casos(id),
+    estudio_id INTEGER NOT NULL REFERENCES estudios(id),
     etapa VARCHAR(30) NOT NULL,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
     fecha_hora VARCHAR(19) NOT NULL,
-    UNIQUE (caso_id, etapa)
+    UNIQUE (estudio_id, etapa)
 );
 CREATE TABLE IF NOT EXISTS macro (
-    caso_id INTEGER PRIMARY KEY REFERENCES casos(id),
+    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
     template VARCHAR(120), descripcion TEXT, cassettes INTEGER
 );
 CREATE TABLE IF NOT EXISTS micro (
-    caso_id INTEGER PRIMARY KEY REFERENCES casos(id),
+    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
     template VARCHAR(120), descripcion TEXT, conclusion TEXT,
     bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS ihq (
-    caso_id INTEGER PRIMARY KEY REFERENCES casos(id),
+    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
     marcadores TEXT, resultado TEXT
 );
 CREATE TABLE IF NOT EXISTS templates (
@@ -91,12 +94,15 @@ CREATE TABLE IF NOT EXISTS catalogo (
 CREATE TABLE IF NOT EXISTS listas (nombre VARCHAR(30) NOT NULL, orden INTEGER, valor VARCHAR(80));
 CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fecha_hora VARCHAR(19) NOT NULL, usuario_id INTEGER, caso_id INTEGER,
+    fecha_hora VARCHAR(19) NOT NULL, usuario_id INTEGER, protocolo_id INTEGER, estudio_id INTEGER,
     accion VARCHAR(40) NOT NULL, detalle TEXT
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
-CREATE INDEX IF NOT EXISTS ix_etapas_caso ON etapas(caso_id);
-CREATE INDEX IF NOT EXISTS ix_auditoria_caso ON auditoria(caso_id);
+CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL);
+CREATE INDEX IF NOT EXISTS ix_estudios_protocolo ON estudios(protocolo_id);
+CREATE INDEX IF NOT EXISTS ix_estudios_lote ON estudios(lote_id);
+CREATE INDEX IF NOT EXISTS ix_etapas_estudio ON etapas(estudio_id);
+CREATE INDEX IF NOT EXISTS ix_auditoria_protocolo ON auditoria(protocolo_id);
 """
 
 
@@ -145,35 +151,26 @@ def feriados():
     return {date.fromisoformat(r["fecha"]) for r in q("SELECT fecha FROM feriados")}
 
 
-def auditar(usuario_id, caso_id, accion, detalle=""):
-    ex("INSERT INTO auditoria (fecha_hora, usuario_id, caso_id, accion, detalle) VALUES (?,?,?,?,?)",
-       (ahora(), usuario_id, caso_id, accion, detalle))
+def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
+    ex("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
+       (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
 
 
 # ---------------------------------------------------------------- inicialización
 def inicializar():
     c = _conectar()
+    # versión anterior (un "caso" por tipo de estudio, solo datos de prueba): se respalda y se arranca limpio
+    if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='casos'").fetchone():
+        os.makedirs(os.path.join(DATA, "respaldos"), exist_ok=True)
+        copia = sqlite3.connect(os.path.join(DATA, "respaldos", f"antes_de_protocolos_{datetime.now():%Y%m%d_%H%M}.db"))
+        c.backup(copia)
+        copia.close()
+        c.execute("PRAGMA foreign_keys = OFF")
+        for tabla in ("ihq", "micro", "macro", "etapas", "casos", "lotes", "auditoria"):
+            c.execute(f"DROP TABLE IF EXISTS {tabla}")
+        c.commit()
+        c.execute("PRAGMA foreign_keys = ON")
     c.executescript(SCHEMA)
-    # migraciones de bases creadas con versiones anteriores
-    columnas = {r["name"] for r in c.execute("PRAGMA table_info(casos)")}
-    if "lote_id" not in columnas:
-        c.execute("ALTER TABLE casos ADD COLUMN lote_id INTEGER REFERENCES lotes(id)")
-    c.execute("CREATE INDEX IF NOT EXISTS ix_casos_lote ON casos(lote_id)")
-    # lotes de la versión anterior (solo texto "TIPO-MMDD.N") -> lotes reales
-    for caso_id, texto, creado_en in c.execute(
-            "SELECT id, lote, creado_en FROM casos WHERE lote_id IS NULL AND lote LIKE '%-____.%'").fetchall():
-        tipo_lote, _, resto = texto.rpartition("-")
-        mmdd, _, numero = resto.partition(".")
-        if not (tipo_lote and mmdd.isdigit() and len(mmdd) == 4 and numero.isdigit()):
-            continue
-        fecha = f"{(creado_en or ahora())[:4]}-{mmdd[:2]}-{mmdd[2:]}"
-        fila = c.execute("SELECT id FROM lotes WHERE codigo=?", (texto,)).fetchone()
-        if fila:
-            lote_id = fila["id"]
-        else:
-            lote_id = c.execute("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_en) VALUES (?,?,?,?,?)",
-                                (texto, tipo_lote, fecha, int(numero), creado_en or ahora())).lastrowid
-        c.execute("UPDATE casos SET lote_id=? WHERE id=?", (lote_id, caso_id))
     seed = os.path.join(BASE, "seed")
 
     def cargar(nombre):
@@ -183,6 +180,8 @@ def inicializar():
     if not c.execute("SELECT 1 FROM feriados LIMIT 1").fetchone():
         from trazabilidad import FERIADOS_2026
         c.executemany("INSERT INTO feriados VALUES (?,?)", FERIADOS_2026)
+    if not c.execute("SELECT 1 FROM medicos LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "medicos.json")):
+        c.executemany("INSERT INTO medicos (id, nombre) VALUES (?,?)", [(m["id"], m["nombre"]) for m in cargar("medicos.json")])
     if not c.execute("SELECT 1 FROM catalogo LIMIT 1").fetchone():
         c.executemany("INSERT INTO catalogo VALUES (?,?,?,?,?)",
                       [(x["tipo"], x["categoria"], x["subcategoria"], x["sitio"], x["tipo_muestra"])
@@ -190,6 +189,12 @@ def inicializar():
     if not c.execute("SELECT 1 FROM listas LIMIT 1").fetchone():
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [(n, i, v) for n, vals in cargar("listas.json").items() for i, v in enumerate(vals)])
+    # coberturas: reemplaza la lista genérica inicial (Particular / Obra Social / Prepaga) por las del sistema
+    actuales = [r[0] for r in c.execute("SELECT valor FROM listas WHERE nombre='cobertura' ORDER BY orden")]
+    if actuales in ([], ["Particular", "Obra Social", "Prepaga"]):
+        c.execute("DELETE FROM listas WHERE nombre='cobertura'")
+        c.executemany("INSERT INTO listas VALUES (?,?,?)",
+                      [("cobertura", i, v) for i, v in enumerate(cargar("listas.json")["cobertura"])])
     if not c.execute("SELECT 1 FROM templates LIMIT 1").fetchone():
         for clase in ("macro", "micro"):
             c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion) VALUES (?,?,?,?,?)",

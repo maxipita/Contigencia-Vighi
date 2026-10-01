@@ -1,0 +1,55 @@
+{# Piezas de formulario compartidas. Importar con: {% import "estudios/_bloque.html" as b with context %} #}
+
+{% macro opciones(lista, actual) %}<option value=""></option>{% if actual and actual|string not in lista|map('string') %}<option selected>{{ actual }}</option>{% endif %}{% for o in lista %}<option {{ 'selected' if o|string == actual|string }}>{{ o }}</option>{% endfor %}{% endmacro %}
+
+{# Bloque de un estudio (PAP / BP / CT). Los campos se llaman e-N-campo; lo que cambia entre tipos sale del módulo del estudio. #}
+{% macro bloque(tipo, i, e, quitar=True) %}
+{% set t = REGISTRO[tipo] %}
+{% set p = 'e-' ~ i ~ '-' %}
+{% macro val(k) %}{{ e[k] if e and e[k] is not none else '' }}{% endmacro %}
+<div class="tarjeta estudio-bloque" data-tipo="{{ tipo }}">
+  <input type="hidden" name="{{ p }}tipo" value="{{ tipo }}">
+  <div class="bloque-cab">
+    <h2>{{ t.nombre }}</h2>
+    {% if quitar %}<button type="button" class="btn sec mini-btn" data-quitar-bloque>✕ Quitar</button>{% endif %}
+  </div>
+  <div class="grilla">
+    {% if t.subcategoria_fija %}
+      <div><label>Subcategoría</label><input value="{{ t.subcategoria_fija }}" readonly></div>
+      <div><label>Sitio</label><input value="{{ t.sitio_fijo }}" readonly></div>
+    {% else %}
+      <div><label>Subcategoría (sistema)</label><select name="{{ p }}subcategoria" data-cat="subcategoria" data-actual="{{ val('subcategoria') }}"></select></div>
+      <div><label>Sitio (órgano)</label><select name="{{ p }}sitio" data-cat="sitio" data-actual="{{ val('sitio') }}"></select></div>
+    {% endif %}
+    <div><label>Tipo de muestra</label><select name="{{ p }}tipo_muestra" data-cat="tipo_muestra" data-actual="{{ val('tipo_muestra') }}"></select></div>
+    <div><label>Cantidad ({{ t.etiqueta_cantidad }})</label><select name="{{ p }}cantidad">{{ opciones(t.cantidades, val('cantidad')) }}</select></div>
+    {% if t.citologia_hormonal %}
+      <div><label>Citología hormonal</label><select name="{{ p }}citologia_hormonal">{{ opciones(['Si', 'No'], val('citologia_hormonal')) }}</select></div>
+    {% endif %}
+    <div><label>{{ t.etiqueta_responsable }}</label>
+      <select name="{{ p }}responsable_id"{% if t.lote_por_citotecnico %} data-lote-cito{% endif %}><option value=""></option>
+        {% for r in resp[tipo] %}<option value="{{ r.id }}" data-ini="{{ r.iniciales }}" {{ 'selected' if r.id|string == val('responsable_id') }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} — {{ r.nombre }}{% endif %}</option>{% endfor %}
+      </select></div>
+    <div><label>Lote</label>
+      <select name="{{ p }}lote_id">
+        <option value="">— Sin lote —</option>
+        {% if lotes_abiertos[tipo] %}<optgroup label="Lotes abiertos de hoy">
+          {% for l in lotes_abiertos[tipo] %}<option value="{{ l.id }}" data-tipo="{{ l.tipo_lote }}" {{ 'selected' if l.id|string == val('lote_sel') }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}
+        </optgroup>{% endif %}
+        <optgroup label="Crear lote nuevo de hoy">
+          {% for tl in tipos_lote_de[tipo] %}<option value="nuevo:{{ tl }}" {{ 'selected' if val('lote_sel') == 'nuevo:' ~ tl }}>+ Nuevo lote {{ tl }}</option>{% endfor %}
+        </optgroup>
+      </select></div>
+    <div class="ancho"><label>Observaciones del estudio</label><textarea name="{{ p }}observaciones" style="min-height:50px">{{ val('observaciones') }}</textarea></div>
+  </div>
+</div>
+{% endmacro %}
+
+{# Botones para sumar estudios + plantillas ocultas que usa app.js para crear bloques nuevos #}
+{% macro agregar_estudios() %}
+<div class="acciones agregar-estudio">
+  <span class="muted">Agregar estudio:</span>
+  {% for k, t in REGISTRO.items() %}<button type="button" class="btn sec" data-agregar-estudio="{{ k }}">+ {{ t.nombre }}</button>{% endfor %}
+</div>
+{% for k in REGISTRO %}<template id="tpl-estudio-{{ k }}">{{ bloque(k, '__N__', {}) }}</template>{% endfor %}
+{% endmacro %}

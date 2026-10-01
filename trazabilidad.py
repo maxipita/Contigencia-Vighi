@@ -1,31 +1,8 @@
 """Trazabilidad de un protocolo: fecha límite de cada etapa (días hábiles desde la recolección, igual que
 southernbits), fecha completada, usuario y si se cumplió a tiempo (OT) o tarde (LT)."""
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 
-# etapa -> (proceso, actividad, acción) tal como los muestra el sistema
-ETIQUETAS = {
-    "ingreso": ("INGRESO", "Cargar protocolo", "Protocolo > Cargar"),
-    "macroscopia": ("DIAGNÓSTICOS", "Macroscopía", "Macro > Informar"),
-    "procesamiento": ("LABORATORIO", "Procesamiento", "Histo > Procesar"),
-    "inclusion": ("LABORATORIO", "Inclusión", "Cassette > Incluir"),
-    "corte": ("LABORATORIO", "Corte PH", "Taco > Cortar"),
-    "coloreado": ("LABORATORIO", "Coloreado", "Porta > Colorear"),
-    "citotecnicos": ("TRASLADOS", "Citotécnicos", "Cito > Informar"),
-    "microscopia": ("DIAGNÓSTICOS", "Microscopía", "Micro > Informar"),
-    "corte_ihq": ("LABORATORIO", "Corte PH", "Taco IHQ > Cortar"),
-    "envio_ihq": ("TRASLADOS", "Laboratorio", "Lab Ext > Procesar"),
-    "proc_ihq": ("LABORATORIO", "Procesamiento", "IHQ > Procesar"),
-    "interp_ihq": ("DIAGNÓSTICOS", "Microscopía", "Micro > Interpretar"),
-}
-
-# Plazos: (días hábiles desde la recolección, hora límite). Sacados de las capturas del sistema.
-PLAZOS = {
-    "BP": {"ingreso": (1, 20), "macroscopia": (2, 20), "procesamiento": (3, 20), "inclusion": (3, 20),
-           "corte": (4, 20), "coloreado": (5, 20), "microscopia": (6, 20),
-           "corte_ihq": (7, 20), "envio_ihq": (8, 18), "proc_ihq": (9, 20), "interp_ihq": (13, 20)},
-    "PAP": {"ingreso": (1, 20), "coloreado": (2, 20), "citotecnicos": (3, 18), "microscopia": (4, 20)},
-    "CT": {"ingreso": (1, 20), "coloreado": (2, 20), "microscopia": (3, 20)},
-}
+from estudios import ETAPAS, REGISTRO
 
 
 def _d(texto):
@@ -90,37 +67,38 @@ def texto_demora(horas):
 
 def limite(tipo, etapa, base_texto, feriados):
     """Fecha límite de una etapa a partir de la fecha de recolección (o de ingreso) en texto."""
-    dias, hora = PLAZOS[tipo].get(etapa, (0, 20))
+    dias, hora = REGISTRO[tipo].plazos.get(etapa, (0, 20))
     return datetime.combine(sumar_habiles(_d(base_texto), dias, feriados), time(hora))
 
 
-def calcular(caso, pasos, etapas, feriados, ahora=None):
-    """caso: fila de casos; pasos: [(clave, nombre, sector)] del flujo; etapas: {clave: fila con fecha_hora/iniciales}.
+def calcular(estudio, pasos, etapas, feriados, ahora=None):
+    """estudio: fila del estudio con tipo, creado_en, creador y la fecha_recoleccion del protocolo;
+    pasos: [(clave, nombre, sector)] del flujo; etapas: {clave: fila con fecha_hora/iniciales}.
     Devuelve (encabezado, filas)."""
     ahora = ahora or datetime.now()
-    tipo = caso["tipo"]
-    base = _d(caso["fecha_recoleccion"]) if caso["fecha_recoleccion"] else _d(caso["creado_en"])
-    completadas = {"ingreso": {"fecha_hora": caso["creado_en"], "iniciales": caso["creador"]}}
-    completadas.update({k: v for k, v in etapas.items()})
+    tipo = REGISTRO[estudio["tipo"]]
+    base = _d(estudio["fecha_recoleccion"]) if estudio["fecha_recoleccion"] else _d(estudio["creado_en"])
+    completadas = {"ingreso": {"fecha_hora": estudio["creado_en"], "iniciales": estudio["creador"]}}
+    completadas.update(etapas)
     filas, proxima_marcada = [], False
     ant_limite = datetime.combine(base, time(JORNADA[0]))    # la etapa anterior a la primera: la recolección
     ant_completada = ant_limite
     for clave in ["ingreso"] + [p[0] for p in pasos]:
-        dias, hora = PLAZOS[tipo].get(clave, (0, 20))
-        limite = datetime.combine(sumar_habiles(base, dias, feriados), time(hora))
+        dias, hora = tipo.plazos.get(clave, (0, 20))
+        lim = datetime.combine(sumar_habiles(base, dias, feriados), time(hora))
         hecha = completadas.get(clave)
-        proceso, actividad, accion = ETIQUETAS[clave]
-        f = {"clave": clave, "proceso": proceso, "actividad": actividad, "accion": accion, "limite": limite,
+        _, _, proceso, actividad, accion = ETAPAS[clave]
+        f = {"clave": clave, "proceso": proceso, "actividad": actividad, "accion": accion, "limite": lim,
              "completada": _dt(hecha["fecha_hora"]) if hecha else None, "usuario": hecha["iniciales"] if hecha else None,
              "estado": "", "atraso": "", "demora": "", "proxima": False}
         referencia = f["completada"] or ahora
-        if referencia > limite:
+        if referencia > lim:
             f["estado"] = "LT"
-            f["atraso"] = f"{dias_atraso(limite, referencia, feriados)}d"
+            f["atraso"] = f"{dias_atraso(lim, referencia, feriados)}d"
             if f["completada"]:
                 # horas hábiles que llevó la etapa (desde que la anterior estuvo disponible) menos las permitidas
                 inicio = max(ant_completada or ant_limite, ant_limite)
-                extra = horas_habiles(inicio, f["completada"], feriados) - horas_habiles(ant_limite, limite, feriados)
+                extra = horas_habiles(inicio, f["completada"], feriados) - horas_habiles(ant_limite, lim, feriados)
                 if extra >= 0.5:
                     f["demora"] = texto_demora(extra)
         elif f["completada"]:
@@ -128,16 +106,16 @@ def calcular(caso, pasos, etapas, feriados, ahora=None):
         if not hecha and not proxima_marcada:
             f["proxima"] = proxima_marcada = True
         filas.append(f)
-        ant_limite, ant_completada = limite, f["completada"]
+        ant_limite, ant_completada = lim, f["completada"]
 
-    ultima = "interp_ihq" if "interp_ihq" in [p[0] for p in pasos] else "microscopia"
+    ultima = pasos[-1][0]
     estimada = next(f["limite"] for f in filas if f["clave"] == ultima)
     informe = completadas.get(ultima)
     encabezado = {
-        "recoleccion": base if caso["fecha_recoleccion"] else None,
-        "base_ingreso": not caso["fecha_recoleccion"],
+        "recoleccion": base if estudio["fecha_recoleccion"] else None,
+        "base_ingreso": not estudio["fecha_recoleccion"],
         "estimada": estimada.date(),
-        "estimada_habiles": PLAZOS[tipo][ultima][0],
+        "estimada_habiles": tipo.plazos[ultima][0],
         "informe": _dt(informe["fecha_hora"]).date() if informe else None,
         "informe_habiles": habiles_entre(base, _dt(informe["fecha_hora"]).date(), feriados) if informe else None,
     }

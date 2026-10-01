@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% import "estudios/_bloque.html" as b with context %}
+{% macro v(k) %}{{ p[k] if p and p[k] is not none else '' }}{% endmacro %}
+{% block titulo %}{{ 'Nuevo protocolo' if nuevo else 'Editar protocolo ' ~ p.numero }}{% endblock %}
+{% block contenido %}
+<h1>{{ 'Nuevo protocolo' if nuevo else 'Editar protocolo ' ~ p.numero }}</h1>
+<form method="post" class="form-estudios">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="tarjeta">
+    <h2>Protocolo</h2>
+    <div class="grilla">
+      <div><label>N° Protocolo *</label><input name="numero" value="{{ v('numero') }}" required {{ 'autofocus' if nuevo }}>
+        {% if ultimos %}<div class="muted">Últimos cargados: {{ ultimos | join(', ') }}</div>{% endif %}</div>
+      <div><label>Fecha recolección</label><input type="date" name="fecha_recoleccion" value="{{ v('fecha_recoleccion') }}"></div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Paciente</h2>
+    <div class="grilla">
+      <div><label>Apellido</label><input name="apellido" value="{{ v('apellido') }}"></div>
+      <div><label>Nombre</label><input name="nombre" value="{{ v('nombre') }}"></div>
+      <div><label>DNI</label><input name="dni" value="{{ v('dni') }}"></div>
+      <div><label>Sexo</label><select name="sexo">{{ b.opciones(listas.sexo, v('sexo')) }}</select></div>
+      <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ v('fecha_nacimiento') }}"></div>
+      <div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, v('cobertura')) }}</select></div>
+      <div><label>N° afiliado</label><input name="n_afiliado" value="{{ v('n_afiliado') }}"></div>
+      <div><label>Exento</label><select name="exento">{{ b.opciones(['Si', 'No'], v('exento')) }}</select></div>
+      <div><label>E-mail</label><input type="email" name="email" value="{{ v('email') }}"></div>
+      <div><label>Teléfono</label><input name="telefono" value="{{ v('telefono') }}"></div>
+      <div><label>Médico solicitante</label><div class="buscador"><input name="medico" value="{{ v('medico') }}" data-medicos autocomplete="off"
+        placeholder="Escribí apellido…"></div></div>
+      <div><label>Lugar recolección</label><input name="lugar_recoleccion" value="{{ v('lugar_recoleccion') }}"></div>
+      <div><label>Lugar entrega</label><input name="lugar_entrega" value="{{ v('lugar_entrega') }}"></div>
+      <div class="ancho"><label>Observaciones del protocolo</label><textarea name="observaciones" style="min-height:50px">{{ v('observaciones') }}</textarea></div>
+    </div>
+  </div>
+
+  {% if nuevo %}
+  <h2 class="titulo-seccion">Estudios</h2>
+  <p class="muted">Con un PAP solo pueden ir muestras ginecológicas. Las demás muestras se pueden combinar entre sí (ej. biopsia + citología de líquido).</p>
+  <div class="bloques">
+    {% for e in estudios %}{{ b.bloque(e.tipo, loop.index0, e) }}{% endfor %}
+  </div>
+  {{ b.agregar_estudios() }}
+  {% endif %}
+
+  <div class="acciones">
+    <button class="btn">{{ 'Ingresar protocolo' if nuevo else 'Guardar cambios' }}</button>
+    <a class="btn sec" href="{{ url_for('tablero') if nuevo else url_for('protocolo', pid=p.id) }}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

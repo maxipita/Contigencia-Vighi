@@ -7,58 +7,123 @@ document.querySelectorAll("label:not([for])").forEach((lab, i) => {
   lab.htmlFor = campo.id;
 });
 
-// Cascada Subcategoría -> Sitio -> Tipo de muestra (formulario de ingreso)
-(async function cascada() {
-  const f = document.querySelector("form[data-tipo]");
-  if (!f) return;
-  const [sub, sitio, tm] = ["subcategoria", "sitio", "tipo_muestra"].map(n => f.elements[n]);
-  const arbol = await (await fetch(`/api/catalogo/${f.dataset.tipo}`)).json();
+// Bloques de estudio (PAP / BP / CT) en el formulario del protocolo.
+// Cascada Subcategoría -> Sitio -> Tipo de muestra con el catálogo de cada tipo (se pide una vez por tipo).
+const catalogos = {};
+const catalogo = tipo => (catalogos[tipo] = catalogos[tipo] || fetch(`/api/catalogo/${tipo}`).then(r => r.json()));
+
+async function prepararBloque(bloque) {
+  const campo = c => bloque.querySelector(`[data-cat="${c}"]`);
+  const [sub, sitio, tm] = ["subcategoria", "sitio", "tipo_muestra"].map(campo);
+  const arbol = await catalogo(bloque.dataset.tipo);
   const llenar = (sel, opciones, actual) => {
     sel.innerHTML = '<option value=""></option>' + opciones.map(o =>
       `<option${o === actual ? " selected" : ""}>${o.replace(/</g, "&lt;")}</option>`).join("");
   };
-  const actualizar = (desde) => {
-    if (sub.tagName === "SELECT" && desde === "inicio") llenar(sub, Object.keys(arbol), sub.dataset.actual);
-    const sitios = arbol[sub.value] || {};
-    if (sitio.tagName === "SELECT" && desde !== "sitio") llenar(sitio, Object.keys(sitios), desde === "inicio" ? sitio.dataset.actual : "");
-    llenar(tm, sitios[sitio.value] || [], desde === "inicio" ? tm.dataset.actual : "");
+  const fijo = !sub;                                    // PAP: subcategoría y sitio fijos
+  const subVal = () => fijo ? Object.keys(arbol)[0] : sub.value;
+  const sitioVal = () => fijo ? Object.keys(arbol[subVal()] || {})[0] : sitio.value;
+  const actualizar = desde => {
+    if (!fijo && desde === "inicio") llenar(sub, Object.keys(arbol), sub.dataset.actual);
+    const sitios = arbol[subVal()] || {};
+    if (!fijo && desde !== "sitio") llenar(sitio, Object.keys(sitios), desde === "inicio" ? sitio.dataset.actual : "");
+    llenar(tm, sitios[sitioVal()] || [], desde === "inicio" ? tm.dataset.actual : "");
   };
-  sub.addEventListener("change", () => actualizar("sub"));
-  sitio.addEventListener("change", () => actualizar("sitio"));
+  if (!fijo) {
+    sub.addEventListener("change", () => actualizar("sub"));
+    sitio.addEventListener("change", () => actualizar("sitio"));
+  }
   actualizar("inicio");
-})();
 
-// Templates: al elegir el título, el texto aparece en el campo editable
-document.querySelectorAll("input[data-templates]").forEach(inp => {
-  const lista = document.getElementById(inp.getAttribute("list"));
-  const destino = document.getElementById(inp.dataset.destino);
-  const concl = inp.dataset.conclusion ? document.getElementById(inp.dataset.conclusion) : null;
-  let ultimo = inp.value;
-  inp.addEventListener("change", async () => {
-    const op = [...lista.options].find(o => o.value === inp.value);
-    if (!op || inp.value === ultimo) return;
-    const t = await (await fetch(`/api/template/${op.dataset.id}`)).json();
+  // PAP: al elegir el citotécnico, proponer su lote del día (el abierto o uno nuevo con sus iniciales)
+  const cito = bloque.querySelector("select[data-lote-cito]");
+  if (cito) cito.addEventListener("change", () => {
+    const lote = bloque.querySelector("select[name$='-lote_id']");
+    const ini = cito.selectedOptions[0] && cito.selectedOptions[0].dataset.ini;
+    if (!lote || !ini || lote.value) return;
+    const opcion = lote.querySelector(`option[data-tipo="${ini}"]`) || lote.querySelector(`option[value="nuevo:${ini}"]`);
+    if (opcion) lote.value = opcion.value;
+  });
+  const quitar = bloque.querySelector("[data-quitar-bloque]");
+  if (quitar) quitar.addEventListener("click", () => bloque.remove());
+}
+
+let siguienteBloque = 100;
+document.querySelectorAll(".estudio-bloque").forEach(b => { if (!b.closest("template")) prepararBloque(b); });
+document.querySelectorAll("[data-agregar-estudio]").forEach(btn => btn.addEventListener("click", () => {
+  const form = btn.closest("form");
+  const n = siguienteBloque++;                                   // índice único de los campos e-N-
+  const html = document.getElementById(`tpl-estudio-${btn.dataset.agregarEstudio}`).innerHTML.replaceAll("__N__", n);
+  form.querySelector(".bloques").insertAdjacentHTML("beforeend", html);
+  const nuevo = form.querySelector(".bloques").lastElementChild;
+  prepararBloque(nuevo);
+  nuevo.scrollIntoView({ behavior: "smooth", block: "center" });
+}));
+
+// Templates: al elegir uno de la lista, el texto aparece en el campo editable
+document.querySelectorAll("select[data-templates]").forEach(sel => {
+  const destino = document.getElementById(sel.dataset.destino);
+  const concl = sel.dataset.conclusion ? document.getElementById(sel.dataset.conclusion) : null;
+  let ultimo = sel.value;
+  sel.addEventListener("change", async () => {
+    const id = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.id;
+    if (!id) { ultimo = sel.value; return; }            // "sin template": no toca el texto
+    const t = await (await fetch(`/api/template/${id}`)).json();
     const ocupado = destino.value.trim() || (concl && concl.value.trim());
-    if (ocupado && !confirm("Ya hay texto escrito. ¿Reemplazarlo por el del template?")) { inp.value = ultimo; return; }
+    if (ocupado && !confirm("Ya hay texto escrito. ¿Reemplazarlo por el del template?")) { sel.value = ultimo; return; }
     destino.value = t.texto || "";
     if (concl) concl.value = t.conclusion || "";
-    ultimo = inp.value;
+    ultimo = sel.value;
     destino.focus();
+  });
+});
+
+// Médico solicitante: buscador con la lista del sistema (se carga una vez y el navegador la guarda).
+// Busca sin importar acentos ni mayúsculas, y todas las palabras escritas ("abad del" -> "ABAD CANDELA, Delfina").
+const sinAcentos = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+document.querySelectorAll("input[data-medicos]").forEach(async inp => {
+  const nombres = (await (await fetch("/api/medicos")).json()).map(n => [n, sinAcentos(n)]);
+  const caja = document.createElement("div");
+  caja.className = "sugerencias";
+  caja.hidden = true;
+  inp.after(caja);
+  let activo = -1;
+  const marcar = i => {
+    const items = caja.children;
+    if (!items.length) return;
+    activo = (i + items.length) % items.length;
+    [...items].forEach((el, k) => el.classList.toggle("activo", k === activo));
+    items[activo].scrollIntoView({ block: "nearest" });
+  };
+  const elegir = nombre => { inp.value = nombre; caja.hidden = true; };
+  const mostrar = () => {
+    const palabras = sinAcentos(inp.value).split(/\s+/).filter(Boolean);
+    caja.innerHTML = "";
+    activo = -1;
+    if (!palabras.length) { caja.hidden = true; return; }
+    const coinciden = nombres.filter(([, s]) => palabras.every(p => s.includes(p)));
+    const hallados = [...coinciden.filter(([, s]) => s.startsWith(palabras[0])),     // primero los apellidos que empiezan así
+                      ...coinciden.filter(([, s]) => !s.startsWith(palabras[0]))].slice(0, 40);
+    hallados.forEach(([n]) => {
+      const el = document.createElement("div");
+      el.textContent = n;
+      el.addEventListener("mousedown", e => { e.preventDefault(); elegir(n); });
+      caja.append(el);
+    });
+    if (!hallados.length) caja.innerHTML = '<div class="nada">Sin coincidencias (se guarda lo escrito)</div>';
+    caja.hidden = false;
+  };
+  inp.addEventListener("input", mostrar);
+  inp.addEventListener("focus", () => inp.value && mostrar());
+  inp.addEventListener("blur", () => { caja.hidden = true; });
+  inp.addEventListener("keydown", e => {
+    if (caja.hidden) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); marcar(activo + (e.key === "ArrowDown" ? 1 : -1)); }
+    else if (e.key === "Enter" && activo >= 0 && caja.children[activo].textContent) { e.preventDefault(); elegir(caja.children[activo].textContent); }
+    else if (e.key === "Escape") caja.hidden = true;
   });
 });
 
 // Confirmaciones
 document.querySelectorAll("form[data-confirmar]").forEach(f =>
   f.addEventListener("submit", e => { if (!confirm(f.dataset.confirmar)) e.preventDefault(); }));
-
-// PAP: al elegir el citotécnico, proponer su lote del día (el abierto o uno nuevo con sus iniciales)
-document.querySelectorAll("select[data-lote-cito]").forEach(function (sel) {
-  sel.addEventListener("change", function () {
-    var lote = sel.form.querySelector("select[name=lote_id]");
-    var ini = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.ini;
-    if (!lote || !ini || lote.value) return;
-    var abierto = lote.querySelector('option[data-tipo="' + ini + '"]');
-    var nuevo = lote.querySelector('option[value="nuevo:' + ini + '"]');
-    if (abierto || nuevo) lote.value = (abierto || nuevo).value;
-  });
-});

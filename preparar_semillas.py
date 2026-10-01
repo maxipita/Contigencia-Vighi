@@ -63,12 +63,18 @@ def catalogo():
         filas.append({"tipo": "PAP", "categoria": "Citologías", "subcategoria": "Ginecológica", "sitio": "Vagina", "tipo_muestra": tm})
     guardar("catalogo.json", filas)
     guardar("listas.json", {
-        "cobertura": columna(ws, "B"),
+        "cobertura": coberturas(),
         "sexo": columna(ws, "C"),
         "tipo_lote": ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "CT"],
         "bethesda": ["NILM", "ASC-US", "ASC-H", "LSIL", "HSIL", "Carcinoma escamoso", "AGC", "AIS",
                      "Adenocarcinoma", "Insatisfactoria"],
     })
+
+
+def coberturas():
+    """Nombres de las coberturas tal como están en el sistema (coberturas.csv, col1). Se omite la de prueba."""
+    with open(os.path.join(CSV_DIR, "coberturas.csv"), encoding="utf-8-sig") as f:
+        return [x["col1"].strip() for x in csv.DictReader(f) if x["col1"].strip() and x["col1"].strip() != "TEST"]
 
 
 def templates(archivo, clase, col_texto, col_conclusion=None):
@@ -115,9 +121,17 @@ def usuarios():
     guardar("usuarios.json", [{"iniciales": k, "sectores": sorted(v)} for k, v in sorted(u.items())])
 
 
+def medicos():
+    """Médicos solicitantes exportados del sistema (medicos.csv: id, nombre)."""
+    with open(os.path.join(CSV_DIR, "medicos.csv"), encoding="utf-8-sig") as f:
+        filas = [{"id": int(x["id"]), "nombre": " ".join(x["nombre"].split())} for x in csv.DictReader(f) if x["nombre"].strip()]
+    guardar("medicos.json", sorted(filas, key=lambda m: m["nombre"].casefold()))
+
+
 if __name__ == "__main__":
     print("Generando semillas en", SEED)
     catalogo()
     templates_macro_desde_excel()
     templates("templates_micro.csv", "micro", "micro", "observaciones")
     usuarios()
+    medicos()

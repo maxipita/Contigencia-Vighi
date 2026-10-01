@@ -6,7 +6,7 @@
 <div class="cols">
 <div>
   <table>
-    <tr><th>Lote</th><th>Protocolos</th><th>Creado</th><th>Estado</th></tr>
+    <tr><th>Lote</th><th>Estudios</th><th>Creado</th><th>Estado</th></tr>
     {% for l in lotes %}
     <tr>
       <td><a href="{{ url_for('lote', lote_id=l.id) }}"><b>{{ l.codigo }}</b></a></td>
