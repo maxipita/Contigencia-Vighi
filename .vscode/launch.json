@@ -11,8 +11,26 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
+      // Sin depurador: el recargador reinicia el servidor con una "excepción" (SystemExit 3) y el depurador la mostraría como error.
+      "noDebug": true,
       "env": {
         "CONTINGENCIA_DESARROLLO": "1",
+        "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
+        "CONTINGENCIA_PUERTO": "8001"
+      }
+    },
+    {
+      // Para usar puntos de interrupción. No recarga solo: hay que reiniciar (Ctrl+Shift+F5) después de cambiar un .py.
+      "name": "Contingencia — con depurador (sin recarga)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "CONTINGENCIA_DESARROLLO": "1",
+        "CONTINGENCIA_SIN_RECARGA": "1",
         "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
         "CONTINGENCIA_PUERTO": "8001"
       }

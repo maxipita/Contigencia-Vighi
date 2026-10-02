@@ -16,6 +16,7 @@ PERMISOS = {
     "lotes_cerrar": ("Lotes", "Cerrar, reabrir y eliminar lotes"),
     "macro": ("Diagnóstico", "Cargar macroscopía"),
     "micro": ("Diagnóstico", "Cargar microscopía e IHQ"),
+    "informe": ("Diagnóstico", "Generar informes en PDF (llevan la firma del médico)"),
     "etapas": ("Etapas", "Marcar etapas como listas (las de su sector)"),
     "etapas_deshacer": ("Etapas", "Deshacer etapas registradas por otros"),
     "exportar": ("Consultas", "Exportar a Excel"),
@@ -33,7 +34,7 @@ PERFILES_INICIALES = {
     "Macroscopía": ("macroscopia", ["macro", "lotes_armar", "etapas"]),
     "Traslados": ("traslados", ["etapas"]),
     "Citotécnico": ("citotecnico", ["etiquetas_lab", "lotes_armar", "etapas"]),
-    "Médico firmante": ("firmante", ["micro", "etapas", "exportar"]),
+    "Médico firmante": ("firmante", ["micro", "informe", "etapas", "exportar"]),
 }
 
 

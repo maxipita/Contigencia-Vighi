@@ -2,25 +2,54 @@
 {% block titulo %}Protocolo {{ p.numero }}{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Protocolo</div>
-<h1>Protocolo {{ p.numero }}</h1>
+<h1>#{{ p.numero }}{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}</h1>
 {% if p.borrador %}<div class="aviso">Protocolo generado desde Recepción: faltan los datos del paciente y la cantidad de cada estudio.
   <a href="{{ url_for('protocolo_editar', pid=p.id) }}">Completar datos</a>.</div>{% endif %}
+{% if puede('informe') and not p.borrador %}
+<div class="panel-informe" id="informe">
+  <svg class="ic ic-grande"><use href="#i-informe"/></svg>
+  <div class="texto">
+    {% if emitido and informe_vigente %}
+    <b>Informe emitido</b>
+    {% elif emitido %}
+    <b>Informe desactualizado</b>
+    <div class="muted">{% if pendientes %}Se agregaron estudios y todavía falta: {% for tp, paso, nombre in pendientes %}<b>{{ nombre }}</b> (pendiente {{ paso }}){{ '; ' if not loop.last }}{% endfor %}.
+      Cuando estén informados hay que generar el informe de nuevo.{% else %}Cambiaron los estudios del protocolo desde que se generó: hay que generarlo de nuevo.{% endif %}</div>
+    {% elif informe_listo %}
+    <b>Listo para informar</b>
+    {% else %}
+    <b>Informe del protocolo</b>
+    <div class="muted">Se genera cuando todos los estudios están informados.{% if pendientes %} Falta:
+      {% for tp, paso, nombre in pendientes %}<b>{{ nombre }}</b> (pendiente {{ paso }}){{ '; ' if not loop.last }}{% endfor %}.{% endif %}</div>
+    {% endif %}
+  </div>
+  <div class="acciones">
+    {% if emitido and informe_vigente %}<a class="btn" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Ver informe</a>{% endif %}
+    {% if informes_ok and informe_listo %}<a class="btn {{ 'sec' if emitido and informe_vigente else '' }}" href="{{ url_for('informe', pid=p.id) }}">{{ 'Generar de nuevo' if emitido else 'Generar informe' }}</a>{% endif %}
+  </div>
+</div>
+{% endif %}
 <div class="cols">
 <div>
   <div class="tarjeta">
     <h2>Estudios</h2>
     <table>
       <tr><th>Estudio</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th></tr>
-      {% for e in estudios %}
+      {% for tipo, grupo in estudios | groupby('tipo') %}
+      {% set activos = grupo | rejectattr('anulado') | list %}
+      <tr class="flujo-cab"><td colspan="6"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
+        {% if activos | length > 1 %}<span class="muted">· flujo compartido por {{ activos | length }} estudios (mismo recorrido)</span>{% endif %}</td></tr>
+      {% for e in grupo %}
       <tr class="{{ 'bloqueado' if e.anulado }}">
         <td><a href="{{ url_for('estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>
         <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
         <td>{% if e.lote_id %}<a href="{{ url_for('lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
         <td>{{ e.responsable or '' }}</td>
-        <td><span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
-          {% if e.proxima %}<div class="muted">{{ SECTORES[e.proxima[2]] }}</div>{% endif %}</td>
+        <td><div class="estado-celda"><span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
+          {% if e.proxima %}<span class="muted">{{ SECTORES[e.proxima[2]] }}</span>{% endif %}</div></td>
         <td>{% if e.vence %}<span class="{{ 'lt' if e.atrasado else 'muted' }}">{{ '⚑ ' if e.atrasado }}{{ e.vence | dh }}</span>{% endif %}</td>
       </tr>
+      {% endfor %}
       {% endfor %}
     </table>
     {% if puede('protocolo_editar') %}

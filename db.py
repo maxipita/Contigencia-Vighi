@@ -110,6 +110,19 @@ CREATE TABLE IF NOT EXISTS auditoria (
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
 CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL);
+-- firma de cada médico para los informes en PDF (PNG). Va en una tabla aparte para no cargarla en cada consulta de usuarios.
+CREATE TABLE IF NOT EXISTS firmas (usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id), imagen BLOB NOT NULL, actualizada_en VARCHAR(19));
+-- Informe en PDF emitido de cada PROTOCOLO (junta todos sus estudios): se guarda tal como salió (al volver a verlo no se rearma). Una sola
+-- fila por protocolo: generarlo de nuevo reemplaza el PDF anterior para no acumular archivos (la constancia de cada generación queda en
+-- auditoria). version = cuántas veces se generó. usuario_id = quien lo generó la última vez; firmante_id = el médico que lleva la firma.
+CREATE TABLE IF NOT EXISTS informes_emitidos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id), version INTEGER NOT NULL,
+    usuario_id INTEGER, firmante_id INTEGER, creado_en VARCHAR(19) NOT NULL,
+    comentario TEXT, archivo VARCHAR(120), pdf BLOB NOT NULL,
+    estudios VARCHAR(500)              -- ids de los estudios que incluye (si cambian, el informe deja de valer)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_informes_protocolo ON informes_emitidos(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_protocolo ON estudios(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_lote ON estudios(lote_id);
 CREATE INDEX IF NOT EXISTS ix_etapas_estudio ON etapas(estudio_id);
@@ -128,6 +141,9 @@ CREATE TABLE IF NOT EXISTS etiquetas_lotes (
 );
 CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
 """
+
+
+IntegrityError = sqlite3.IntegrityError      # app.py no importa el motor: captura esta excepción cuando una restricción falla
 
 
 def ahora():
@@ -181,6 +197,26 @@ def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
 
 
 # ---------------------------------------------------------------- inicialización
+def unificar_etapas(c):
+    """El flujo (etapas) es de cada TIPO de estudio dentro del protocolo, no de cada estudio: los estudios activos del mismo tipo comparten
+    etapas (la app las marca en todos a la vez). Si una base vieja los tiene desparejos, queda lo que tienen todos en común: así no se da por
+    hecha una etapa que a alguno le falta. Con datos ya parejos no hace nada."""
+    grupos = {}
+    for r in c.execute("SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0 ORDER BY id"):
+        grupos.setdefault((r["protocolo_id"], r["tipo"]), []).append(r["id"])
+    hechas = {}
+    for r in c.execute("SELECT estudio_id, etapa FROM etapas"):
+        hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
+    for ids in grupos.values():
+        if len(ids) < 2:
+            continue
+        comun = set.intersection(*(hechas.get(i, set()) for i in ids))
+        for i in ids:
+            for etapa in hechas.get(i, set()) - comun:
+                c.execute("DELETE FROM etapas WHERE estudio_id=? AND etapa=?", (i, etapa))
+    c.commit()
+
+
 def inicializar():
     c = _conectar()
     # versión anterior (un "caso" por tipo de estudio, solo datos de prueba): se respalda y se arranca limpio
@@ -194,18 +230,43 @@ def inicializar():
             c.execute(f"DROP TABLE IF EXISTS {tabla}")
         c.commit()
         c.execute("PRAGMA foreign_keys = ON")
+    vieja = [r["name"] for r in c.execute("PRAGMA table_info(informes_emitidos)")]
+    if vieja and "protocolo_id" not in vieja:
+        # el informe se guardaba por estudio: pasa a ser uno por protocolo (queda el último de cada uno)
+        c.execute("DROP INDEX IF EXISTS ux_informes_estudio_version")
+        c.execute("DROP INDEX IF EXISTS ux_informes_estudio")
+        c.execute("ALTER TABLE informes_emitidos RENAME TO informes_por_estudio")
+        c.executescript(SCHEMA)
+        c.execute("""INSERT INTO informes_emitidos (protocolo_id, version, usuario_id, firmante_id, creado_en, comentario, archivo, pdf)
+                     SELECT e.protocolo_id, i.version, i.usuario_id, i.firmante_id, i.creado_en, i.comentario, i.archivo, i.pdf
+                     FROM informes_por_estudio i JOIN estudios e ON e.id=i.estudio_id
+                     WHERE i.id IN (SELECT MAX(i2.id) FROM informes_por_estudio i2 JOIN estudios e2 ON e2.id=i2.estudio_id GROUP BY e2.protocolo_id)""")
+        c.execute("DROP TABLE informes_por_estudio")
+        c.commit()
     c.executescript(SCHEMA)
     # columnas sumadas después de crear la tabla
     cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
+    antes_de_informes = "titulo" not in cols("usuarios")      # primera vez que arranca con los informes en PDF
     for tabla, col, definicion in (("usuarios", "perfil_id", "INTEGER REFERENCES perfiles(id)"),
                                    ("usuarios", "permisos_mas", "VARCHAR(500) NOT NULL DEFAULT ''"),
                                    ("usuarios", "permisos_menos", "VARCHAR(500) NOT NULL DEFAULT ''"),
+                                   ("usuarios", "titulo", "VARCHAR(10)"),           # Dr. / Dra. (informes en PDF)
+                                   ("usuarios", "mn", "VARCHAR(20)"),               # matrícula nacional
+                                   ("usuarios", "mp", "VARCHAR(20)"),               # matrícula provincial
                                    ("protocolos", "borrador", "INTEGER NOT NULL DEFAULT 0"),
                                    ("protocolos", "etiqueta_lote_id", "INTEGER"),
+                                   ("informes_emitidos", "estudios", "VARCHAR(500)"),
+                                   ("protocolos", "firmante_id", "INTEGER"),        # quien pasó a su nombre la firma del informe (si no, firma el responsable)
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
+    unificar_etapas(c)
+    if antes_de_informes:
+        # Una sola vez, al actualizar: el perfil de los médicos firmantes ya existente recibe el permiso nuevo de generar informes.
+        # Después se administra desde Perfiles (si alguien se lo quita, no se vuelve a agregar).
+        c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'informe' ELSE permisos || ',informe' END "
+                  "WHERE nombre = 'Médico firmante' AND (',' || permisos || ',') NOT LIKE '%,informe,%'")
     seed = os.path.join(BASE, "seed")
 
     def cargar(nombre):

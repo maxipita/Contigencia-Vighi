@@ -1,10 +1,18 @@
 {% extends "base.html" %}
 {% block titulo %}{{ e.numero }} · {{ etiqueta }}{% endblock %}
+{% macro casilla_firma() %}
+  {% if cierra_protocolo %}
+    <label class="firmar-yo" title="Si no la marcás, firma el responsable asignado al caso">
+      <input type="checkbox" name="firmar_yo" value="1"> Quiero firmar el informe yo (cambiar el firmante a mi nombre)
+    </label>
+  {% endif %}
+{% endmacro %}
 {% macro listo_toggle(etapa) %}
   {% if prox and prox[0] == etapa and puede('etapas') and (yo.admin or prox[2] in mis_sectores) %}
     <label style="display:inline-flex;gap:6px;align-items:center;margin:0">
       <input type="checkbox" name="y_listo" value="1"> y marcar <b>{{ NOMBRE_ETAPA[etapa] }}</b> como lista ({{ yo.iniciales }})
     </label>
+    {{ casilla_firma() }}
   {% endif %}
 {% endmacro %}
 {% macro select_template(lista, actual, destino, conclusion='') %}
@@ -16,10 +24,18 @@
 {% endmacro %}
 {% block contenido %}
 <div class="eyebrow">Estudio</div>
-<p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>
+<p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
 <h1>{{ e.numero }} · {{ etiqueta }}
   <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span></h1>
+{% if comparte %}
+<div class="aviso">Este flujo lo comparten {{ comparte | length + 1 }} estudios de {{ tipo.nombre | lower }} de este protocolo
+  ({% for h in comparte %}<a href="{{ url_for('estudio', eid=h.id) }}">{{ h.etiqueta }}</a>{{ ', ' if not loop.last }}{% endfor %}): al completar o deshacer una etapa se marca en todos a la vez.
+  Cada uno carga su propia macroscopía y diagnóstico.</div>
+{% endif %}
+{% if puede('informe') and not e.borrador %}
+<p style="margin:-4px 0 12px"><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}#informe">El informe en PDF es del protocolo completo →</a></p>
+{% endif %}
 {% if hermanos | length > 1 %}
 <div class="tabs">
   {% for h in hermanos %}<a href="{{ url_for('estudio', eid=h.id) }}" class="{{ 'activo' if h.id == e.id }}{{ ' bloqueado' if h.anulado }}">{{ h.etiqueta }}</a>{% endfor %}
@@ -56,6 +72,7 @@
         <form method="post" action="{{ url_for('marcar_listo', eid=e.id, etapa=f.clave) }}">
           <input type="hidden" name="_csrf" value="{{ csrf }}">
           <button class="btn listo" style="padding:4px 10px">✔ Completar ({{ yo.iniciales }})</button>
+          {{ casilla_firma() }}
         </form>
         {% else %}<span class="muted">La marca {{ SECTORES[prox[2]] }}</span>{% endif %}{% endif %}</td>
     </tr>

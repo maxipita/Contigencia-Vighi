@@ -28,15 +28,15 @@
   <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th><th>Ingresado</th></tr>
   {% for c in estudios %}
   <tr>
-    <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>
+    <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
         {% if c.hermanos > 1 %}<div class="muted">{{ c.hermanos }} estudios</div>{% endif %}</td>
     <td><a href="{{ url_for('estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
     <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
     <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
     <td>{% if c.lote_id %}<a href="{{ url_for('lote', lote_id=c.lote_id) }}">{{ c.lote }}</a>{% endif %}</td>
     <td>{{ c.responsable or '' }}</td>
-    <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span>
-        {% if c.proxima %}<div class="muted">{{ SECTORES[c.proxima[2]] }}</div>{% endif %}</td>
+    <td><div class="estado-celda"><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span>
+        {% if c.proxima %}<span class="muted">{{ SECTORES[c.proxima[2]] }}</span>{% endif %}</div></td>
     <td>{% if c.vence %}<span class="{{ 'lt' if c.atrasado else 'muted' }}">{{ '⚑ ' if c.atrasado }}{{ c.vence | dh }}</span>{% endif %}</td>
     <td class="muted">{{ c.creado_en | fh }}</td>
   </tr>

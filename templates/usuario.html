@@ -3,7 +3,7 @@
 {% block contenido %}
 <div class="eyebrow">Administración</div>
 <h1>{{ 'Editar ' ~ u.iniciales if u else 'Nuevo usuario' }}</h1>
-<form method="post" class="tarjeta" style="max-width:820px">
+<form method="post" class="tarjeta" style="max-width:820px" enctype="multipart/form-data">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <div class="grilla">
     <div><label>Iniciales *</label><input name="iniciales" value="{{ u.iniciales if u else '' }}" required style="text-transform:uppercase"></div>
@@ -22,6 +22,25 @@
       <input type="checkbox" name="activo" value="1" {{ 'checked' if not u or u.activo }}> Activo</label>
     <label style="display:flex;gap:6px;align-items:center;color:inherit;font-size:14px">
       <input type="checkbox" name="admin" value="1" {{ 'checked' if u and u.admin }}> Administrador</label>
+  </div>
+  <h2 class="titulo-seccion" style="margin-top:18px">Firma en los informes</h2>
+  <div class="muted" style="margin-bottom:8px">Para los médicos que firman informes en PDF. Si no se cargan, el informe sale con el nombre pero sin firma ni matrícula.</div>
+  <div class="grilla">
+    <div><label>Título</label>
+      <select name="titulo"><option value="">—</option>
+        <option {{ 'selected' if u and u.titulo == 'Dr.' }}>Dr.</option><option {{ 'selected' if u and u.titulo == 'Dra.' }}>Dra.</option></select></div>
+    <div><label>Matrícula nacional (MN)</label><input name="mn" value="{{ u.mn if u and u.mn else '' }}" maxlength="20" autocomplete="off"></div>
+    <div><label>Matrícula provincial (MP)</label><input name="mp" value="{{ u.mp if u and u.mp else '' }}" maxlength="20" autocomplete="off"></div>
+  </div>
+  <div style="margin-top:12px">
+    <label>Imagen de la firma (PNG o JPG{{ ', reemplaza a la actual' if tiene_firma }})</label>
+    <input type="file" name="firma" accept="image/png,image/jpeg">
+    {% if tiene_firma %}
+    <div style="margin-top:8px;display:flex;gap:14px;align-items:center">
+      <img src="{{ url_for('usuario_firma', uid=u.id) }}" alt="Firma cargada" style="height:56px;width:auto;max-width:240px;border:1px solid var(--borde);border-radius:8px;background:#fff;padding:4px">
+      <label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" name="quitar_firma" value="1"> Quitar la firma</label>
+    </div>
+    {% endif %}
   </div>
   <h2 class="titulo-seccion" style="margin-top:18px">Permisos</h2>
   <label>Perfil</label>

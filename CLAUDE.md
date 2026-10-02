@@ -47,6 +47,23 @@ py app.py                                 # servidor real en :8000 (equivale a "
 - `trazabilidad.py` — fecha límite de cada etapa en días hábiles desde la recolección (plazos de cada estudio, `FERIADOS_2026`),
   para mostrar OT/LT como southernbits. Horario hábil 8–20.
 - `templates/` (Jinja) y `static/` — interfaz. `seed/` — datos iniciales en JSON.
+- **Flujo compartido:** las etapas (`etapas`) siguen guardadas por `estudio_id`, pero el flujo es de cada **tipo dentro del protocolo**: los
+  estudios activos del mismo tipo (`miembros_flujo`) tienen siempre las mismas etapas. `marcar_listo` las inserta en todos (y exige los requisitos de
+  cada uno: macro / micro / IHQ), `deshacer` las borra en todos, `pide_ihq(protocolo, tipo)` decide si el flujo incluye IHQ (basta con que un estudio
+  la pida; `ficha` y `cargar_estudios` lo usan) y `estudio_nuevo` / reactivar rechazan sumar un estudio a un tipo con `flujo_avanzado`. Al arrancar,
+  `db.unificar_etapas` deja parejas las bases viejas (queda lo común). Un tipo distinto en el mismo protocolo es otro flujo, con su propio tracking.
+  `protocolo_cerrado(pid)` = todos los estudios activos informados.
+- `informes.py` — **informe en PDF de un PROTOCOLO** (junta todos sus estudios; título histopatológico si son todos BP, citológico si no hay BP,
+  "de anatomía patológica" si hay de los dos), con el diseño de la maqueta `vighi-sistema`: `armar(pid)` junta lo cargado (paciente, médico
+  solicitante y, por estudio, material, macro, micro, diagnóstico, IHQ) y `generar_pdf(datos)` lo dibuja con reportlab. Solo se genera con el protocolo
+  completo y **todos** sus estudios informados, y con el permiso `informe`. **Firmante** (`informes._firmante`): 1) `protocolos.firmante_id` si quien cerró
+  lo último marcó "Quiero firmar el informe yo" (`firmar_yo` en `marcar_listo`; `deshacer` lo borra), 2) el responsable asignado (primer estudio cuyo
+  responsable tiene el sector `firmante`), 3) quien cerró la última etapa. Rutas: `/protocolo/<id>/informe` (revisión; `/estudio/<id>/informe` redirige acá)
+  y `POST /protocolo/<id>/informe.pdf`, que **guarda el PDF** en `informes_emitidos` (BLOB, **una sola fila por protocolo**: generar de nuevo la
+  reemplaza para no acumular archivos; guarda quién lo generó y quién firma), lo audita (`informe_pdf`, una línea por generación: ahí queda la
+  constancia histórica) y redirige a `GET /informe/<id>.pdf`, que sirve lo guardado sin rearmarlo. La firma (imagen PNG)
+  vive en la tabla `firmas` y título / MN / MP en `usuarios` (se cargan en Usuarios; nunca en el repositorio ni en `static/`). Usa la
+  fuente Segoe UI o Arial de Windows para los símbolos; sin ellas cae a Helvetica. Los datos del centro (pie) están en `informes.CENTRO`.
 - **Visual** (`static/app.css`, `templates/base.html`): colores y tipografías de la web nueva (`NUEVAWEB/susana-vighi-web`,
   `src/styles.css`; sus valores OKLCH están pasados a hex en `:root`) y armado de pantallas de la maqueta del sistema
   (`SistemaVighi/Sistema-de-Gestion-Laboratorio-Vighi`): barra superior violeta que es el menú principal (íconos, botón "Ingresar", listas desplegables; en pantallas angostas
@@ -73,6 +90,10 @@ py app.py                                 # servidor real en :8000 (equivale a "
   previa del shadow DOM; la fuente Finlandica está en `static/fonts/` para imprimir sin
   internet. Las listas salen del sistema: citotécnicos y patólogos de `usuarios` (sectores `citotecnico` / `firmante`), tipos
   de lote de `tipos_lote_fijos()` + `LOTES_ETIQUETA_EXTRA`; los códigos de muestra PAP (`MUESTRAS_PAP`) son fijos.
+  En laboratorio **nada se elige por etiqueta**: el patólogo (BP) es el responsable del estudio y el tipo de muestra (PAP) sale de su `tipo_muestra`
+  (`codigo_muestra_pap`: Endocervical→ENDO, Exocervical→EXO, Cúpula→CUPULA, Líquido→DERRAME; otro, su texto en mayúsculas; y con cantidad "1/2" —un vidrio
+  con mitad endo y mitad exo, la única cantidad fraccionaria— siempre ENDO/EXO). Los toma el servidor al confirmar
+  y los guarda en `params` (`patos` / `muestras`, uno por etiqueta) para poder reimprimir igual.
 
 ## Datos sensibles
 

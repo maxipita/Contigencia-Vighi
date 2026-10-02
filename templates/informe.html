@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block titulo %}Informe {{ d.numero }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Informe en PDF</div>
+<p><a href="{{ url_for('protocolo', pid=d.pid) }}">← Protocolo {{ d.numero }}</a></p>
+<h1>{{ d.titulo | title }} · {{ d.numero }}</h1>
+
+{% for a in d.avisos %}
+<div class="aviso error">{{ a }}
+  {% if yo.admin and 'firma' in a or yo.admin and 'matrícula' in a %}<a href="{{ url_for('usuario', uid=d.medico.id) }}">Cargarla ahora</a>{% endif %}</div>
+{% endfor %}
+
+<div class="cols">
+  <div>
+  <div class="tarjeta">
+    <h2>Datos del protocolo</h2>
+    <table class="datos-informe">
+      <tr><th>Paciente</th><td>{{ d.paciente }}</td></tr>
+      <tr><th>Protocolo</th><td>{{ d.numero }}</td></tr>
+      <tr><th>Médico solicitante</th><td>{{ d.medico_solicitante or '—' }}</td></tr>
+      <tr><th>Institución</th><td>{{ d.institucion or '—' }}</td></tr>
+      <tr><th>Cobertura</th><td>{{ d.cobertura or '—' }}</td></tr>
+      <tr><th>Fecha</th><td>{{ d.fecha }}</td></tr>
+      <tr><th>Firma</th><td>{{ (d.medico.titulo ~ ' ' ~ d.medico.nombre) | trim }}
+        {% if d.medico.mn or d.medico.mp %}<span class="muted"> · {% if d.medico.mn %}MN {{ d.medico.mn }}{% endif %}{% if d.medico.mn and d.medico.mp %} · {% endif %}{% if d.medico.mp %}MP {{ d.medico.mp }}{% endif %}</span>{% endif %}
+        · {% if d.medico.firma %}<span class="ot">con firma</span>{% else %}<span class="lt">sin firma</span>{% endif %}
+        <div class="muted">{{ d.medico.origen | capitalize }}.</div></td></tr>
+    </table>
+  </div>
+  {% for s in d.estudios %}
+  <div class="tarjeta">
+    <h2>{{ s.etiqueta }}</h2>
+    <table class="datos-informe">
+      <tr><th>Material</th><td>{{ s.material or '—' }}</td></tr>
+      <tr><th>Diagnóstico final</th><td>{% if s.diagnostico %}<b>{{ s.diagnostico }}</b>{% if s.detalle %}<div class="texto-largo">{{ s.detalle }}</div>{% endif %}{% else %}<span class="lt">sin diagnóstico cargado</span>{% endif %}</td></tr>
+      {% if s.macroscopia %}<tr><th>Macroscopía</th><td><div class="texto-largo">{{ s.macroscopia }}</div></td></tr>{% endif %}
+      {% if s.microscopia %}<tr><th>{{ 'Microscopía' if s.tipo == 'BP' else 'Descripción' }}</th><td><div class="texto-largo">{{ s.microscopia }}</div></td></tr>{% endif %}
+      {% if s.tecnicas %}<tr><th>Técnicas especiales</th><td>{{ s.tecnicas }}</td></tr>{% endif %}
+      {% if s.ihq %}<tr><th>Inmunohistoquímica</th><td><div class="texto-largo">{{ s.ihq }}</div></td></tr>{% endif %}
+    </table>
+  </div>
+  {% endfor %}
+  </div>
+
+  <div class="tarjeta">
+    <h2>Generar</h2>
+    <form method="post" action="{{ url_for('informe_pdf', pid=d.pid) }}" target="_blank">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label for="comentario">Comentario (opcional)</label>
+      <textarea id="comentario" name="comentario" maxlength="3000" placeholder="Si lo escribís, el informe suma una sección “Comentario”."></textarea>
+      <div class="acciones"><button class="btn">{{ 'Generar de nuevo (reemplaza el actual)' if emitido else 'Generar PDF' }}</button><a class="btn sec" href="{{ url_for('protocolo', pid=d.pid) }}">Volver</a></div>
+      <p class="muted" style="margin-top:10px">El PDF se guarda en el sistema y se abre en una pestaña nueva; desde ahí se descarga o se imprime. Queda registrado quién lo generó.
+        {% if emitido %}Reemplaza al informe guardado actual.{% endif %}</p>
+    </form>
+  </div>
+</div>
+
+{% if emitido and informe_vigente %}
+<div class="tarjeta">
+  <h2>Informe guardado</h2>
+  <div class="acciones"><a class="btn" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Abrir el informe guardado</a></div>
+  <p class="muted" style="margin-top:10px">Si lo generás de nuevo, <b>reemplaza</b> a este. Quién lo generó y cuándo queda en el historial del protocolo.</p>
+</div>
+{% endif %}
+<script>
+  // el PDF se abre en otra pestaña: al generar, esta se actualiza sola para que muestre el informe nuevo
+  document.querySelector('form[target="_blank"]').addEventListener('submit', function () { setTimeout(function () { location.reload(); }, 1500); });
+</script>
+{% endblock %}

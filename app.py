@@ -9,6 +9,8 @@ import os
 import re
 import secrets
 import socket
+import sys
+import unicodedata
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -21,9 +23,17 @@ import permisos
 import trazabilidad
 from estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, TIPOS, validar_combinacion
 
+try:
+    import informes
+except ImportError as _err:     # falta reportlab (o Pillow): solo se pierden los informes, el resto del sistema arranca igual
+    informes = None
+    print(f"AVISO: los informes en PDF están desactivados ({_err}). Instalar con: {sys.executable} -m pip install -r requirements.txt")
+SIN_INFORMES = "Los informes en PDF no están disponibles: falta instalar reportlab (python -m pip install -r requirements.txt) y reiniciar el sistema."
+
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024      # tope de subida (firma de los médicos)
 
 
 def _clave_secreta():
@@ -112,7 +122,7 @@ def globales():
     u = usuario_actual()
     pendientes = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1")["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "n_borradores": pendientes,
+            "n_borradores": pendientes, "informes_ok": informes is not None,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
@@ -242,20 +252,24 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
     """Estudios con los datos de su protocolo, estado, próxima etapa y vencimiento. Los de protocolos en borrador
     (generados desde Recepción, sin los datos del paciente) quedan afuera salvo que se pidan."""
     filas = db.q(f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
-                            u.iniciales AS responsable, l.codigo AS lote, COALESCE(m.solicita_ihq, 0) AS solicita_ihq,
+                            u.iniciales AS responsable, l.codigo AS lote,
                             (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
-                     LEFT JOIN micro m ON m.estudio_id=e.id
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id""", params)
     hechas = {}
     for r in db.q("SELECT estudio_id, etapa FROM etapas"):
         hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
+    con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(      # el flujo es del tipo de estudio dentro del protocolo, no de cada estudio
+        "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0")}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
+    flujos = flujos_de({f["protocolo_id"] for f in filas} or None) if filas else {}
     for f in filas:
         d = dict(f)
+        d["flujos"] = flujos.get(f["protocolo_id"], "")
         tipo = REGISTRO[f["tipo"]]
-        d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), bool(f["solicita_ihq"]), bool(f["anulado"]))
+        d["solicita_ihq"] = (f["protocolo_id"], f["tipo"]) in con_ihq
+        d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), d["solicita_ihq"], bool(f["anulado"]))
         if f["borrador"]:
             d["estado"] = "A completar"
         d["proxima"] = prox
@@ -271,6 +285,51 @@ def etiqueta(e):
     if e["tipo"] == "PAP" or not e["sitio"]:
         return TIPOS[e["tipo"]]
     return f"{TIPOS[e['tipo']]} · {e['sitio']}"
+
+
+def etiqueta_flujos(tipos, con_ihq):
+    """Los flujos que componen un protocolo, ej. 'BP', 'BP c/ CT', 'BP c/ CT + IHQ', 'PAP c/ BP y CT'."""
+    t = [k for k in ("BP", "CT", "PAP") if k in tipos]
+    if not t:
+        return ""
+    return t[0] + (" c/ " + " y ".join(t[1:]) if len(t) > 1 else "") + (" + IHQ" if con_ihq else "")
+
+
+def flujos_de(protocolo_ids=None):
+    """{protocolo_id: 'BP c/ CT + IHQ'} de los estudios activos (de todos los protocolos o de los pedidos)."""
+    donde = f" AND e.protocolo_id IN ({','.join('?' * len(protocolo_ids))})" if protocolo_ids else ""
+    tipos = {}
+    for r in db.q(f"SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0{donde}", tuple(protocolo_ids or ())):
+        tipos.setdefault(r["protocolo_id"], set()).add(r["tipo"])
+    ihq = {r["protocolo_id"] for r in db.q(
+        f"SELECT DISTINCT e.protocolo_id FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0{donde}",
+        tuple(protocolo_ids or ()))}
+    return {pid: etiqueta_flujos(ts, pid in ihq) for pid, ts in tipos.items()}
+
+
+def miembros_flujo(e):
+    """Los estudios activos del mismo tipo dentro del protocolo. El flujo (etapas) es de cada TIPO: 4 biopsias comparten el mismo
+    recorrido (al completar una etapa se marca en todas) y una biopsia y una citología tienen cada una el suyo."""
+    return db.q("SELECT * FROM estudios WHERE protocolo_id=? AND tipo=? AND anulado=0 ORDER BY id", (e["protocolo_id"], e["tipo"]))
+
+
+def pide_ihq(protocolo_id, tipo):
+    """Si algún estudio del tipo pidió IHQ, todo el flujo del tipo incluye esas etapas."""
+    return bool(db.uno("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
+                       "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1", (protocolo_id, tipo)))
+
+
+def flujo_avanzado(protocolo_id, tipo):
+    """Nombre de la última etapa completada en el flujo del tipo dentro del protocolo (None si todavía no empezó)."""
+    r = db.uno("""SELECT x.etapa FROM etapas x JOIN estudios e ON e.id=x.estudio_id
+                  WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 ORDER BY x.fecha_hora DESC, x.id DESC LIMIT 1""", (protocolo_id, tipo))
+    return NOMBRE_ETAPA.get(r["etapa"], r["etapa"]) if r else None
+
+
+def protocolo_cerrado(pid):
+    """True si el protocolo está completo y todos sus estudios activos están informados."""
+    activos = [x for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if not x["anulado"]]
+    return bool(activos) and not any(x["borrador"] or x["proxima"] for x in activos)
 
 
 def tipos_lote_fijos():
@@ -578,7 +637,15 @@ def protocolo(pid):
     p = protocolo_o_404(pid)
     historial = db.q("""SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
                         WHERE protocolo_id=? ORDER BY a.id DESC""", (pid,))
-    return render_template("protocolo.html", p=p, estudios=cargar_estudios("e.protocolo_id=?", (pid,), borradores=True), historial=historial)
+    estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
+    pendientes = []                 # qué falta para poder informar (un renglón por flujo, no por estudio)
+    for x in estudios:
+        if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
+            pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
+    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, emitido=informe_emitido(pid),
+                           flujos=flujos_de([pid]).get(pid, ""),
+                           informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
+                           pendientes=pendientes, informe_vigente=informe_vigente(pid, informe_emitido(pid)))
 
 
 @app.route("/protocolo/<int:pid>/estudio/nuevo", methods=["GET", "POST"])
@@ -593,6 +660,10 @@ def estudio_nuevo(pid):
         lotes, error = validar_estudios(lista, existentes)
         if not lista:
             error = "Elegí qué estudio agregar."
+        for e in lista:
+            if not error and (avance := flujo_avanzado(pid, e["tipo"])):
+                error = (f"Ya hay {REGISTRO[e['tipo']].nombre.lower()} de este protocolo en proceso (llegó a {avance}) y comparten el mismo flujo: "
+                         "para sumar otra hay que deshacer las etapas antes.")
         if error:
             flash(error, "error")
         else:
@@ -645,7 +716,7 @@ def ficha(eid):
     ihq = db.uno("SELECT * FROM ihq WHERE estudio_id=?", (eid,))
     etapas = {x["etapa"]: x for x in db.q("""SELECT x.*, u.iniciales, u.nombre FROM etapas x
                                             JOIN usuarios u ON u.id=x.usuario_id WHERE estudio_id=?""", (eid,))}
-    solicita = bool(micro and micro["solicita_ihq"])
+    solicita = bool(micro and micro["solicita_ihq"]) if e["anulado"] else pide_ihq(e["protocolo_id"], e["tipo"])
     return e, macro, micro, ihq, etapas, solicita
 
 
@@ -683,7 +754,12 @@ def estudio(eid):
     pasos = tipo.flujo(solicita)
     traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados())
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
-    return render_template("estudio.html", e=e, tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
+    activos = [h for h in hermanos if not h["anulado"]]
+    comparte = [h for h in activos if h["tipo"] == e["tipo"] and h["id"] != e["id"]]          # estudios del mismo tipo: mismo flujo
+    cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
+                            and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
+    return render_template("estudio.html", e=e, comparte=comparte, cierra_protocolo=cierra_protocolo,
+                           flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e),
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
@@ -765,17 +841,134 @@ def marcar_listo(eid, etapa):
         return redirect(url_for("protocolo_editar", pid=e["protocolo_id"]))
     tipo = REGISTRO[e["tipo"]]
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
+    miembros = miembros_flujo(e)        # el flujo es del tipo: la etapa se marca en todos los estudios del mismo tipo del protocolo
+    falta = None
+    for m in miembros:
+        if etapa in PASOS_IHQ and not db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (m["id"],)):
+            continue                    # la IHQ solo se exige a los que la pidieron
+        problema = tipo.requisito(etapa, db.uno("SELECT * FROM macro WHERE estudio_id=?", (m["id"],)),
+                                  db.uno("SELECT * FROM micro WHERE estudio_id=?", (m["id"],)), db.uno("SELECT * FROM ihq WHERE estudio_id=?", (m["id"],)))
+        if problema:
+            falta = f"{etiqueta(m)}: {problema}" if len(miembros) > 1 else problema
+            break
     if not prox or prox[0] != etapa:
         flash("Esa etapa no es la próxima pendiente de este estudio.", "error")
     elif not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):     # cada etapa la marca su sector
         flash(f"La etapa {prox[1]} la marca el sector {SECTORES[prox[2]]}.", "error")
-    elif (falta := tipo.requisito(etapa, macro, micro, ihq)):
+    elif falta:
         flash(falta, "error")
     else:
-        db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (eid, etapa, yo["id"], db.ahora()))
-        db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa], eid)
-        flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']}.", "ok")
+        ahora_ = db.ahora()
+        for m in miembros:
+            if not db.uno("SELECT 1 FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], etapa)):
+                db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (m["id"], etapa, yo["id"], ahora_))
+        db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa] + (f" (en {len(miembros)} estudios {tipo.nombre.lower()})" if len(miembros) > 1 else ""), eid)
+        flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']}"
+              + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
+        if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]):
+            # al informar lo último que faltaba, quien lo cierra pidió firmar el informe él mismo (si no, firma el responsable asignado)
+            db.ex("UPDATE protocolos SET firmante_id=? WHERE id=?", (yo["id"], e["protocolo_id"]))
+            db.auditar(yo["id"], e["protocolo_id"], "firmante", f"{yo['iniciales']} firmará el informe", eid)
+            flash("Vas a figurar como firmante del informe.", "ok")
     return redirect(request.form.get("volver") or url_for("estudio", eid=eid))
+
+
+def informe_emitido(pid):
+    """El informe ya generado del protocolo (sin el archivo, que pesa), o None."""
+    return db.uno("""SELECT i.id, i.version, i.creado_en, i.comentario, i.estudios, u.iniciales, u.nombre AS generado_por, f.nombre AS firmante
+                     FROM informes_emitidos i LEFT JOIN usuarios u ON u.id=i.usuario_id LEFT JOIN usuarios f ON f.id=i.firmante_id
+                     WHERE i.protocolo_id=?""", (pid,))
+
+
+def informe_vigente(pid, emitido):
+    """El informe guardado solo se puede entregar si el protocolo está completo (todos sus estudios informados) y los estudios son los mismos
+    que cuando se generó: si se agregó o se quitó uno, hay que generarlo de nuevo."""
+    if not emitido or not protocolo_cerrado(pid):
+        return False
+    if not emitido["estudios"]:         # informes guardados antes de registrar qué estudios incluían
+        return True
+    activos = {str(x["id"]) for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if not x["anulado"]}
+    return set(emitido["estudios"].split(",")) == activos
+
+
+@app.route("/estudio/<int:eid>/informe")
+@requiere_permiso("informe")
+def informe_de_estudio(eid):
+    """El informe es del protocolo (junta todos sus estudios): se redirige a su pantalla."""
+    return redirect(url_for("informe", pid=ficha(eid)[0]["protocolo_id"]))
+
+
+@app.route("/protocolo/<int:pid>/informe")
+@requiere_permiso("informe")
+def informe(pid):
+    """Revisión antes de generar el informe en PDF: muestra lo que lleva y avisa si falta algo."""
+    p = protocolo_o_404(pid)
+    if informes is None:
+        flash(SIN_INFORMES, "error")
+        return redirect(url_for("protocolo", pid=pid))
+    try:
+        d = informes.armar(pid)
+    except informes.InformeError as err:
+        flash(str(err), "error")
+        return redirect(url_for("protocolo", pid=pid))
+    emitido = informe_emitido(pid)
+    return render_template("informe.html", d=d, p=p, emitido=emitido, informe_vigente=informe_vigente(pid, emitido))
+
+
+@app.route("/protocolo/<int:pid>/informe.pdf", methods=["POST"])
+@requiere_permiso("informe")
+def informe_pdf(pid):
+    """Genera el PDF del informe del protocolo, lo guarda (reemplaza el anterior) y lo abre en el navegador."""
+    protocolo_o_404(pid)
+    if informes is None:
+        flash(SIN_INFORMES, "error")
+        return redirect(url_for("protocolo", pid=pid))
+    yo = usuario_actual()
+    try:
+        d = informes.armar(pid, request.form.get("comentario", ""))
+    except informes.InformeError as err:
+        flash(str(err), "error")
+        return redirect(url_for("protocolo", pid=pid))
+    pdf = informes.generar_pdf(d)
+    previo = db.uno("SELECT i.id, i.version, i.creado_en, u.iniciales FROM informes_emitidos i LEFT JOIN usuarios u ON u.id=i.usuario_id WHERE i.protocolo_id=?", (pid,))
+    campos = (yo["id"], d["medico"]["id"], db.ahora(), d["comentario"], informes.nombre_archivo(d), pdf, ",".join(str(s["eid"]) for s in d["estudios"]))
+    try:
+        if previo:      # generarlo de nuevo reemplaza el PDF anterior (no se acumulan archivos); el historial conserva quién lo generó cada vez
+            db.ex("UPDATE informes_emitidos SET usuario_id=?, firmante_id=?, creado_en=?, comentario=?, archivo=?, pdf=?, estudios=?, version=version+1 WHERE id=?",
+                  campos + (previo["id"],))
+            iid, version = previo["id"], previo["version"] + 1
+        else:
+            iid, version = db.ex("INSERT INTO informes_emitidos (usuario_id, firmante_id, creado_en, comentario, archivo, pdf, estudios, protocolo_id, version) "
+                                 "VALUES (?,?,?,?,?,?,?,?,1)", campos + (pid,)), 1
+    except db.IntegrityError:       # dos personas lo generaron a la vez por primera vez: ya hay uno, que lo intente de nuevo
+        flash("Alguien más generó el informe al mismo tiempo, revisalo y generalo de nuevo si hace falta.", "error")
+        return redirect(url_for("informe", pid=pid))
+    reemplaza = f" · reemplaza el de {previo['iniciales'] or '—'} del {fecha_hora(previo['creado_en'])}" if previo else ""
+    db.auditar(yo["id"], pid, "informe_pdf",
+               f"{d['titulo'].title()} generado por {yo['iniciales']} · firma de {d['medico']['nombre']}" + (f" (emisión {version}{reemplaza})" if previo else ""))
+    return redirect(url_for("informe_ver", iid=iid))        # se abre el PDF guardado: recargar la pestaña no genera otro
+
+
+@app.route("/informe/<int:iid>.pdf")
+@requiere_permiso("informe")
+def informe_ver(iid):
+    """El PDF tal como se generó (no se rearma: lo que se emitió es lo que se ve)."""
+    r = db.uno("SELECT protocolo_id, estudios, archivo, pdf FROM informes_emitidos WHERE id=?", (iid,))
+    if not r:
+        abort(404)
+    if not informe_vigente(r["protocolo_id"], r):
+        flash("Ese informe ya no se puede entregar: el protocolo tiene estudios pendientes o cambió desde que se generó. Hay que generarlo de nuevo.", "error")
+        return redirect(url_for("protocolo", pid=r["protocolo_id"]))
+    return send_file(io.BytesIO(bytes(r["pdf"])), mimetype="application/pdf", download_name=r["archivo"], max_age=0)
+
+
+@app.route("/usuarios/<int:uid>/firma")
+@requiere_admin
+def usuario_firma(uid):
+    f = db.uno("SELECT imagen FROM firmas WHERE usuario_id=?", (uid,))
+    if not f:
+        abort(404)
+    return send_file(io.BytesIO(bytes(f["imagen"])), mimetype="image/png", max_age=0)
 
 
 @app.route("/estudio/<int:eid>/deshacer", methods=["POST"])
@@ -789,7 +982,10 @@ def deshacer(eid):
     elif ultima["usuario_id"] != yo["id"] and not puede("etapas_deshacer"):
         flash("Solo quien la registró o alguien con permiso puede deshacer la etapa.", "error")
     else:
-        db.ex("DELETE FROM etapas WHERE id=?", (ultima["id"],))
+        miembros = miembros_flujo(e)            # el flujo es del tipo: se deshace en todos los estudios del mismo tipo
+        for m in miembros or [e]:
+            db.ex("DELETE FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], ultima["etapa"]))
+        db.ex("UPDATE protocolos SET firmante_id=NULL WHERE id=?", (e["protocolo_id"],))      # el protocolo deja de estar cerrado: se pierde el cambio de firmante
         db.auditar(yo["id"], e["protocolo_id"], "deshacer", NOMBRE_ETAPA.get(ultima["etapa"], ultima["etapa"]), eid)
         flash(f"Se deshizo {NOMBRE_ETAPA.get(ultima['etapa'])}.", "ok")
     return redirect(url_for("estudio", eid=eid))
@@ -808,6 +1004,9 @@ def anular(eid):
         flash("Indicá el motivo de la anulación.", "error")
     elif not nuevo and (error := validar_combinacion(otros + [{"tipo": e["tipo"], "subcategoria": e["subcategoria"]}])):
         flash(f"No se puede reactivar: {error}", "error")
+    elif not nuevo and (avance := flujo_avanzado(e["protocolo_id"], e["tipo"])):
+        flash(f"No se puede reactivar: hay {REGISTRO[e['tipo']].nombre.lower()} de este protocolo en proceso (llegó a {avance}) y comparten el mismo "
+              "flujo. Primero hay que deshacer las etapas.", "error")
     else:
         db.ex("UPDATE estudios SET anulado=?, motivo_anulacion=? WHERE id=?", (nuevo, motivo if nuevo else None, eid))
         db.auditar(usuario_actual()["id"], e["protocolo_id"], "anular" if nuevo else "reactivar", motivo, eid)
@@ -1012,6 +1211,17 @@ def usuario(uid=None):
         sectores = ",".join(s for s in SECTORES if request.form.get("s_" + s))
         perfil_id = int(request.form["perfil_id"]) if request.form.get("perfil_id", "").isdigit() else None
         ajuste = {k: request.form.get("p_" + k, "") for k in permisos.PERMISOS}
+        titulo = request.form.get("titulo", "") if request.form.get("titulo") in ("Dr.", "Dra.") else ""
+        mn, mp = request.form.get("mn", "").strip()[:20], request.form.get("mp", "").strip()[:20]
+        firma_png, firma_error = None, None
+        archivo = request.files.get("firma")
+        if archivo and archivo.filename and informes is None:
+            firma_error = SIN_INFORMES
+        elif archivo and archivo.filename:
+            try:
+                firma_png = informes.procesar_firma(archivo.read())
+            except ValueError as err:
+                firma_error = str(err)
         vals = (ini, request.form.get("nombre", "").strip() or ini, sectores,
                 1 if request.form.get("admin") else 0, 1 if request.form.get("activo") else 0, perfil_id,
                 permisos.texto({k for k, v in ajuste.items() if v == "mas"}),
@@ -1026,6 +1236,8 @@ def usuario(uid=None):
             flash("El perfil elegido no existe.", "error")
         elif uid == yo["id"] and not (vals[3] and vals[4]):
             flash("No podés quitarte el rol de administrador ni desactivarte a vos mismo.", "error")
+        elif firma_error:
+            flash(f"Firma: {firma_error}", "error")
         else:
             if u:
                 db.ex("UPDATE usuarios SET iniciales=?, nombre=?, sectores=?, admin=?, activo=?, perfil_id=?, permisos_mas=?, "
@@ -1035,6 +1247,14 @@ def usuario(uid=None):
                             "permisos_menos) VALUES (?,?,?,?,?,?,?,?)", vals)
             if clave:
                 db.ex("UPDATE usuarios SET clave_hash=?, debe_cambiar_clave=1 WHERE id=?", (generate_password_hash(clave), uid))
+            db.ex("UPDATE usuarios SET titulo=?, mn=?, mp=? WHERE id=?", (titulo, mn, mp, uid))
+            if firma_png:
+                db.ex("DELETE FROM firmas WHERE usuario_id=?", (uid,))
+                db.ex("INSERT INTO firmas (usuario_id, imagen, actualizada_en) VALUES (?,?,?)", (uid, firma_png, db.ahora()))
+                db.auditar(yo["id"], None, "firma", f"{ini}: firma cargada")
+            elif request.form.get("quitar_firma"):
+                db.ex("DELETE FROM firmas WHERE usuario_id=?", (uid,))
+                db.auditar(yo["id"], None, "firma", f"{ini}: firma quitada")
             detalle = (f"perfil {db.uno('SELECT nombre FROM perfiles WHERE id=?', (perfil_id,))['nombre'] if perfil_id else '—'}"
                        + (f", +{vals[6]}" if vals[6] else "") + (f", -{vals[7]}" if vals[7] else ""))
             db.auditar(yo["id"], None, "usuario", f"{ini}: {detalle}{' (clave temporal)' if clave else ''}")
@@ -1042,9 +1262,10 @@ def usuario(uid=None):
             return redirect(url_for("usuarios"))
         u = {**(dict(u) if u else {}), "iniciales": ini, "nombre": vals[1], "sectores": sectores, "admin": vals[3],
              "activo": vals[4], "perfil_id": perfil_id, "permisos_mas": vals[6], "permisos_menos": vals[7],
-             "clave_hash": u["clave_hash"] if u else None}
+             "clave_hash": u["clave_hash"] if u else None, "titulo": titulo, "mn": mn, "mp": mp}
     lista_perfiles = perfiles_con_permisos()
-    return render_template("usuario.html", u=u, perfiles=lista_perfiles, PERMISOS=permisos.PERMISOS,
+    tiene_firma = bool(uid and db.uno("SELECT 1 FROM firmas WHERE usuario_id=?", (uid,)))
+    return render_template("usuario.html", u=u, perfiles=lista_perfiles, tiene_firma=tiene_firma, PERMISOS=permisos.PERMISOS,
                            GRUPOS=permisos.GRUPOS, lista_permisos=permisos.lista,
                            mapa_perfiles={p["id"]: sorted(p["set"]) for p in lista_perfiles})
 
@@ -1132,8 +1353,19 @@ ESTUDIO_LAB = {"lab": "BP", "pap": "PAP"}  # estudio de los protocolos que rotul
 LOTES_ETIQUETA_EXTRA = ["PAPS"]
 # Códigos que lleva la etiqueta PAP (no coinciden con los tipos de muestra del catálogo, que son más descriptivos)
 MUESTRAS_PAP = ["EXO", "ENDO", "ENDO/EXO", "PAPURG", "CUPULA", "DERRAME"]
+# Cómo se rotula en la etiqueta PAP cada tipo de muestra del catálogo (el código sale del protocolo, no se elige en la etiqueta)
+CODIGO_MUESTRA_PAP = {"citologia endocervical": "ENDO", "citologia exocervical": "EXO", "cupula vaginal": "CUPULA", "liquido": "DERRAME"}
 MAX_PROTOCOLO = 999999
 DIAS_ETIQUETADOS = 3                       # cuánto tiempo siguen apareciendo los ya etiquetados (por si hay que reimprimir)
+
+
+def codigo_muestra_pap(tipo_muestra, cantidad=""):
+    """Código de la etiqueta PAP. Con cantidad "1/2" (un solo vidrio con mitad endo y mitad exo) es ENDO/EXO; si no, el que corresponde al tipo de
+    muestra del protocolo (sin tildes ni mayúsculas), y si no tiene uno propio, su texto en mayúsculas."""
+    if (cantidad or "").strip() == "1/2":
+        return "ENDO/EXO"
+    normal = unicodedata.normalize("NFD", tipo_muestra or "").encode("ascii", "ignore").decode().strip().lower()
+    return CODIGO_MUESTRA_PAP.get(normal, (tipo_muestra or "").strip().upper())
 
 
 def numero_protocolo(n):
@@ -1197,7 +1429,7 @@ def etiquetas_casos():
     laboratorio. Los ya etiquetados se ofrecen unos días más por si hay que reimprimir."""
     limite = (datetime.now() - timedelta(days=DIAS_ETIQUETADOS)).strftime("%Y-%m-%d")
     filas = db.q("""SELECT e.id, e.tipo, p.numero, p.apellido, p.nombre, e.cantidad, e.lote_id, l.codigo AS lote,
-                           p.fecha_recoleccion, e.lab_etiquetado_en, u.iniciales AS resp
+                           p.fecha_recoleccion, e.lab_etiquetado_en, e.tipo_muestra, u.iniciales AS resp
                     FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                     LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                     WHERE p.borrador=0 AND e.anulado=0 AND e.tipo IN ('BP','PAP') AND e.cantidad IS NOT NULL AND e.cantidad<>''
@@ -1205,6 +1437,7 @@ def etiquetas_casos():
     return [{"id": f["id"], "estudio": f["tipo"], "protocolo": f["numero"], "apellido": f["apellido"] or "",
              "nombre": f["nombre"] or "", "cantidad": etiquetas_cantidad(f["cantidad"]), "loteId": f["lote_id"],
              "loteCodigo": f["lote"] or "", "fechaRec": f["fecha_recoleccion"] or "", "resp": f["resp"] or "",
+             "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if f["tipo"] == "PAP" else "",
              "etiquetado": bool(f["lab_etiquetado_en"])}
             for f in filas]
 
@@ -1278,7 +1511,6 @@ def api_etiquetas_confirmar():
         return error("Tipo de etiqueta inválido.")
     if not puede("etiquetas_recepcion" if tipo == "bp" else "etiquetas_lab"):
         return error(f"No tenés permiso para etiquetas de {TIPOS_ETIQUETA[tipo]}.", 403)
-    firmantes = {x["iniciales"] for x in personal("firmante")}
     citos = {x["iniciales"] for x in personal("citotecnico")}
     desde = hasta = None
     borradores = etiquetados = None
@@ -1327,17 +1559,16 @@ def api_etiquetas_confirmar():
                 return error(f"El protocolo {f['numero'] if f else i} no está listo para {TIPOS_ETIQUETA[tipo]}: "
                              "tiene que estar completo (paciente y cantidad) y ser del estudio que corresponde.")
             items.append({"casoId": f["id"], "protocolo": f["numero"], "cantidad": etiquetas_cantidad(f["cantidad"]),
-                          "loteCodigo": f["lote_codigo"] or "", "resp": f["resp"] or "", "fechaRec": f["fecha_recoleccion"] or ""})
+                          "loteCodigo": f["lote_codigo"] or "", "resp": f["resp"] or "", "fechaRec": f["fecha_recoleccion"] or "",
+                          "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if tipo == "pap" else ""})
         n, total, por_proto = len(items), sum(i["cantidad"] for i in items), 1
         params = {"items": items}
+        # lo que lleva cada etiqueta sale del protocolo (lo decide el servidor, no la pantalla): patólogo = responsable, muestra = su tipo de muestra
+        por_etiqueta = lambda campo: [i[campo] for i in items for _ in range(i["cantidad"])]
         if tipo == "lab":
-            if not _lista_valida(p.get("patos"), total, firmantes | {""}):
-                return error("Patólogo inválido en alguna etiqueta.")
-            params.update(patos=p["patos"], pato=p.get("pato") if p.get("pato") in firmantes else "")
+            params["patos"] = por_etiqueta("resp")
         else:
-            if not _lista_valida(p.get("muestras"), total, MUESTRAS_PAP):
-                return error("Falta elegir el tipo de muestra de cada etiqueta.")
-            params.update(muestras=p["muestras"], lotePap=p.get("lotePap") if p.get("lotePap") in MUESTRAS_PAP else "")
+            params["muestras"] = por_etiqueta("muestra")
         etiquetados = ids
 
     r = db.etiquetas_confirmar(tipo, GRUPO_NUMERACION, desde, hasta, n, por_proto, total,
@@ -1458,13 +1689,14 @@ if __name__ == "__main__":
         # Solo escucha en esta PC: el depurador de Flask permite ejecutar código y no debe quedar expuesto en la red.
         # Usar siempre con una base de prueba (CONTINGENCIA_DB), nunca con la real.
         app.jinja_env.auto_reload = True        # las plantillas se releen en cada pedido (el entorno ya está creado: no alcanza con la config)
-        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":    # el recargador ejecuta este archivo dos veces: avisar una sola
+        recarga = os.environ.get("CONTINGENCIA_SIN_RECARGA") != "1"      # sin recarga: para depurar con puntos de interrupción
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not recarga:    # el recargador ejecuta este archivo dos veces: avisar una sola
             print("=" * 64)
-            print(" MODO DESARROLLO — recarga automática al guardar")
+            print(" MODO DESARROLLO — " + ("recarga automática al guardar" if recarga else "con depurador, SIN recarga (reiniciar tras cambiar un .py)"))
             print(f" Abrir:             http://localhost:{PUERTO}")
             print(f" Base de datos:     {db.DB_PATH}")
             print("=" * 64)
-        app.run(host="127.0.0.1", port=PUERTO, debug=True, use_reloader=True)
+        app.run(host="127.0.0.1", port=PUERTO, debug=True, use_reloader=recarga)
         raise SystemExit
     from waitress import serve
     db.iniciar_respaldos(minutos=10)

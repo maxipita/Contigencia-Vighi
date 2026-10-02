@@ -95,12 +95,6 @@
         <input type="date" id="fecha">
       </label>
       <!-- Laboratorio: protocolos ya completos -->
-      <label data-tipos="pap">Tipo de muestra para todas
-        <select id="lotePap"></select>
-      </label>
-      <label data-tipos="lab">Patólogo para todas (opcional)
-        <select id="pato"></select>
-      </label>
     </div>
     <div class="seleccion" data-tipos="pap lab">
       <div class="sel-cab">
@@ -172,13 +166,7 @@
     .lab-pagina:last-child { page-break-after: auto; }
     .lab-l1 { font-size: 14px; font-weight: 500; }
     .lab-l2, .lab-l3 { font-size: 12px; font-weight: 500; }
-    @media screen { .lab-pagina { outline: 1px dashed #c9c2d4; } .lab-pato-txt, .pap-muestra-txt { display: none; } }
-    @media print { .lab-pato-sel, .pap-muestra-sel { display: none; } }
-    /* Desplegable de patólogo / tipo de muestra dentro de cada etiqueta (solo en pantalla; al imprimir sale el texto) */
-    .lab-pato-sel, .pap-muestra-sel {
-        font: inherit; font-size: 12px; font-weight: 500; height: 16px; padding: 0; margin: 0;
-        border: 1px solid #c9c2d4; border-radius: 3px; background: #fff; color: #000; vertical-align: top;
-    }
+    @media screen { .lab-pagina { outline: 1px dashed #c9c2d4; } }
 </script>
 
 <script>
@@ -229,7 +217,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;   // viene de la página de un lote: se elige ese lote
 
     /* ---------- Estado de la pantalla ---------- */
-    var elec = {pato: {}, muestra: {}};     // elección por etiqueta ("idCaso:k" -> valor), para laboratorio
+    var elec = {pato: {}, muestra: {}};     // solo al ver un lote ya impreso: lo que llevó cada etiqueta ("idCaso:k" -> valor)
     var seleccion = {};                     // idCaso -> true/false, lo que marcó la persona (si no, se marcan los no etiquetados)
     var itemsFijos = null;                  // al ver un lote de etiquetas confirmado: los protocolos tal como se imprimieron
     var loteActual = null;                  // lote de etiquetas confirmado que se está viendo (habilita Imprimir); null = sin confirmar
@@ -269,13 +257,6 @@ window.ETIQUETAS = {{ datos|tojson }};
 
     /* ---------- PAP-Laboratorio: tabla de 3 etiquetas por fila, sin bordes ---------- */
     var PAP_TD = 'font-family: Finlandica, sans-serif; color: #000; padding-left: 10px; width: 110px; height: 50px; padding-top:10px;';
-    function opcionesMuestra(sel) {         // mismas opciones que el desplegable general
-        var o = $('lotePap').options, h = '';
-        for (var i = 0; i < o.length; i++) {
-            h += '<option' + (o[i].value === sel ? ' selected' : '') + '>' + esc(o[i].value) + '</option>';
-        }
-        return h;
-    }
     function renderPap(d) {
         var html = '<table cellspacing="0" cellpadding="0" style="padding-left:20px; width:400px;"><tbody>';
         for (var j = 0; j < d.pos.length; j += 3) {
@@ -283,14 +264,13 @@ window.ETIQUETAS = {{ datos|tojson }};
             for (var c = 0; c < 3; c++) {
                 var p = d.pos[j + c];
                 if (p) {
-                    var mu = elec.muestra[p.key] || '';
+                    var mu = elec.muestra[p.key] !== undefined ? elec.muestra[p.key] : p.item.muestra;   // sale del protocolo (un lote ya impreso trae el suyo)
                     // línea 3: citotécnico del caso y fecha de recolección
                     var linea3 = (p.item.resp ? p.item.resp + ' ' : '') + fechaCorta(p.item.fechaRec);
                     html += '<td style="' + PAP_TD + '">' +
                         '<div style="font-size: 14px; font-weight: 500;">' + esc(p.item.protocolo) + '</div>' +
-                        // línea 2: tipo de muestra de ESTA etiqueta (desplegable en pantalla, texto al imprimir)
-                        '<div style="font-size: 14px; font-weight: 500;"><select class="pap-muestra-sel" data-key="' + esc(p.key) + '">' +
-                            opcionesMuestra(mu) + '</select><span class="pap-muestra-txt">' + esc(mu) + '</span></div>' +
+                        // línea 2: tipo de muestra del protocolo
+                        '<div style="font-size: 14px; font-weight: 500;">' + esc(mu) + '</div>' +
                         '<div style="font-size: 12px; font-weight: 500;">' + esc(linea3) + '</div>' +
                         '</td>';
                 } else {
@@ -303,23 +283,14 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
 
     /* ---------- BP-Laboratorio: una etiqueta por página ---------- */
-    function opcionesPato(sel) {            // mismas siglas que el desplegable general
-        var o = $('pato').options, h = '';
-        for (var i = 0; i < o.length; i++) {
-            h += '<option value="' + esc(o[i].value) + '"' + (o[i].value === sel ? ' selected' : '') + '>' +
-                 (o[i].value ? esc(o[i].value) : '—') + '</option>';
-        }
-        return h;
-    }
     function renderLab(d) {
         var html = '';
         d.pos.forEach(function (p) {
-            var pa = elec.pato[p.key] || '';
+            var pa = (elec.pato[p.key] !== undefined ? elec.pato[p.key] : p.item.resp) || '';   // el responsable del protocolo (un lote ya impreso trae el suyo)
             html += '<div class="lab-pagina">' +
                 '<div class="lab-l1">' + esc(p.item.protocolo) + '</div>' +
-                // línea 2: patólogo de ESTA etiqueta (desplegable en pantalla, texto al imprimir)
-                '<div class="lab-l2"><select class="lab-pato-sel" data-key="' + esc(p.key) + '">' + opcionesPato(pa) + '</select>' +
-                    '<span class="lab-pato-txt">' + (pa ? esc(pa) : '&nbsp;') + '</span></div>' +
+                // línea 2: patólogo (responsable del protocolo)
+                '<div class="lab-l2">' + (pa ? esc(pa) : '&nbsp;') + '</div>' +
                 // línea 3: código del lote del sistema (TIPO-MMDD.N)
                 '<div class="lab-l3">' + esc(p.item.loteCodigo) + '</div>' +
                 '</div>';
@@ -343,14 +314,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         var L = DATOS.listas;
         rellenar($('lote'), L.tiposLote);
         if (L.tiposLote.indexOf('ENDO') !== -1) $('lote').value = 'ENDO';
-        rellenar($('lotePap'), L.muestrasPap);
         rellenar($('cito'), L.citotecnicos, '(sin citotécnico)');
-        rellenar($('pato'), L.patologos, '(en blanco)');
-    }
-    function existePato(v) {
-        var o = $('pato').options;
-        for (var i = 0; i < o.length; i++) if (o[i].value === v) return true;
-        return false;
     }
 
     /* ---------- Numeración de Recepción ---------- */
@@ -550,10 +514,8 @@ window.ETIQUETAS = {{ datos|tojson }};
             payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito}};
         } else {
             if (!d.n) { aviso('Marcá al menos un protocolo para etiquetar.', 'err'); return; }
-            payload = {tipo: t, items: d.items.map(function (i) { return i.id; }),
-                       params: {pato: $('pato').value, lotePap: $('lotePap').value,
-                                patos: d.pos.map(function (p) { return elec.pato[p.key] || ''; }),
-                                muestras: d.pos.map(function (p) { return elec.muestra[p.key] || ''; })}};
+            // el patólogo y el tipo de muestra de cada etiqueta los toma el servidor del protocolo
+            payload = {tipo: t, items: d.items.map(function (i) { return i.id; })};
         }
         enviarConfirmacion(payload);
     }
@@ -578,7 +540,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         reiniciarLab();
         if (b.tipo !== 'bp') {
             itemsFijos = b.params.items.map(function (i) {
-                return {id: i.casoId, protocolo: i.protocolo, cantidad: i.cantidad, loteCodigo: i.loteCodigo, resp: i.resp, fechaRec: i.fechaRec};
+                return {id: i.casoId, protocolo: i.protocolo, cantidad: i.cantidad, loteCodigo: i.loteCodigo, resp: i.resp, fechaRec: i.fechaRec, muestra: i.muestra};
             });
             posicionesDe(itemsFijos).forEach(function (p, i) {
                 elec.pato[p.key] = (b.params.patos || [])[i] || '';
@@ -637,16 +599,6 @@ window.ETIQUETAS = {{ datos|tojson }};
     function generar() {
         mostrarCampos();
         var t = tipoActual(), d = armarDatos();
-        // las etiquetas nuevas arrancan con el patólogo del caso (BP) o con el tipo de muestra general (PAP)
-        if (t === 'lab') {
-            d.pos.forEach(function (p) {
-                if (elec.pato[p.key] === undefined) elec.pato[p.key] = (p.item.resp && existePato(p.item.resp)) ? p.item.resp : $('pato').value;
-            });
-        } else if (t === 'pap') {
-            d.pos.forEach(function (p) {
-                if (elec.muestra[p.key] === undefined) elec.muestra[p.key] = $('lotePap').value;
-            });
-        }
         lienzo.innerHTML = RENDER[t](d);
 
         if (t === 'bp') {
@@ -654,7 +606,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             $('nota').textContent = d.n ? 'De ' + numero(d.inicio) + ' a ' + numero(ultimo) + ' (' + d.n + ' protocolos, ' + (d.n * 2) + ' etiquetas).' : '';
         } else {
             $('nota').textContent = d.n ? d.n + ' protocolos (' + d.pos.length + ' etiquetas). ' +
-                (t === 'lab' ? 'Elegí el patólogo de cada etiqueta en su segunda línea.' : 'Elegí el tipo de muestra de cada etiqueta en su segunda línea.') : '';
+                (t === 'lab' ? 'El patólogo sale del responsable de cada protocolo.' : 'El tipo de muestra sale de cada protocolo.') : '';
             resumenSeleccion();
         }
         aplicarBloqueo();
@@ -708,31 +660,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         if (!id) return;
         seleccion[parseInt(id, 10)] = e.target.checked;
         generar();
-    });
-    // "Patólogo para todas": pisa la elección de todas las etiquetas visibles
-    $('pato').addEventListener('input', function () {
-        var d = armarDatos();
-        if (d.pos) d.pos.forEach(function (p) { elec.pato[p.key] = $('pato').value; });
-        generar();
-    });
-    // "Tipo de muestra para todas" (PAP): pisa la elección de todas las etiquetas visibles
-    $('lotePap').addEventListener('input', function () {
-        var d = armarDatos();
-        if (d.pos) d.pos.forEach(function (p) { elec.muestra[p.key] = $('lotePap').value; });
-        generar();
-    });
-    // Elección en una etiqueta puntual (sin volver a dibujar todo, para no perder el foco)
-    sombra.addEventListener('change', function (e) {
-        var sel = e.target;
-        if (!sel.classList) return;
-        var key = sel.getAttribute('data-key');
-        if (sel.classList.contains('lab-pato-sel')) {
-            elec.pato[key] = sel.value;
-            sel.parentNode.querySelector('.lab-pato-txt').innerHTML = sel.value ? esc(sel.value) : '&nbsp;';
-        } else if (sel.classList.contains('pap-muestra-sel')) {
-            elec.muestra[key] = sel.value;
-            sel.parentNode.querySelector('.pap-muestra-txt').textContent = sel.value;
-        }
     });
     $('confirmar').addEventListener('click', confirmar);
     $('nueva').addEventListener('click', nuevaGeneracion);

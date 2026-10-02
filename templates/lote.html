@@ -15,7 +15,7 @@
     {% for c in estudios %}
     <tr class="{{ 'bloqueado' if c.anulado }}">
       <td class="muted">{{ loop.index }}</td>
-      <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.borrador %} <a class="mini" href="{{ url_for('protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
+      <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}{% if c.borrador %} <a class="mini" href="{{ url_for('protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
       <td><a href="{{ url_for('estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
