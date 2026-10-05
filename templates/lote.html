@@ -20,8 +20,8 @@
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
       <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span></td>
-      <td class="no-imprimir">{% if not l.cerrado and puede('lotes_armar') %}
-        <form method="post" action="{{ url_for('lote_quitar', lote_id=l.id, eid=c.id) }}" data-confirmar="¿Quitar {{ c.numero }} · {{ c.etiqueta }} del lote?">
+      <td class="no-imprimir">{% if not l.cerrado and puede('lotes_armar') and (loop.first or estudios[loop.index0 - 1].protocolo_id != c.protocolo_id) %}
+        <form method="post" action="{{ url_for('lote_quitar', lote_id=l.id, eid=c.id) }}" data-confirmar="¿Quitar el protocolo {{ c.numero }} del lote?">
           <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec" style="padding:3px 8px">Quitar</button></form>
       {% endif %}</td>
     </tr>
@@ -38,12 +38,12 @@
     <h2>Agregar estudio</h2>
     <form method="post" action="{{ url_for('lote_agregar', lote_id=l.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
-      <label>Estudios sin lote que van en {{ l.tipo_lote }}</label>
+      <label>Protocolos sin lote que van en {{ l.tipo_lote }}</label>
       <select name="estudio_id"><option value="" hidden>Seleccionar…</option>
-        {% for s in sin_lote %}<option value="{{ s.id }}">{{ s.numero }} · {{ s.etiqueta }}{% if s.apellido %} — {{ s.apellido }}{% endif %}</option>{% endfor %}</select>
+        {% for s in sin_lote %}<option value="{{ s.id }}">{{ s.numero }}{% if s.flujos %} · {{ s.flujos }}{% endif %}{% if s.apellido %} — {{ s.apellido }}{% endif %}</option>{% endfor %}</select>
       <label style="margin-top:8px">o escribí el N° de protocolo</label>
       <input name="protocolo" autocomplete="off">
-      <p class="muted">Si el estudio ya estaba en otro lote, se mueve a este.</p>
+      <p class="muted">El lote es del protocolo (lo marca su primer flujo): entran todos sus estudios. Si ya estaba en otro lote, se mueve a este.</p>
       <div class="acciones"><button class="btn">Agregar</button></div>
     </form>
   </div>

@@ -1,6 +1,4 @@
 {
-  // F5 inicia el sistema en modo desarrollo: al guardar un archivo (.py, plantilla o CSS) alcanza con actualizar el navegador.
-  // Usa una base de prueba (data/prueba.db) y el puerto 8001, así que no toca los datos reales ni choca con el servidor real (8000).
   "version": "0.2.0",
   "configurations": [
     {
@@ -11,7 +9,6 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      // Sin depurador: el recargador reinicia el servidor con una "excepción" (SystemExit 3) y el depurador la mostraría como error.
       "noDebug": true,
       "env": {
         "CONTINGENCIA_DESARROLLO": "1",
@@ -20,7 +17,6 @@
       }
     },
     {
-      // Para usar puntos de interrupción. No recarga solo: hay que reiniciar (Ctrl+Shift+F5) después de cambiar un .py.
       "name": "Contingencia — con depurador (sin recarga)",
       "type": "debugpy",
       "request": "launch",

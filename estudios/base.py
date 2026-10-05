@@ -1,6 +1,3 @@
-"""Piezas comunes a todos los tipos de estudio: sectores, etapas y la clase que describe un tipo.
-Cada tipo (PAP, BP, CT) vive en su propio módulo y se registra en estudios/__init__.py."""
-
 SECTORES = {
     "ingreso": "Ingreso",
     "laboratorio": "Laboratorio",
@@ -10,8 +7,6 @@ SECTORES = {
     "firmante": "Médicos firmantes",
 }
 
-# etapa -> (nombre, sector que la realiza, proceso, actividad, acción) — los tres últimos como los muestra
-# la trazabilidad de southernbits
 ETAPAS = {
     "ingreso": ("Ingreso", "ingreso", "INGRESO", "Cargar protocolo", "Protocolo > Cargar"),
     "macroscopia": ("Macroscopía", "macroscopia", "DIAGNÓSTICOS", "Macroscopía", "Macro > Informar"),
@@ -35,32 +30,29 @@ def _texto(fila, campo):
 
 
 class Estudio:
-    """Describe un tipo de estudio. Los módulos pap.py, bp.py y ct.py crean una instancia cada uno."""
-    clave = ""                     # PAP, BP, CT
-    nombre = ""                    # como se muestra
-    categoria = ""                 # Biopsias / Citologías
-    pasos = []                     # claves de ETAPAS, en orden (sin el ingreso)
-    pasos_ihq = []                 # se agregan si el médico solicita IHQ
-    plazos = {}                    # etapa -> (días hábiles desde la recolección, hora límite)
-    secciones = ["micro"]          # partes de la ficha: macro, micro, ihq
+    clave = ""
+    nombre = ""
+    categoria = ""
+    pasos = []
+    pasos_ihq = []
+    plazos = {}
+    secciones = ["micro"]
     sector_responsable = "citotecnico"
     etiqueta_responsable = "Citotécnico responsable"
     cantidades = [str(n) for n in range(1, 11)]
     etiqueta_cantidad = "vidrios"
-    subcategoria_fija = None       # si el tipo siempre es de la misma subcategoría / sitio
+    subcategoria_fija = None
     sitio_fijo = None
-    citologia_hormonal = False     # pregunta propia del PAP
-    bethesda = False               # el diagnóstico lleva resultado Bethesda (PAP)
-    lotes = []                     # tipos de lote fijos que le corresponden
-    lote_por_citotecnico = False   # lote con las iniciales del citotécnico (PAP)
+    citologia_hormonal = False
+    bethesda = False
+    lotes = []
+    lote_por_citotecnico = False
 
     def flujo(self, solicita_ihq=False):
-        """[(clave, nombre, sector)] de las etapas del estudio."""
         claves = self.pasos + (self.pasos_ihq if solicita_ihq else [])
         return [(k, ETAPAS[k][0], ETAPAS[k][1]) for k in claves]
 
     def estado(self, hechas, solicita_ihq=False, anulado=False):
-        """(texto de estado, próxima etapa o None)."""
         if anulado:
             return "ANULADO", None
         for paso in self.flujo(solicita_ihq):
@@ -72,7 +64,6 @@ class Estudio:
         return self.flujo(solicita_ihq)[-1][0]
 
     def requisito(self, etapa, macro, micro, ihq):
-        """Qué tiene que estar cargado antes de completar la etapa (None = nada)."""
         if etapa == "macroscopia" and not _texto(macro, "descripcion"):
             return "Falta la descripción macroscópica."
         if etapa == "microscopia" and not (_texto(micro, "descripcion") or _texto(micro, "conclusion")):
@@ -82,7 +73,6 @@ class Estudio:
         return None
 
     def tipos_lote(self, fijos, citotecnicos):
-        """Tipos de lote que se pueden elegir para este estudio."""
         if self.lote_por_citotecnico:
             return list(citotecnicos)
         return [t for t in fijos if t in self.lotes]

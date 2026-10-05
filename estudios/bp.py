@@ -1,4 +1,3 @@
-"""Biopsias (con IHQ opcional)."""
 from .base import Estudio
 
 

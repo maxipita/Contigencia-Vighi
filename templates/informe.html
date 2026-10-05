@@ -63,7 +63,6 @@
 </div>
 {% endif %}
 <script>
-  // el PDF se abre en otra pestaña: al generar, esta se actualiza sola para que muestre el informe nuevo
   document.querySelector('form[target="_blank"]').addEventListener('submit', function () { setTimeout(function () { location.reload(); }, 1500); });
 </script>
 {% endblock %}

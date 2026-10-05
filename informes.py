@@ -1,9 +1,3 @@
-"""Informe en PDF de cada PROTOCOLO: junta todos sus estudios (histopatológico para biopsias, citológico para PAP y citologías, o uno
-general si hay de los dos), armado con los datos cargados. El diseño es el del informe de la maqueta del sistema de gestión (vighi-sistema).
-
-- armar(pid): junta los datos del protocolo desde la base. Falla con InformeError si todavía no se puede informar.
-- generar_pdf(datos): dibuja el PDF (bytes) con reportlab.
-- procesar_firma(bytes): valida la imagen de la firma de un médico y la deja como PNG liviano."""
 import io
 import os
 from datetime import datetime
@@ -25,7 +19,6 @@ from estudios import REGISTRO
 BASE = os.path.dirname(os.path.abspath(__file__))
 LOGO = os.path.join(BASE, "static", "img", "logo.png")
 
-# Datos del centro (pie de cada página). Se editan acá.
 CENTRO = {
     "nombre": "CAP VIGHI",
     "subtitulo": "CENTRO DE ANATOMÍA PATOLÓGICA",
@@ -36,7 +29,6 @@ CENTRO = {
 }
 CONFIDENCIAL = "INFORMACIÓN CONFIDENCIAL · SECRETO MÉDICO · ALCANCES DEL ARTÍCULO 156 DEL CÓDIGO PENAL"
 
-# Paleta de la web nueva (la misma que usa el sistema)
 PRIMARIO = colors.HexColor("#431866")
 ACENTO = colors.HexColor("#8a3fd6")
 PIZARRA = colors.HexColor("#665e77")
@@ -44,18 +36,15 @@ SUPERFICIE = colors.HexColor("#f8f5fb")
 BORDE = colors.HexColor("#e3e8ee")
 TEXTO = colors.HexColor("#2d2038")
 
-MAX_FIRMA = (900, 360)      # px: la firma se achica a este tamaño máximo
+MAX_FIRMA = (900, 360)
 MAX_COMENTARIO = 3000
 
 
 class InformeError(Exception):
-    """El informe no se puede generar todavía (mensaje para mostrar a la persona)."""
+    pass
 
 
-# ------------------------------------------------------------------ fuentes
 def _fuentes():
-    """Registra una fuente Unicode (Segoe UI o Arial de Windows) para que se vean bien tildes, µ, ≥, etc.
-    Si no hay ninguna, usa Helvetica (cubre el castellano, pero no símbolos como ≥)."""
     carpeta = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
     for normal, negrita in (("segoeui.ttf", "segoeuib.ttf"), ("arial.ttf", "arialbd.ttf")):
         a, b = os.path.join(carpeta, normal), os.path.join(carpeta, negrita)
@@ -73,9 +62,7 @@ def _fuentes():
 FUENTE, NEGRITA = _fuentes()
 
 
-# ------------------------------------------------------------------ firma
 def procesar_firma(contenido):
-    """Valida que sea una imagen (PNG o JPG), la achica y la devuelve como PNG. Levanta ValueError si no sirve."""
     from PIL import Image as PIL
     if len(contenido) > 6 * 1024 * 1024:
         raise ValueError("La imagen pesa más de 6 MB.")
@@ -90,11 +77,10 @@ def procesar_firma(contenido):
     fondo = PIL.new("RGBA", img.size, (255, 255, 255, 0))
     fondo.alpha_composite(img)
     salida = io.BytesIO()
-    fondo.save(salida, "PNG", optimize=True)         # re-guardar descarta metadatos del archivo original
+    fondo.save(salida, "PNG", optimize=True)
     return salida.getvalue()
 
 
-# ------------------------------------------------------------------ datos del informe
 def _fecha(texto):
     try:
         return datetime.strptime(texto[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
@@ -107,14 +93,11 @@ def _t(fila, campo):
 
 
 def _etiqueta(e):
-    """Cómo se nombra el estudio dentro del informe, ej. 'Biopsia · Mama'."""
     nombre = REGISTRO[e["tipo"]].nombre
     return nombre if e["tipo"] == "PAP" or not e["sitio"] else f"{nombre} · {e['sitio']}"
 
 
 def _firmante(protocolo, estudios, cierre):
-    """Quién firma: 1) quien, al cerrar lo último, pidió pasar la firma a su nombre; 2) el responsable asignado al caso (el primer estudio
-    cuyo responsable es médico firmante); 3) si no hay, quien cerró la última etapa. Devuelve (fila de usuario, de dónde sale)."""
     if protocolo["firmante_id"]:
         u = db.uno("SELECT id, iniciales, nombre, titulo, mn, mp FROM usuarios WHERE id=?", (protocolo["firmante_id"],))
         if u:
@@ -129,7 +112,6 @@ def _firmante(protocolo, estudios, cierre):
 
 
 def armar(pid, comentario=""):
-    """Datos del informe del protocolo `pid` (todos sus estudios activos). Levanta InformeError si no se puede informar."""
     p = db.uno("SELECT * FROM protocolos WHERE id=?", (pid,))
     if not p:
         raise InformeError("El protocolo no existe.")
@@ -142,7 +124,7 @@ def armar(pid, comentario=""):
     etapas = {}
     for x in db.q("SELECT x.* FROM etapas x JOIN estudios e ON e.id=x.estudio_id WHERE e.protocolo_id=?", (pid,)):
         etapas.setdefault(x["estudio_id"], {})[x["etapa"]] = x
-    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (e["id"],))}   # el flujo es del tipo
+    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (e["id"],))}
     pendientes = []
     for e in estudios:
         _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["id"], {})), e["tipo"] in ihq_pide)
@@ -152,7 +134,7 @@ def armar(pid, comentario=""):
         raise InformeError("El informe se genera cuando todos los estudios están informados. Falta: "
                            + "; ".join(f"{n} (pendiente {s})" for n, s in pendientes) + ".")
 
-    cierre = max((x for ids in etapas.values() for x in ids.values()), key=lambda x: (x["fecha_hora"], x["id"]))   # lo último que se completó
+    cierre = max((x for ids in etapas.values() for x in ids.values()), key=lambda x: (x["fecha_hora"], x["id"]))
     medico, origen = _firmante(p, estudios, cierre)
     tiene_firma = bool(db.uno("SELECT 1 FROM firmas WHERE usuario_id=?", (medico["id"],)))
     nombre_medico = medico["nombre"] or medico["iniciales"]
@@ -210,7 +192,6 @@ def nombre_archivo(d):
     return f"Informe_{seguro}.pdf"
 
 
-# ------------------------------------------------------------------ PDF
 def _estilos():
     base = dict(fontName=FUENTE, textColor=TEXTO, leading=14.5, fontSize=10.5)
     return {
@@ -230,12 +211,10 @@ def _estilos():
 
 
 def _p(texto, estilo):
-    """Párrafo con texto escapado y saltos de línea respetados."""
     return Paragraph(escape(texto or "").replace("\r", "").replace("\n", "<br/>"), estilo)
 
 
 def _construir(d, total, firma_png):
-    """Dibuja el PDF. Devuelve (bytes, cantidad de páginas)."""
     s = _estilos()
     ancho, alto = A4
     izq = der = 18 * mm
@@ -263,7 +242,6 @@ def _construir(d, total, firma_png):
 
     flujo = []
 
-    # encabezado: marca a la derecha, como en la maqueta
     logo = Image(LOGO, width=17 * mm, height=17 * mm) if os.path.exists(LOGO) else Spacer(1, 1)
     marca = Table([[[Paragraph(CENTRO["nombre"], s["marca"]), Paragraph(CENTRO["subtitulo"], s["marca2"])], logo]],
                   colWidths=[util - 17 * mm - 6, 17 * mm + 6], style=TableStyle([
@@ -272,7 +250,6 @@ def _construir(d, total, firma_png):
                       ("LINEBELOW", (0, 0), (-1, 0), 1.6, ACENTO)]))
     flujo += [marca, Spacer(1, 8)]
 
-    # datos del paciente y del protocolo
     def fila(a, b, c, d_):
         return [Paragraph(a, s["etiqueta"]) if a else "", _p(b, s["valor"]) if b else "",
                 Paragraph(c, s["etiqueta"]) if c else "", _p(d_, s["valor"]) if d_ else ""]
@@ -293,11 +270,11 @@ def _construir(d, total, firma_png):
 
     varios = len(d["estudios"]) > 1
     for est in d["estudios"]:
-        if varios:      # con más de un estudio, cada uno lleva su nombre como cabecera
+        if varios:
             flujo.append(Table([[Paragraph(escape(est["etiqueta"]).upper(), s["estudio"])]], colWidths=[util], style=TableStyle([
                 ("LINEBELOW", (0, 0), (-1, -1), 1.2, ACENTO), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)])))
             flujo.append(Spacer(1, 6))
-        if est["diagnostico"]:           # diagnóstico final destacado
+        if est["diagnostico"]:
             partes = [Paragraph("DIAGNÓSTICO FINAL", s["seccion"]), _p(est["diagnostico"], s["diagnostico"])]
             if est["detalle"]:
                 partes.append(_p(est["detalle"], s["texto"]))
@@ -314,7 +291,6 @@ def _construir(d, total, firma_png):
             flujo.append(Spacer(1, 10))
     seccion("COMENTARIO", d["comentario"])
 
-    # firma
     m = d["medico"]
     rol = {"Dra.": "Médica Patóloga", "Dr.": "Médico Patólogo"}.get(m["titulo"], "Médico/a Patólogo/a")
     nombre = f"{m['titulo']} {m['nombre']}".strip()
@@ -329,7 +305,7 @@ def _construir(d, total, firma_png):
     celdas.append([Paragraph(rol, s["firma_dato"])])
     if matricula:
         celdas.append([Paragraph(matricula, s["firma_dato"])])
-    bloque = Table(celdas, colWidths=[85 * mm], style=TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT"),      # sin esto la imagen queda a la izquierda de la columna
+    bloque = Table(celdas, colWidths=[85 * mm], style=TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT"),
                                                                    ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                                                                    ("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
     emitido = Paragraph(f"Informe emitido por el sistema de contingencia · {datetime.now():%d/%m/%Y %H:%M}", s["pie"])
@@ -343,7 +319,6 @@ def _construir(d, total, firma_png):
 
 
 def generar_pdf(d):
-    """PDF del informe (bytes). Se arma dos veces: la primera solo para saber cuántas páginas tiene ("Página 1 de N")."""
     firma = None
     if d["medico"]["firma"]:
         f = db.uno("SELECT imagen FROM firmas WHERE usuario_id=?", (d["medico"]["id"],))

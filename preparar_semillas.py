@@ -1,8 +1,3 @@
-"""Genera los datos iniciales (seed/*.json) a partir del Excel de contingencia y los CSV de templates.
-
-Uso:  py preparar_semillas.py
-Se corre solo cuando cambian los templates, el catálogo o los usuarios del Excel.
-"""
 import csv
 import json
 import os
@@ -29,7 +24,6 @@ def guardar(nombre, datos):
 
 
 def valores_de_nombre(wb, nombre):
-    """Valores de un rango con nombre (ej. SITIO_Biopsias_Digestiva)."""
     dn = wb.defined_names.get(nombre)
     if dn is None:
         return []
@@ -49,8 +43,8 @@ def columna(ws, col):
 def catalogo():
     wb = openpyxl.load_workbook(EXCEL_LISTAS)
     ws = wb["Listas"]
-    rango_sitio = dict(zip(columna(ws, "Q"), columna(ws, "R")))   # "Cat|Sub" -> nombre de rango
-    rango_tm = dict(zip(columna(ws, "AU"), columna(ws, "AV")))     # "Cat|Sub|Sitio" -> nombre de rango
+    rango_sitio = dict(zip(columna(ws, "Q"), columna(ws, "R")))
+    rango_tm = dict(zip(columna(ws, "AU"), columna(ws, "AV")))
     filas = []
     for tipo, cat, subs in [("BP", "Biopsias", columna(ws, "F")), ("CT", "Citologías", columna(ws, "J"))]:
         for sub in subs:
@@ -72,7 +66,6 @@ def catalogo():
 
 
 def coberturas():
-    """Nombres de las coberturas tal como están en el sistema (coberturas.csv, col1). Se omite la de prueba."""
     with open(os.path.join(CSV_DIR, "coberturas.csv"), encoding="utf-8-sig") as f:
         return [x["col1"].strip() for x in csv.DictReader(f) if x["col1"].strip() and x["col1"].strip() != "TEST"]
 
@@ -85,10 +78,10 @@ def templates(archivo, clase, col_texto, col_conclusion=None):
         texto = (x.get(col_texto) or "").strip()
         concl = (x.get(col_conclusion) or "").strip() if col_conclusion else ""
         if not texto and not concl:
-            continue                                   # sin contenido: no sirve como template
+            continue
         t = x["titulo"].strip()
         if (texto, concl) in [(a["texto"], a["conclusion"]) for a in vistos[t]]:
-            continue                                   # duplicado idéntico
+            continue
         vistos[t].append({"texto": texto, "conclusion": concl, "tipo_biopsia": (x.get("tipo_biopsia") or "").strip()})
     out = []
     for t, versiones in vistos.items():
@@ -100,7 +93,6 @@ def templates(archivo, clase, col_texto, col_conclusion=None):
 
 
 def templates_macro_desde_excel():
-    """Los textos de macro buenos quedaron en la hoja oculta Templates_Macro del Excel v3."""
     ws = openpyxl.load_workbook(EXCEL_USUARIOS)["Templates_Macro"]
     out = []
     for titulo, tipo, texto in ws.iter_rows(min_row=2, max_col=3, values_only=True):
@@ -122,7 +114,6 @@ def usuarios():
 
 
 def medicos():
-    """Médicos solicitantes exportados del sistema (medicos.csv: id, nombre)."""
     with open(os.path.join(CSV_DIR, "medicos.csv"), encoding="utf-8-sig") as f:
         filas = [{"id": int(x["id"]), "nombre": " ".join(x["nombre"].split())} for x in csv.DictReader(f) if x["nombre"].strip()]
     guardar("medicos.json", sorted(filas, key=lambda m: m["nombre"].casefold()))

@@ -95,6 +95,53 @@ py app.py                                 # servidor real en :8000 (equivale a "
   con mitad endo y mitad exo, la única cantidad fraccionaria— siempre ENDO/EXO). Los toma el servidor al confirmar
   y los guarda en `params` (`patos` / `muestras`, uno por etiqueta) para poder reimprimir igual.
 
+## Notas de implementación
+
+El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo está en este archivo y en `LEEME.md`.
+
+- **Migraciones:** no hay herramienta. `db.inicializar()` corre en cada arranque: ejecuta `SCHEMA` (todo `CREATE ... IF NOT EXISTS`), suma con `ALTER`
+  las columnas que falten (lista dentro de la función; una columna nueva va ahí y en `SCHEMA`) y hace los pasos de una sola vez detectando su estado: el permiso
+  `informe` se agrega al perfil "Médico firmante" solo si `usuarios` todavía no tiene la columna `titulo`; `informes_emitidos` pasa de "por estudio" a "por protocolo"
+  si no tiene `protocolo_id`; `unificar_etapas` deja parejas las etapas de estudios del mismo tipo; la versión anterior con tabla `casos` se respalda y se descarta.
+- **Acceso a datos:** `app.py` no importa el motor de base: para capturar una restricción rota usa `db.IntegrityError`. Cada escritura de `db.ex` hace commit.
+  Las conexiones permiten leer mientras otro escribe (WAL); `etiquetas_confirmar` usa una transacción que bloquea escrituras.
+- **Informes opcionales:** si falta `reportlab` (o Pillow), `app.py` arranca igual con `informes = None`: se ocultan los botones (`informes_ok` en las plantillas) y las rutas
+  avisan con `SIN_INFORMES`. Los informes ya guardados se pueden ver sin la librería. `MAX_CONTENT_LENGTH` (8 MB) existe por las imágenes de firma; `procesar_firma`
+  acepta solo PNG/JPG reales, las achica y las guarda como PNG sin metadatos. Los datos del pie del PDF están en `informes.CENTRO` y los colores en las constantes del módulo.
+- **Modo desarrollo** (`CONTINGENCIA_DESARROLLO=1`): el recargador de Werkzeug ejecuta `app.py` dos veces, por eso el banner se imprime solo en el proceso hijo
+  (`WERKZEUG_RUN_MAIN`); `jinja_env.auto_reload` se activa a mano porque el entorno de plantillas ya está creado; escucha solo en `127.0.0.1` porque el depurador
+  de Flask permite ejecutar código; usar siempre una base de prueba. `CONTINGENCIA_SIN_RECARGA=1` apaga el recargador para depurar con puntos de interrupción
+  (el recargador termina el proceso con `SystemExit 3`, que el depurador de VS Code muestra como excepción: por eso F5 corre sin depurador).
+- **Respaldos:** un hilo copia la base cada 10 minutos a `data/respaldos` y, si está definida, a `CONTINGENCIA_RESPALDO` (por ejemplo una carpeta de SharePoint
+  sincronizada). Un respaldo que falla no tira la aplicación.
+- **Pasar a MySQL:** habría que cambiar solo `db.py`: la conexión, los placeholders (`?` → `%s`), los tipos del esquema y el bloqueo de `etiquetas_confirmar`
+  (`BEGIN IMMEDIATE` de SQLite → una transacción con `SELECT ... FOR UPDATE`).
+- **Lotes:** el código es `TIPO-MMDD.N` y se arma igual en `app.crear_lote` y en `db._lote_abierto`: si se toca uno, tocar el otro. `tipos_lote_fijos()` suma a los de la
+  base los que exige cada estudio (así una base anterior a un tipo nuevo, como HPM, no necesita migración). `orden_numero` ordena los números de protocolo como personas
+  (C000009 antes que C000010). `etiquetas_confirmar` devuelve `{id, lote}` o `{error: "choque" | "existentes"}`; `borradores` es
+  `{estudio, categoria, subcategoria, sitio, tipo_lote, fecha_lote, fecha_rec, responsable_id, protocolos}`.
+- **Lote por protocolo:** el lote lo marca el primer estudio activo del protocolo (`primer_estudio`) y todos los activos comparten `estudios.lote_id`. `asignar_lote(protocolo_id, ...)`
+  lo aplica a todos y audita una sola línea; `crear_estudio` hereda el del protocolo; solo el primer bloque de los formularios muestra el selector (CSS `.campo-lote`, y
+  `sin-lote` en el formulario cuando el estudio no es el primero); `lote_agregar` y `lote_quitar` mueven el protocolo completo y exigen que el tipo de lote sirva al primer
+  flujo. `db.unificar_lotes` parejea las bases que tenían lotes distintos en un mismo protocolo (queda el del primer flujo).
+- **Carga de macro y micro:** solo se puede editar mientras el estudio está en esa etapa (`habilitada`); `con_permiso` suma el permiso del usuario.
+- **Excel de exportación:** una fila por estudio con los datos de su protocolo y sus etapas, para volver a cargarlos en southernbits.
+- **Permisos:** el orden de `PERMISOS` es el orden en la pantalla de perfiles. Los usuarios que ya existían arrancan con el perfil de su sector.
+- **Trazabilidad:** el horario hábil es de 12 horas por día hábil (8 a 20). `FERIADOS_2026` es la carga inicial y hay que verificarla con el calendario oficial;
+  después se edita desde la pantalla Feriados. La etapa anterior a la primera es la recolección.
+- **Etiquetas:** `GRUPO_NUMERACION` es ("bp", "pap"): comparten numeración porque los lotes de PAP de la versión anterior también numeraban. `LOTES_ETIQUETA_EXTRA`
+  (PAPS) son los tipos del desplegable de southernbits que no son un tipo de lote de este sistema. `MUESTRAS_PAP` son los códigos de la etiqueta PAP: no coinciden con
+  los tipos de muestra del catálogo, que son más descriptivos. Los lotes ya etiquetados siguen apareciendo `DIAS_ETIQUETADOS` días por si hay que reimprimir.
+  El QR institucional (con el logo Vighi al centro, recortado sin borde blanco) va en la etiqueta de Recepción a 70x70 px. Las medidas de cada etiqueta imitan las del
+  sistema original (Recepción 457,2x84 px; PAP 126,7x60; BP-Laboratorio una página por etiqueta): no tocarlas.
+- **Formularios (`static/app.js`):** la cascada Subcategoría → Sitio → Tipo de muestra se arma con el catálogo de cada tipo (se pide una vez); sin opciones el campo queda
+  deshabilitado. En PAP la subcategoría y el sitio son fijos y, al elegir el citotécnico, se propone su lote del día. Los bloques de estudio nuevos se clonan de las
+  plantillas ocultas de `estudios/_bloque.html` (campos `e-N-campo`). El buscador de médico solicitante carga la lista una vez, ignora acentos y mayúsculas, busca todas las
+  palabras escritas y muestra primero los apellidos que empiezan igual.
+- **Visual:** los colores de la web nueva salen de `NUEVAWEB/susana-vighi-web` (`src/styles.css`, valores OKLCH pasados a hex en `:root`). El menú superior tiene tres anchos:
+  completo, compacto (conserva los textos de los botones principales) y solo íconos (el activo conserva su texto, la búsqueda se abre al hacer clic); en pantallas angostas
+  se despliega debajo de la barra.
+
 ## Datos sensibles
 
 `data/` (base, respaldos automáticos cada 10 min, `secret.key`) contiene **datos de pacientes** y está en

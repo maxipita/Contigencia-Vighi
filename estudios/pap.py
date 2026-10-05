@@ -1,4 +1,3 @@
-"""PAP: siempre ginecológico, resultado en Bethesda, lote por citotécnico."""
 from .base import GINECOLOGICA, Estudio, _texto
 
 
@@ -16,7 +15,7 @@ class Pap(Estudio):
     lote_por_citotecnico = True
 
     def requisito(self, etapa, macro, micro, ihq):
-        if etapa == "microscopia":          # en el PAP alcanza con el resultado Bethesda
+        if etapa == "microscopia":
             return None if _texto(micro, "bethesda") else "Falta el resultado (Bethesda)."
         return super().requisito(etapa, macro, micro, ihq)
 

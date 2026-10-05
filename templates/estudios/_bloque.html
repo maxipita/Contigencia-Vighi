@@ -1,8 +1,5 @@
-{# Piezas de formulario compartidas. Importar con: {% import "estudios/_bloque.html" as b with context %} #}
-
 {% macro opciones(lista, actual) %}<option value="" hidden>Seleccionar…</option>{% if actual and actual|string not in lista|map('string') %}<option selected>{{ actual }}</option>{% endif %}{% for o in lista %}<option {{ 'selected' if o|string == actual|string }}>{{ o }}</option>{% endfor %}{% endmacro %}
 
-{# Bloque de un estudio (PAP / BP / CT). Los campos se llaman e-N-campo; lo que cambia entre tipos sale del módulo del estudio. #}
 {% macro bloque(tipo, i, e, quitar=True) %}
 {% set t = REGISTRO[tipo] %}
 {% set p = 'e-' ~ i ~ '-' %}
@@ -31,7 +28,7 @@
       <select name="{{ p }}responsable_id"{% if t.lote_por_citotecnico %} data-lote-cito{% endif %}><option value="" hidden>Seleccionar…</option>
         {% for r in resp[tipo] %}<option value="{{ r.id }}" data-ini="{{ r.iniciales }}" {{ 'selected' if r.id|string == val('responsable_id') }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} — {{ r.nombre }}{% endif %}</option>{% endfor %}
       </select></div>
-    <div><label>Lote</label>
+    <div class="campo-lote"><label>Lote del protocolo</label>
       <select name="{{ p }}lote_id">
         <option value="">— Sin lote —</option>
         {% if lotes_abiertos[tipo] %}<optgroup label="Lotes abiertos de hoy">
@@ -46,7 +43,6 @@
 </div>
 {% endmacro %}
 
-{# Botones para sumar estudios + plantillas ocultas que usa app.js para crear bloques nuevos #}
 {% macro agregar_estudios() %}
 <div class="acciones agregar-estudio">
   <span class="muted">Agregar estudio:</span>

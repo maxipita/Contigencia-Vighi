@@ -2,14 +2,12 @@
 {% block titulo %}Etiquetas{% endblock %}
 {% block head %}
 <style>
-  /* Fuente de las etiquetas impresas (guardada en el proyecto: se imprime igual sin internet) */
   @font-face {
     font-family: Finlandica;
     src: url('{{ url_for("static", filename="fonts/Finlandica-latin.woff2") }}') format('woff2');
     font-weight: 400 700;
     font-display: swap;
   }
-  /* pasos del flujo */
   .pasos-etq { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 16px; }
   .pasos-etq .paso-et { display: inline-flex; align-items: center; gap: 8px; }
   .pasos-etq label, .pasos-etq a.paso-et { margin: 0; cursor: pointer; text-decoration: none; }
@@ -24,7 +22,6 @@
   .pasos-etq input:disabled + .pill { opacity: .55; cursor: not-allowed; }
   .pasos-etq input:checked:disabled + .pill { opacity: 1; cursor: default; }
   .pasos-etq .flecha { color: var(--borde); font-weight: 700; }
-  /* datos de las etiquetas */
   .controles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 16px; align-items: end; }
   .nota { font-size: 12px; color: var(--pizarra); }
   .seleccion { margin-top: 4px; }
@@ -37,7 +34,6 @@
   .sel-tabla tr.hecho td { color: var(--pizarra); }
   .sel-tabla input[type=checkbox] { width: 16px; height: 16px; }
   .sel-vacio { padding: 14px 16px; font-size: 13px; color: var(--pizarra); background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); }
-  /* aviso de estado del lote de etiquetas */
   .lote-info { margin-bottom: 16px; padding: 11px 16px; border: 1px solid var(--borde); border-left: 3px solid var(--acento); border-radius: 10px; background: #fff;
                font-size: 13px; line-height: 1.6; box-shadow: var(--sombra); }
   .lote-info.ok { background: var(--ok-fondo); border-color: #bbf7d0; border-left-color: var(--ok); color: #14532d; }
@@ -48,7 +44,6 @@
   details.historial-etq > summary { cursor: pointer; padding: 12px 16px; font: 700 10px var(--fuente); letter-spacing: .1em; text-transform: uppercase; color: var(--pizarra); }
   details.historial-etq[open] > summary { border-bottom: 1px solid var(--borde); background: var(--superficie); border-radius: var(--radio) var(--radio) 0 0; }
   details.historial-etq > div { padding: 12px 16px 16px; overflow-x: auto; }
-  /* vista previa: fondo blanco y sin adornos al imprimir */
   #vistaPrevia { padding: 0; overflow: hidden; }
   #vistaPrevia h2 { margin: 0; padding: 10px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde); font-size: 10px; letter-spacing: .1em; }
   #etiquetas { min-height: 80px; padding: 8px 12px 16px; }
@@ -65,7 +60,6 @@
   <p class="muted">Primero se generan las etiquetas de Recepción (crean los protocolos), después se cargan los pacientes en
     <a href="{{ url_for('completar') }}">Por completar</a> y por último se imprimen las de laboratorio de cada protocolo.</p>
 
-  {# cada paso solo con su permiso (el servidor también lo controla al confirmar) #}
   {% set rec, lab = puede('etiquetas_recepcion'), puede('etiquetas_lab') %}
   {% macro sin(ok) %}{{ ' data-sin-permiso disabled' if not ok }}{% endmacro %}
   <div class="pasos-etq">
@@ -78,7 +72,6 @@
   <div class="tarjeta" id="panelEtq">
     <h2>Datos de las etiquetas</h2>
     <div class="controles">
-      <!-- Recepción: genera los números y los protocolos a completar -->
       <label data-tipos="bp">Cantidad de protocolos
         <input type="number" id="cantidad" min="1" max="1000" value="10">
       </label>
@@ -94,7 +87,6 @@
       <label data-tipos="bp">Fecha de recolección
         <input type="date" id="fecha">
       </label>
-      <!-- Laboratorio: protocolos ya completos -->
     </div>
     <div class="seleccion" data-tipos="pap lab">
       <div class="sel-cab">
@@ -128,9 +120,7 @@
   <div id="etiquetas"></div>
 </div>
 
-<!-- CSS de las etiquetas: se inyecta en el shadow DOM de la vista previa (no lo toca el CSS del sistema) -->
 <script type="text/plain" id="css-etiquetas">
-    /* ===== Recepción: estilos idénticos a etiqueta.css del sistema ===== */
     .table-etiqueta {
         color: #000 !important;
         font-weight: 600;
@@ -157,11 +147,8 @@
         font-size: 14px;
         font-family: Finlandica, sans-serif;
     }
-    /* En el original el ancho lo da el texto de la procedencia (~110px + 20px de margen).
-       Se fija ese ancho mínimo para que las celdas midan igual aunque no haya procedencia. */
     .etiqueta { min-width: 129.61px; }
 
-    /* ===== BP-Laboratorio: una etiqueta por página ===== */
     .lab-pagina { margin: 10px; font-family: Finlandica, sans-serif; color: #000; page-break-after: always; }
     .lab-pagina:last-child { page-break-after: auto; }
     .lab-l1 { font-size: 14px; font-weight: 500; }
@@ -178,7 +165,6 @@ window.ETIQUETAS = {{ datos|tojson }};
 <script>
 (function () {
     var $ = function (id) { return document.getElementById(id); };
-    // QR institucional (con el logo Vighi en el centro, recortado sin borde blanco), 70x70 px
     var QR = 'data:image/png;base64,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';
 
     function esc(s) {
@@ -186,44 +172,39 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
     function dos(n) { return ('0' + n).slice(-2); }
 
-    function formatearFecha(iso) {          // dd/mm (sin año, se sobreentiende)
+    function formatearFecha(iso) {
         if (!iso) return '';
         var p = iso.split('-');
         return p[2] + '/' + p[1];
     }
-    var fechaCorta = formatearFecha;        // mismo formato en los tres tipos
+    var fechaCorta = formatearFecha;
     function hoyISO() {
         var d = new Date();
         return d.getFullYear() + '-' + dos(d.getMonth() + 1) + '-' + dos(d.getDate());
     }
-    function numero(n) {                    // C000001
+    function numero(n) {
         return 'C' + ('000000' + n).slice(-6);
     }
     function tipoActual() {
         return document.querySelector('input[name=tipo]:checked').value;
     }
 
-    /* ---------- Datos que vienen del servidor ---------- */
     var DATOS = window.ETIQUETAS;
-    // La vista previa va en un shadow DOM: el CSS del sistema (tablas, tipografías, interlineado) no la toca,
-    // así las etiquetas miden exactamente lo mismo que en el sistema original.
     var sombra = $('etiquetas').attachShadow({mode: 'open'});
     sombra.innerHTML = '<style>:host { all: initial; display: block; background: #fff; }\n' + $('css-etiquetas').textContent + '</style><div id="lienzo"></div>';
     var lienzo = sombra.getElementById('lienzo');
-    var NOMBRES = DATOS.nombres;            // {bp: 'Recepción', pap: 'PAP-Laboratorio', lab: 'BP-Laboratorio'}
-    var historial = DATOS.historial;        // lotes de etiquetas confirmados; los guarda el servidor (numeración única para todas las PCs)
-    var casos = DATOS.casos;                // protocolos ya completos: candidatos a etiquetas de laboratorio
-    var ESTUDIO = {pap: 'PAP', lab: 'BP'};  // estudio de los protocolos que rotula cada pestaña de laboratorio
-    var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;   // viene de la página de un lote: se elige ese lote
+    var NOMBRES = DATOS.nombres;
+    var historial = DATOS.historial;
+    var casos = DATOS.casos;
+    var ESTUDIO = {pap: 'PAP', lab: 'BP'};
+    var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;
 
-    /* ---------- Estado de la pantalla ---------- */
-    var elec = {pato: {}, muestra: {}};     // solo al ver un lote ya impreso: lo que llevó cada etiqueta ("idCaso:k" -> valor)
-    var seleccion = {};                     // idCaso -> true/false, lo que marcó la persona (si no, se marcan los no etiquetados)
-    var itemsFijos = null;                  // al ver un lote de etiquetas confirmado: los protocolos tal como se imprimieron
-    var loteActual = null;                  // lote de etiquetas confirmado que se está viendo (habilita Imprimir); null = sin confirmar
+    var elec = {pato: {}, muestra: {}};
+    var seleccion = {};
+    var itemsFijos = null;
+    var loteActual = null;
     var enviando = false;
 
-    /* ---------- Recepción: 2 etiquetas por fila, con QR/logo a la derecha de cada una ---------- */
     function bpEtiqueta(proto, lote, fecha, estilo) {
         return '' +
         '<td style="width: 100px;">' +
@@ -234,15 +215,12 @@ window.ETIQUETAS = {{ datos|tojson }};
             '</div>' +
         '</td>';
     }
-    // ancho: ancho útil de la celda (89px y 74px totales en el sistema, menos borde y padding).
-    // La imagen va como bloque centrado horizontal y verticalmente dentro del recuadro.
     function bpQr(ancho) {
         return '<td style="width: ' + ancho + 'px; height: 74px; vertical-align: middle;">' +
             '<img style="display:block; width:70px; height:70px; margin:0 auto;" src="' + QR + '" width="70" height="70" alt="QR Vighi"></td>';
     }
     function renderBp(d) {
         var html = '';
-        // Lote PAPS: en la segunda línea va el citotécnico (para todas las etiquetas) en lugar del nombre del lote
         var linea2 = (d.lote === 'PAPS') ? d.cito : d.lote;
         for (var i = 0; i < d.n; i++) {
             var proto = '#' + numero(d.inicio + i);
@@ -255,7 +233,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         return html;
     }
 
-    /* ---------- PAP-Laboratorio: tabla de 3 etiquetas por fila, sin bordes ---------- */
     var PAP_TD = 'font-family: Finlandica, sans-serif; color: #000; padding-left: 10px; width: 110px; height: 50px; padding-top:10px;';
     function renderPap(d) {
         var html = '<table cellspacing="0" cellpadding="0" style="padding-left:20px; width:400px;"><tbody>';
@@ -264,12 +241,10 @@ window.ETIQUETAS = {{ datos|tojson }};
             for (var c = 0; c < 3; c++) {
                 var p = d.pos[j + c];
                 if (p) {
-                    var mu = elec.muestra[p.key] !== undefined ? elec.muestra[p.key] : p.item.muestra;   // sale del protocolo (un lote ya impreso trae el suyo)
-                    // línea 3: citotécnico del caso y fecha de recolección
+                    var mu = elec.muestra[p.key] !== undefined ? elec.muestra[p.key] : p.item.muestra;
                     var linea3 = (p.item.resp ? p.item.resp + ' ' : '') + fechaCorta(p.item.fechaRec);
                     html += '<td style="' + PAP_TD + '">' +
                         '<div style="font-size: 14px; font-weight: 500;">' + esc(p.item.protocolo) + '</div>' +
-                        // línea 2: tipo de muestra del protocolo
                         '<div style="font-size: 14px; font-weight: 500;">' + esc(mu) + '</div>' +
                         '<div style="font-size: 12px; font-weight: 500;">' + esc(linea3) + '</div>' +
                         '</td>';
@@ -282,16 +257,13 @@ window.ETIQUETAS = {{ datos|tojson }};
         return html + '</tbody></table>';
     }
 
-    /* ---------- BP-Laboratorio: una etiqueta por página ---------- */
     function renderLab(d) {
         var html = '';
         d.pos.forEach(function (p) {
-            var pa = (elec.pato[p.key] !== undefined ? elec.pato[p.key] : p.item.resp) || '';   // el responsable del protocolo (un lote ya impreso trae el suyo)
+            var pa = (elec.pato[p.key] !== undefined ? elec.pato[p.key] : p.item.resp) || '';
             html += '<div class="lab-pagina">' +
                 '<div class="lab-l1">' + esc(p.item.protocolo) + '</div>' +
-                // línea 2: patólogo (responsable del protocolo)
                 '<div class="lab-l2">' + (pa ? esc(pa) : '&nbsp;') + '</div>' +
-                // línea 3: código del lote del sistema (TIPO-MMDD.N)
                 '<div class="lab-l3">' + esc(p.item.loteCodigo) + '</div>' +
                 '</div>';
         });
@@ -300,7 +272,6 @@ window.ETIQUETAS = {{ datos|tojson }};
 
     var RENDER = { bp: renderBp, pap: renderPap, lab: renderLab };
 
-    /* ---------- Listas del sistema ---------- */
     function etiquetaPersona(p) { return p.iniciales + (p.nombre ? ' · ' + p.nombre : ''); }
     function rellenar(sel, valores, textoVacio) {
         var h = (textoVacio !== undefined) ? '<option value="">' + esc(textoVacio) + '</option>' : '';
@@ -310,15 +281,14 @@ window.ETIQUETAS = {{ datos|tojson }};
         });
         sel.innerHTML = h;
     }
-    function cargarListas() {               // los desplegables salen del sistema (Usuarios, tipos de lote)
+    function cargarListas() {
         var L = DATOS.listas;
         rellenar($('lote'), L.tiposLote);
         if (L.tiposLote.indexOf('ENDO') !== -1) $('lote').value = 'ENDO';
         rellenar($('cito'), L.citotecnicos, '(sin citotécnico)');
     }
 
-    /* ---------- Numeración de Recepción ---------- */
-    function ultimoUsado() {                // último número usado en los lotes de Recepción (0 = ninguno)
+    function ultimoUsado() {
         var u = 0;
         for (var i = 0; i < historial.length; i++) {
             var h = historial[i];
@@ -328,7 +298,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
     function proximo() { return ultimoUsado() + 1; }
 
-    function fechaHora(s) {                 // 'AAAA-MM-DD HH:MM:SS' -> 'DD/MM/AAAA HH:MM'
+    function fechaHora(s) {
         var p = String(s).split(/[- :]/);
         return p[2] + '/' + p[1] + '/' + p[0] + ' ' + p[3] + ':' + p[4];
     }
@@ -337,7 +307,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         return null;
     }
 
-    /* ---------- Selección de protocolos (laboratorio) ---------- */
     function marcado(c) { return seleccion[c.id] === undefined ? !c.etiquetado : seleccion[c.id]; }
     function candidatos(t) {
         var origen = $('origen').value;
@@ -349,7 +318,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     function pendientes(t) {
         return casos.filter(function (c) { return c.estudio === ESTUDIO[t] && !c.etiquetado; }).length;
     }
-    function cargarOrigenes() {             // lotes que tienen protocolos completos para el estudio de la pestaña
+    function cargarOrigenes() {
         var t = tipoActual();
         if (t === 'bp') return;
         var previo = $('origen').value, vistos = {}, h = '<option value="">Todos los lotes</option>';
@@ -395,7 +364,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         resumenSeleccion();
     }
 
-    /* ---------- Aviso e historial ---------- */
     function aviso(html, clase) {
         $('loteInfo').className = 'lote-info ' + (clase || '');
         $('loteInfo').innerHTML = html;
@@ -450,7 +418,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         $('histTabla').innerHTML = h + '</tbody></table>';
     }
 
-    // Con un lote confirmado todo queda bloqueado: lo que se imprime es exactamente lo confirmado.
     function aplicarBloqueo() {
         var bloq = !!loteActual;
         Array.prototype.forEach.call(document.querySelectorAll('#panelEtq input, #panelEtq select, .pasos-etq input'), function (el) {
@@ -463,13 +430,11 @@ window.ETIQUETAS = {{ datos|tojson }};
         mostrarInfo();
     }
 
-    /* ---------- Confirmación (contra el servidor) ---------- */
-    function refrescar(j) {                 // el servidor devuelve el estado completo después de cada operación
+    function refrescar(j) {
         if (j.historial) historial = j.historial;
         if (j.casos) casos = j.casos;
         renderHistorial();
     }
-    // El servidor es quien decide si el rango está libre y, en Recepción, crea los protocolos a completar.
     function enviarConfirmacion(payload) {
         enviando = true;
         $('confirmar').disabled = true;
@@ -485,7 +450,6 @@ window.ETIQUETAS = {{ datos|tojson }};
                 loteActual = buscarLote(j.id);
                 aplicarBloqueo();
             } else if (j.conflicto) {
-                // otra PC tomó esos números: se pasa al siguiente libre y se muestra la vista previa nueva para revisar
                 $('inicio').value = proximo();
                 generar();
                 aviso(esc(j.error) + '<br>Se actualizó el primer número a <b>' + numero(parseInt($('inicio').value, 10)) +
@@ -514,7 +478,6 @@ window.ETIQUETAS = {{ datos|tojson }};
             payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito}};
         } else {
             if (!d.n) { aviso('Marcá al menos un protocolo para etiquetar.', 'err'); return; }
-            // el patólogo y el tipo de muestra de cada etiqueta los toma el servidor del protocolo
             payload = {tipo: t, items: d.items.map(function (i) { return i.id; })};
         }
         enviarConfirmacion(payload);
@@ -532,7 +495,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         generar();
     }
 
-    // Vuelve a mostrar un lote de etiquetas ya confirmado, tal como se imprimió
     function verLote(id) {
         var b = buscarLote(id);
         if (!b || document.querySelector('input[name=tipo][value=' + b.tipo + ']').hasAttribute('data-sin-permiso')) return;
@@ -547,7 +509,7 @@ window.ETIQUETAS = {{ datos|tojson }};
                 elec.muestra[p.key] = (b.params.muestras || [])[i] || '';
             });
         }
-        aplicarBloqueo();                          // habilita los campos para poder cargarlos
+        aplicarBloqueo();
         document.querySelector('input[name=tipo][value=' + b.tipo + ']').checked = true;
         mostrarCampos();
         cargarOrigenes();
@@ -562,19 +524,17 @@ window.ETIQUETAS = {{ datos|tojson }};
         window.scrollTo(0, 0);
     }
 
-    /* ---------- Armado de la vista previa ---------- */
     function mostrarCampos() {
         var t = tipoActual();
         var els = document.querySelectorAll('[data-tipos]');
         for (var i = 0; i < els.length; i++) {
             var visible = els[i].getAttribute('data-tipos').split(' ').indexOf(t) !== -1;
-            // en Recepción el citotécnico solo se pide cuando el tipo de lote es PAPS
             if (visible && els[i].hasAttribute('data-solo-paps') && $('lote').value !== 'PAPS') visible = false;
             els[i].classList.toggle('oculto', !visible);
         }
     }
 
-    function posicionesDe(items) {          // una posición por etiqueta: cada protocolo lleva tantas como su cantidad
+    function posicionesDe(items) {
         var pos = [];
         items.forEach(function (it) {
             for (var k = 0; k < it.cantidad; k++) pos.push({item: it, key: it.id + ':' + k});
@@ -612,7 +572,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         aplicarBloqueo();
     }
 
-    // Al cambiar de pestaña: en Recepción el primer número es el siguiente al último confirmado
     function cambiarTipo() {
         var t = tipoActual();
         mostrarCampos();
@@ -627,7 +586,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         generar();
     }
 
-    /* ---------- Arranque ---------- */
     cargarListas();
     $('fecha').value = hoyISO();
     if (DATOS.preset) {
@@ -668,8 +626,6 @@ window.ETIQUETAS = {{ datos|tojson }};
         var id = e.target.getAttribute && e.target.getAttribute('data-reimprimir');
         if (id) verLote(parseInt(id, 10));
     });
-    // Otra PC pudo confirmar lotes o completar protocolos mientras esta pantalla estaba en segundo plano:
-    // al volver se actualizan la numeración y los protocolos disponibles
     document.addEventListener('visibilitychange', function () {
         if (document.hidden || loteActual || enviando) return;
         fetch(window.URLS.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {

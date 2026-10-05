@@ -46,6 +46,9 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   historial del protocolo (*informe_pdf*: quién lo generó, quién firma y a quién reemplaza).
 - **Lotes:** los lotes del día (`TIPO-MMDD.N`, ej. `ONCO-0930.2`; en PAP las iniciales del citotécnico, ej.
   `MAD-0930.1`), con sus estudios. Se imprimen y se **cierran** al despacharlos (un administrador los puede reabrir).
+  **El lote es del protocolo, no de cada estudio:** lo marca el **primer flujo** (el primer estudio cargado) y todos los estudios del protocolo van en ese mismo
+  lote. Un protocolo de biopsia con una citología agregada queda en el lote de biopsias; no hay lotes compuestos. En el formulario el lote se elige en el primer
+  estudio; en la pantalla del lote se agrega o se quita el protocolo completo.
 - **Tablero:** una fila por estudio: pendientes, informados, sin cargar al sistema; filtros y búsqueda.
 - **Deshacer:** la última etapa la puede deshacer quien la registró o un administrador.
 - **Feriados** (administrador): se descuentan de los plazos. Verificar la lista cada año.

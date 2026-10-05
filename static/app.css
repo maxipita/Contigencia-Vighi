@@ -1,16 +1,12 @@
-/* Visual del sistema de contingencia: colores y tipografías de la web nueva de CAP Vighi (susana-vighi-web) y armado de
-   pantallas de la maqueta del sistema de gestión (barra superior, menú lateral, tarjetas, tablas).
-   Los colores de la web están en OKLCH; acá van sus equivalentes en hexadecimal para que se vean igual en cualquier navegador. */
-/* Fuentes guardadas en el proyecto (static/fonts): el sistema no depende de internet */
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 300 800; font-display: swap; src: url("fonts/Inter-latin.woff2") format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 500; font-display: swap; src: url("fonts/JetBrainsMono-latin.woff2") format("woff2"); }
 :root {
-  --primario: #431866;          /* clinical-blue  oklch(0.32 0.13 305): textos fuertes, botones, menú */
-  --primario-osc: #2a0c42;      /* variante más oscura para degradés */
-  --acento-fuerte: #8a3fd6;     /* acento con contraste suficiente para texto blanco y para íconos sobre fondo claro */
-  --acento: #a657ed;            /* clinical-accent oklch(0.62 0.22 305): detalles, foco, ítem activo */
-  --pizarra: #665e77;           /* clinical-slate: texto secundario */
-  --superficie: #f8f5fb;        /* clinical-surface: fondo de la pantalla y encabezados */
+  --primario: #431866;
+  --primario-osc: #2a0c42;
+  --acento-fuerte: #8a3fd6;
+  --acento: #a657ed;
+  --pizarra: #665e77;
+  --superficie: #f8f5fb;
   --borde: #e3e8ee;
   --texto: #2d2038;
   --ok: #15803d;      --ok-fondo: #dcfce7;
@@ -31,7 +27,6 @@ a:hover { color: var(--acento); }
 ::selection { background: rgba(166, 87, 237, .3); }
 .ic { width: 16px; height: 16px; flex-shrink: 0; vertical-align: -3px; }
 
-/* ---------- barra superior (menú principal) ---------- */
 .barra { position: fixed; inset: 0 0 auto 0; height: var(--barra-h); z-index: 1030; display: flex; align-items: center; gap: 18px; padding: 0 22px;
          background: linear-gradient(100deg, #2a0c42 0%, #431866 55%, #55237f 100%); color: #fff; box-shadow: 0 4px 18px rgba(42, 12, 66, .28); }
 .barra::after { content: ""; position: absolute; inset: auto 0 0 0; height: 3px; pointer-events: none;
@@ -101,7 +96,6 @@ a:hover { color: var(--acento); }
 main { padding: 26px 28px 70px; max-width: 1500px; margin: 0 auto; }
 body.sin-sesion main { max-width: 440px; margin: 40px auto; padding: 0 16px; }
 
-/* barra en pantallas medianas: se compacta pero conserva los textos de los botones principales */
 @media (max-width: 1240px) {
   .barra { gap: 12px; padding: 0 14px; }
   .marca small { display: none; }
@@ -112,13 +106,11 @@ body.sin-sesion main { max-width: 440px; margin: 40px auto; padding: 0 16px; }
   .buscar:focus-within input { width: 150px; }
   .quien .persona { display: none; }
 }
-/* pantallas más angostas: solo íconos (el activo conserva su texto) y la búsqueda se abre al hacer clic */
 @media (max-width: 980px) {
   .menu .it:not(.cta):not(.activo) .t { display: none; }
   .buscar input, .buscar input:focus { width: 0; padding: 0; }
   .buscar:focus-within input { width: 150px; padding: 0 4px 0 14px; }
 }
-/* pantallas angostas: el menú se despliega debajo de la barra */
 @media (max-width: 780px) {
   .barra { gap: 10px; padding: 0 12px; }
   .b-menu { display: grid; order: -1; }
@@ -140,21 +132,18 @@ body.sin-sesion main { max-width: 440px; margin: 40px auto; padding: 0 16px; }
   main { padding: 18px 14px 60px; }
 }
 
-/* ---------- títulos ---------- */
 .eyebrow { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--acento); margin-bottom: 4px; }
 h1 { margin: 0 0 16px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; color: var(--primario); line-height: 1.2; }
 h2 { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--pizarra); }
 .muted { color: var(--pizarra); font-size: 12px; }
 p.muted { margin: 4px 0 12px; font-size: 13px; }
 
-/* ---------- avisos ---------- */
 .aviso { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--borde);
          background: #fff; border-left: 3px solid var(--acento); color: var(--texto); }
 .aviso.ok { background: var(--ok-fondo); border-color: #bbf7d0; border-left-color: var(--ok); color: #14532d; }
 .aviso.error { background: var(--error-fondo); border-color: #fecaca; border-left-color: var(--error); color: #991b1b; }
 .aviso a { color: inherit; font-weight: 600; }
 
-/* ---------- tarjetas ---------- */
 .tarjeta { margin-bottom: 16px; padding: 16px; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra); }
 .tarjeta h2 { margin: -16px -16px 14px; padding: 10px 16px; background: var(--superficie); border-bottom: 1px solid var(--borde);
               border-radius: var(--radio) var(--radio) 0 0; font-size: 10px; letter-spacing: .1em; }
@@ -163,7 +152,6 @@ p.muted { margin: 4px 0 12px; font-size: 13px; }
 .cols { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: start; }
 @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
 
-/* ---------- formularios ---------- */
 label { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 500; color: var(--pizarra); }
 input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; color: var(--primario);
                           font: inherit; font-size: 13px; transition: border-color .15s, box-shadow .15s; }
@@ -173,7 +161,6 @@ input[type=checkbox], input[type=radio] { width: auto; accent-color: var(--prima
 textarea { min-height: 110px; resize: vertical; }
 .acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
 
-/* ---------- botones ---------- */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 18px; border-radius: 999px;
        border: 1px solid var(--primario); background: var(--primario); color: #fff; font: 600 12px var(--fuente); text-decoration: none; cursor: pointer;
        transition: opacity .15s, background .15s, border-color .15s, color .15s; white-space: nowrap; }
@@ -191,7 +178,6 @@ textarea { min-height: 110px; resize: vertical; }
 .btn .ic { width: 15px; height: 15px; vertical-align: -3px; }
 td.der, th.der { text-align: right; white-space: nowrap; }
 
-/* ---------- tablas ---------- */
 table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio);
         overflow: hidden; box-shadow: var(--sombra); }
 th { padding: 10px 14px; text-align: left; background: var(--superficie); border-bottom: 2px solid var(--borde); color: var(--pizarra);
@@ -203,20 +189,17 @@ td a { text-decoration: none; }
 td a:hover { text-decoration: underline; }
 table table { box-shadow: none; }
 
-/* ---------- revisión del informe ---------- */
 .datos-informe { box-shadow: none; }
 .datos-informe th { width: 170px; background: #fff; border-bottom: 1px solid var(--borde); vertical-align: top; letter-spacing: 0; text-transform: none;
                     font-size: 12px; color: var(--pizarra); }
 .datos-informe .texto-largo { white-space: pre-wrap; margin-top: 4px; max-height: 190px; overflow: auto; font-size: 12px; color: var(--texto); }
 
-/* ---------- etiquetas de estado ---------- */
 .chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; background: rgba(166, 87, 237, .12); color: var(--primario);
         font-size: 11px; font-weight: 600; white-space: nowrap; text-decoration: none; }
 .chip.informado, .chip.activo { background: var(--ok-fondo); color: var(--ok); }
 .chip.cerrado { background: rgba(166, 87, 237, .12); color: var(--primario); }
 .chip.anulado { background: var(--error-fondo); color: var(--error); }
 
-/* ---------- pestañas y filtros ---------- */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .tabs a { padding: 6px 14px; border-radius: 999px; background: #fff; border: 1px solid var(--borde); text-decoration: none; font-size: 12px; font-weight: 500; color: var(--pizarra); }
 .tabs a:hover { border-color: var(--acento); color: var(--primario); }
@@ -224,7 +207,6 @@ table table { box-shadow: none; }
 .filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
 .filtros input, .filtros select { width: auto; }
 
-/* ---------- ficha del caso ---------- */
 .pasos { display: flex; flex-wrap: wrap; gap: 8px; }
 .paso { border: 1px solid var(--borde); border-radius: 10px; padding: 8px 10px; min-width: 150px; background: #fff; }
 .paso .nom { font-weight: 600; }
@@ -243,7 +225,6 @@ table table { box-shadow: none; }
 .lt { color: var(--error); }
 .historial { font-size: 12px; color: var(--pizarra); max-height: 260px; overflow: auto; }
 
-/* ---------- pantallas sin sesión ---------- */
 .login { margin: 0; text-align: left; }
 .login .logo { display: block; height: 64px; margin: 0 auto 14px; }
 .login h1 { font-size: 22px; }
@@ -257,7 +238,6 @@ table table { box-shadow: none; }
   th { background: #fff !important; color: #000; border-bottom: 2px solid #000; }
   a { color: #000; text-decoration: none; }
 }
-/* ---------- protocolo con varios estudios, bloqueos por etapa y buscador de médicos ---------- */
 fieldset.seccion { border: 0; padding: 0; margin: 0; min-width: 0; }
 fieldset.seccion[disabled] textarea, fieldset.seccion[disabled] select, fieldset.seccion[disabled] input { background: var(--superficie); color: var(--pizarra); }
 fieldset.seccion[disabled] .acciones { display: none; }
@@ -277,7 +257,6 @@ fieldset.seccion[disabled] .acciones { display: none; }
 .titulo-seccion { margin-top: 6px; }
 .agregar-estudio { margin: 0 0 18px; }
 .tabs a.bloqueado { text-decoration: line-through; }
-/* ---------- perfiles y permisos ---------- */
 table.matriz td.c, table.matriz th.c { text-align: center; }
 table.matriz tr.grupo td { background: var(--superficie); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--pizarra); }
 table.matriz .si { color: var(--ok); font-weight: 600; }
@@ -290,7 +269,6 @@ table.ajustes tr.ajustado td { background: #fbf5ff; }
 label.casilla { display: flex; gap: 8px; align-items: center; color: inherit; font-size: 14px; margin: 4px 0; }
 select:disabled { background: var(--superficie); color: var(--pizarra); cursor: not-allowed; }
 
-/* Informe del protocolo: panel destacado arriba de la ficha */
 .panel-informe { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 0 0 16px; padding: 14px 18px; background: #fff;
                  border: 1px solid var(--borde); border-left: 4px solid var(--acento); border-radius: var(--radio); box-shadow: var(--sombra); }
 .panel-informe .ic-grande { width: 30px; height: 30px; color: var(--acento-fuerte); }
@@ -298,15 +276,12 @@ select:disabled { background: var(--superficie); color: var(--pizarra); cursor: 
 .panel-informe .texto > b:first-child { display: block; color: var(--primario); font-size: 15px; }
 .panel-informe .acciones { margin: 0; }
 .firmar-yo { display: flex; gap: 6px; align-items: center; margin: 6px 0 0; font-size: 12px; color: var(--pizarra); cursor: pointer; }
-/* Separador de flujo en la tabla de estudios del protocolo */
 tr.flujo-cab td { padding: 7px 12px; background: var(--superficie); border-top: 1px solid var(--borde); border-bottom: 1px solid var(--borde);
                   font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--pizarra); }
 tr.flujo-cab td b { color: var(--acento-fuerte); letter-spacing: .08em; }
 tr.flujo-cab .muted { text-transform: none; letter-spacing: 0; font-size: 12px; }
-/* Flujos que componen un protocolo, junto a su número (BP, BP c/ CT, BP c/ CT + IHQ) */
 .chip.flujos { padding: 1px 9px; margin-left: 4px; background: rgba(166, 87, 237, .14); color: var(--primario); font-size: 11px; font-weight: 600;
                letter-spacing: .03em; vertical-align: middle; }
 h1 .chip.flujos { font-size: 12px; }
-/* Estado de un estudio: la pastilla y, debajo, el sector que la marca, centrados entre sí */
 .estado-celda { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
-.estado-celda .muted { font-size: 12px; line-height: 1.2; }
+.estado-celda .muted { font-size: 12px; line-height: 1.2; }.form-estudios.sin-lote .campo-lote, .bloques > .estudio-bloque:not(:first-child) .campo-lote { display: none; }

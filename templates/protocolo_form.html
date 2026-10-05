@@ -42,7 +42,7 @@
 
   {% if nuevo or completar %}
   <h2 class="titulo-seccion">Estudios</h2>
-  <p class="muted">Con un PAP solo pueden ir muestras ginecológicas. Las demás muestras se pueden combinar entre sí (ej. biopsia + citología de líquido).</p>
+  <p class="muted">Con un PAP solo pueden ir muestras ginecológicas. Las demás muestras se pueden combinar entre sí (ej. biopsia + citología de líquido). El lote lo marca el primer estudio y todos van en el mismo.</p>
   <div class="bloques">
     {% for e in estudios %}{{ b.bloque(e.tipo, loop.index0, e) }}{% endfor %}
   </div>

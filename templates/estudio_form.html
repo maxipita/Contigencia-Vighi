@@ -6,11 +6,12 @@
 <div class="eyebrow">Ingreso de muestras</div>
 <h1>{{ 'Editar estudio' if editando else 'Agregar estudio' }} — Protocolo {{ p.numero }}</h1>
 <p class="muted">{{ p.apellido or '' }}{% if p.nombre %}, {{ p.nombre }}{% endif %}{% if p.dni %} · DNI {{ p.dni }}{% endif %}</p>
-<form method="post" class="form-estudios">
+<form method="post" class="form-estudios{{ '' if lote_editable else ' sin-lote' }}">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <div class="bloques">
     {% for e in estudios %}{{ b.bloque(e.tipo, loop.index0, e, quitar=not editando) }}{% endfor %}
   </div>
+  {% if not lote_editable %}<p class="muted">Lote del protocolo: <b>{{ lote_fijo or 'sin lote' }}</b>. Lo marca el primer flujo del protocolo y este estudio va en el mismo.</p>{% endif %}
   {% if not editando %}{{ b.agregar_estudios() }}{% endif %}
   <div class="acciones">
     <button class="btn">{{ 'Guardar cambios' if editando else 'Agregar al protocolo' }}</button>

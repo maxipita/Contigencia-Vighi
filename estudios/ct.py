@@ -1,4 +1,3 @@
-"""Citologías (líquidos y otras no ginecológicas)."""
 from .base import Estudio
 
 
@@ -9,7 +8,7 @@ class Citologia(Estudio):
     pasos = ["coloreado", "microscopia"]
     plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "microscopia": (3, 20)}
     lotes = ["CT"]
-    sector_responsable = "firmante"            # las citologías las miran los patólogos (los citotécnicos miran PAP)
+    sector_responsable = "firmante"
     etiqueta_responsable = "Médico firmante"
 
 

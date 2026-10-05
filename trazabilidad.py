@@ -1,5 +1,3 @@
-"""Trazabilidad de un protocolo: fecha límite de cada etapa (días hábiles desde la recolección, igual que
-southernbits), fecha completada, usuario y si se cumplió a tiempo (OT) o tarde (LT)."""
 from datetime import datetime, time, timedelta
 
 from estudios import ETAPAS, REGISTRO
@@ -23,7 +21,6 @@ def sumar_habiles(desde, n, feriados):
 
 
 def habiles_entre(desde, hasta, feriados):
-    """Días hábiles transcurridos de 'desde' a 'hasta' (sin contar el día de inicio)."""
     n, d = 0, desde
     while d < hasta:
         d += timedelta(days=1)
@@ -32,11 +29,10 @@ def habiles_entre(desde, hasta, feriados):
     return n
 
 
-JORNADA = (8, 20)          # horario hábil: 12 hs por día hábil
+JORNADA = (8, 20)
 
 
 def horas_habiles(desde, hasta, feriados):
-    """Horas hábiles (08 a 20 hs, días hábiles) entre dos momentos."""
     if hasta <= desde:
         return 0.0
     total, d = 0.0, desde.date()
@@ -51,7 +47,6 @@ def horas_habiles(desde, hasta, feriados):
 
 
 def dias_atraso(limite, referencia, feriados):
-    """Cierres hábiles vencidos después del límite (mínimo 1 si está atrasado), como 'LT 1d' del sistema."""
     k = 0
     while datetime.combine(sumar_habiles(limite.date(), k + 1, feriados), limite.time()) <= referencia:
         k += 1
@@ -66,22 +61,18 @@ def texto_demora(horas):
 
 
 def limite(tipo, etapa, base_texto, feriados):
-    """Fecha límite de una etapa a partir de la fecha de recolección (o de ingreso) en texto."""
     dias, hora = REGISTRO[tipo].plazos.get(etapa, (0, 20))
     return datetime.combine(sumar_habiles(_d(base_texto), dias, feriados), time(hora))
 
 
 def calcular(estudio, pasos, etapas, feriados, ahora=None):
-    """estudio: fila del estudio con tipo, creado_en, creador y la fecha_recoleccion del protocolo;
-    pasos: [(clave, nombre, sector)] del flujo; etapas: {clave: fila con fecha_hora/iniciales}.
-    Devuelve (encabezado, filas)."""
     ahora = ahora or datetime.now()
     tipo = REGISTRO[estudio["tipo"]]
     base = _d(estudio["fecha_recoleccion"]) if estudio["fecha_recoleccion"] else _d(estudio["creado_en"])
     completadas = {"ingreso": {"fecha_hora": estudio["creado_en"], "iniciales": estudio["creador"]}}
     completadas.update(etapas)
     filas, proxima_marcada = [], False
-    ant_limite = datetime.combine(base, time(JORNADA[0]))    # la etapa anterior a la primera: la recolección
+    ant_limite = datetime.combine(base, time(JORNADA[0]))
     ant_completada = ant_limite
     for clave in ["ingreso"] + [p[0] for p in pasos]:
         dias, hora = tipo.plazos.get(clave, (0, 20))
@@ -96,7 +87,6 @@ def calcular(estudio, pasos, etapas, feriados, ahora=None):
             f["estado"] = "LT"
             f["atraso"] = f"{dias_atraso(lim, referencia, feriados)}d"
             if f["completada"]:
-                # horas hábiles que llevó la etapa (desde que la anterior estuvo disponible) menos las permitidas
                 inicio = max(ant_completada or ant_limite, ant_limite)
                 extra = horas_habiles(inicio, f["completada"], feriados) - horas_habiles(ant_limite, lim, feriados)
                 if extra >= 0.5:
@@ -122,8 +112,6 @@ def calcular(estudio, pasos, etapas, feriados, ahora=None):
     return encabezado, filas
 
 
-# Feriados nacionales de Argentina 2026 (trasladables ya movidos). VERIFICAR con el calendario oficial;
-# se pueden editar desde la pantalla Feriados.
 FERIADOS_2026 = [
     ("2026-01-01", "Año Nuevo"), ("2026-02-16", "Carnaval"), ("2026-02-17", "Carnaval"),
     ("2026-03-24", "Día de la Memoria"), ("2026-04-02", "Malvinas"), ("2026-04-03", "Viernes Santo"),
