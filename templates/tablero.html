@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_semaforo.html" import pill with context %}
 {% block titulo %}Tablero{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Seguimiento</div>
@@ -22,10 +23,23 @@
     <option value="">Pendiente en cualquier sector</option>
     {% for k, n in SECTORES.items() if k != 'ingreso' %}<option value="{{ k }}" {{ 'selected' if f.sector == k }}>Pendiente en {{ n }}</option>{% endfor %}
   </select>
+  <select name="etapa">
+    <option value="">Pendiente en cualquier etapa</option>
+    {% for k, n in etapas %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>Pendiente en {{ n }}</option>{% endfor %}
+  </select>
+  <select name="semaforo">
+    <option value="">Cualquier semáforo</option>
+    {% for k, n in SEMAFOROS.items() %}<option value="{{ k }}" {{ 'selected' if f.semaforo == k }}>{{ n }}</option>{% endfor %}
+  </select>
   <button class="btn sec">Filtrar</button>
 </form>
+<div class="semaforo-total">
+  {% for k, n in SEMAFOROS.items() %}
+  <a href="{{ url_for('tablero', **dict(args, semaforo='' if f.semaforo == k else k)) }}" class="{{ k }} {{ 'activo' if f.semaforo == k }}"><b>{{ por_semaforo[k] }}</b><span>{{ n }}</span></a>
+  {% endfor %}
+</div>
 <table>
-  <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th><th>Ingresado</th></tr>
+  <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th><th>Ingresado</th></tr>
   {% for c in estudios %}
   <tr>
     <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
@@ -37,11 +51,12 @@
     <td>{{ c.responsable or '' }}</td>
     <td><div class="estado-celda"><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span>
         {% if c.proxima %}<span class="muted">{{ SECTORES[c.proxima[2]] }}</span>{% endif %}</div></td>
-    <td>{% if c.vence %}<span class="{{ 'lt' if c.atrasado else 'muted' }}">{{ '⚑ ' if c.atrasado }}{{ c.vence | dh }}</span>{% endif %}</td>
+    <td>{{ pill(c.semaforo) }}</td>
+    <td class="muted">{% if c.vence %}{{ c.vence | dh }}{% endif %}</td>
     <td class="muted">{{ c.creado_en | fh }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="9" class="muted">No hay estudios para mostrar.</td></tr>
+  <tr><td colspan="10" class="muted">No hay estudios para mostrar.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

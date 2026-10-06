@@ -8,7 +8,7 @@
   completo: aparece en el tablero y se habilitan las <a href="{{ url_for('etiquetas') }}">etiquetas de laboratorio</a>.</p>
 
 <form class="filtros" method="get">
-  <select name="lote" onchange="this.form.submit()">
+  <select name="lote">
     <option value="">Todos los lotes ({{ n_borradores }})</option>
     {% for l in lotes_con %}<option value="{{ l.id }}" {{ 'selected' if l.id|string == lote_sel }}>{{ l.codigo }} ({{ l.n }})</option>{% endfor %}
   </select>

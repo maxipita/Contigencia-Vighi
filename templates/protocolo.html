@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_semaforo.html" import pill with context %}
 {% block titulo %}Protocolo {{ p.numero }}{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Protocolo</div>
@@ -34,10 +35,10 @@
   <div class="tarjeta">
     <h2>Estudios</h2>
     <table>
-      <tr><th>Estudio</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Vence</th></tr>
+      <tr><th>Estudio</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th></tr>
       {% for tipo, grupo in estudios | groupby('tipo') %}
       {% set activos = grupo | rejectattr('anulado') | list %}
-      <tr class="flujo-cab"><td colspan="6"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
+      <tr class="flujo-cab"><td colspan="7"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
         {% if activos | length > 1 %}<span class="muted">· flujo compartido por {{ activos | length }} estudios (mismo recorrido)</span>{% endif %}</td></tr>
       {% for e in grupo %}
       <tr class="{{ 'bloqueado' if e.anulado }}">
@@ -47,7 +48,8 @@
         <td>{{ e.responsable or '' }}</td>
         <td><div class="estado-celda"><span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
           {% if e.proxima %}<span class="muted">{{ SECTORES[e.proxima[2]] }}</span>{% endif %}</div></td>
-        <td>{% if e.vence %}<span class="{{ 'lt' if e.atrasado else 'muted' }}">{{ '⚑ ' if e.atrasado }}{{ e.vence | dh }}</span>{% endif %}</td>
+        <td>{{ pill(e.semaforo) }}</td>
+        <td class="muted">{% if e.vence %}{{ e.vence | dh }}{% endif %}</td>
       </tr>
       {% endfor %}
       {% endfor %}

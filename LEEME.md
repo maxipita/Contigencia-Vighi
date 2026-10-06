@@ -49,7 +49,12 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   **El lote es del protocolo, no de cada estudio:** lo marca el **primer flujo** (el primer estudio cargado) y todos los estudios del protocolo van en ese mismo
   lote. Un protocolo de biopsia con una citología agregada queda en el lote de biopsias; no hay lotes compuestos. En el formulario el lote se elige en el primer
   estudio; en la pantalla del lote se agrega o se quita el protocolo completo.
-- **Tablero:** una fila por estudio: pendientes, informados, sin cargar al sistema; filtros y búsqueda.
+- **Tablero:** una fila por estudio: pendientes, informados, sin cargar al sistema; filtros y búsqueda (por tipo de estudio, sector, **etapa** y semáforo).
+  Arriba de la tabla está el **semáforo total**: cuántos estudios hay On time, Delayed y Late; se recalcula con los filtros (tipo, sector, etapa, pestaña y búsqueda)
+  y sus cuadros sirven para filtrar por semáforo (otro clic en el elegido lo quita). Al elegir uno, los totales siguen mostrando los tres de lo que se está viendo.
+- **Semáforo** (estudios pendientes, en el tablero, el protocolo y la ficha del estudio): **On time** si ni la etapa en que está ni ninguna anterior se pasó de su fecha límite;
+  **Delayed** si hay atraso de menos de 1 día hábil; **Late** si llegó a 1 día hábil o más. El atraso **se arrastra**: si una etapa anterior se completó tarde, el protocolo
+  lo sigue contando aunque la etapa actual todavía esté en término (se toma el peor estado de todo el recorrido, incluido el ingreso). Los informados y anulados no llevan semáforo.
 - **Deshacer:** la última etapa la puede deshacer quien la registró o un administrador.
 - **Feriados** (administrador): se descuentan de los plazos. Verificar la lista cada año.
 - **Exportar Excel:** una fila por estudio con los datos del protocolo, para re-cargarlos en southernbits.

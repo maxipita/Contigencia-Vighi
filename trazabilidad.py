@@ -65,6 +65,27 @@ def limite(tipo, etapa, base_texto, feriados):
     return datetime.combine(sumar_habiles(_d(base_texto), dias, feriados), time(hora))
 
 
+def semaforo(limite, ahora, feriados):
+    if ahora <= limite:
+        return "on_time"
+    tope = datetime.combine(sumar_habiles(limite.date(), 1, feriados), limite.time())
+    return "late" if ahora >= tope else "delayed"
+
+
+GRAVEDAD = {"": 0, "on_time": 1, "delayed": 2, "late": 3}
+
+
+def semaforo_acumulado(tipo, base_texto, completadas, limite_actual, ahora, feriados):
+    peor = semaforo(limite_actual, ahora, feriados) if limite_actual else ""
+    for etapa, cuando in completadas.items():
+        if etapa not in REGISTRO[tipo].plazos:
+            continue
+        estado = semaforo(limite(tipo, etapa, base_texto, feriados), _dt(cuando), feriados)
+        if GRAVEDAD[estado] > GRAVEDAD[peor]:
+            peor = estado
+    return peor
+
+
 def calcular(estudio, pasos, etapas, feriados, ahora=None):
     ahora = ahora or datetime.now()
     tipo = REGISTRO[estudio["tipo"]]

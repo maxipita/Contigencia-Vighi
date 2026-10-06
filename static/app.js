@@ -168,3 +168,27 @@ document.querySelectorAll("form[data-confirmar]").forEach(f =>
   if (admin) admin.addEventListener("change", pintar);
   pintar();
 })();
+
+(function () {
+  document.querySelectorAll("form.filtros").forEach(function (form) {
+    var espera, guardado = null;
+    try { guardado = sessionStorage.getItem("filtro_foco"); sessionStorage.removeItem("filtro_foco"); } catch (e) {}
+    form.classList.add("auto");
+    form.addEventListener("change", function (e) {
+      if (e.target.tagName === "SELECT") form.submit();
+    });
+    form.querySelectorAll("input[type=text], input:not([type])").forEach(function (campo) {
+      if (guardado && campo.name === guardado) {
+        campo.focus();
+        campo.setSelectionRange(campo.value.length, campo.value.length);
+      }
+      campo.addEventListener("input", function () {
+        clearTimeout(espera);
+        espera = setTimeout(function () {
+          try { sessionStorage.setItem("filtro_foco", campo.name); } catch (e) {}
+          form.submit();
+        }, 500);
+      });
+    });
+  });
+})();

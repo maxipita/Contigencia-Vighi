@@ -124,6 +124,11 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   lo aplica a todos y audita una sola línea; `crear_estudio` hereda el del protocolo; solo el primer bloque de los formularios muestra el selector (CSS `.campo-lote`, y
   `sin-lote` en el formulario cuando el estudio no es el primero); `lote_agregar` y `lote_quitar` mueven el protocolo completo y exigen que el tipo de lote sirva al primer
   flujo. `db.unificar_lotes` parejea las bases que tenían lotes distintos en un mismo protocolo (queda el del primer flujo).
+- **Semáforo:** `trazabilidad.semaforo(limite, ahora, feriados)` da `on_time` (hasta el límite), `delayed` (pasado el límite, antes de 1 día hábil a la misma hora) o `late`.
+  `semaforo_acumulado` toma el peor de la etapa en curso y de cada etapa ya completada (incluido el ingreso) contra su propio límite, así el atraso se arrastra aunque las
+  etapas siguientes se hagan en término. `cargar_estudios` lo calcula por estudio (`semaforo`, vacío si está informado, anulado o a completar); el estudio lo calcula en su ficha.
+  El umbral de 1 día hábil y los nombres (`SEMAFOROS`) están en `trazabilidad.py` / `app.py`; la pastilla es el macro `templates/_semaforo.html`.
+  En el tablero, `por_semaforo` (el semáforo total) se cuenta sobre los estudios que pasan todos los filtros **menos** el de semáforo; el filtro por etapa compara con `proxima[0]`.
 - **Carga de macro y micro:** solo se puede editar mientras el estudio está en esa etapa (`habilitada`); `con_permiso` suma el permiso del usuario.
 - **Excel de exportación:** una fila por estudio con los datos de su protocolo y sus etapas, para volver a cargarlos en southernbits.
 - **Permisos:** el orden de `PERMISOS` es el orden en la pantalla de perfiles. Los usuarios que ya existían arrancan con el perfil de su sector.

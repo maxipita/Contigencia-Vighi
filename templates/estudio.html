@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_semaforo.html" import pill with context %}
 {% block titulo %}{{ e.numero }} · {{ etiqueta }}{% endblock %}
 {% macro casilla_firma() %}
   {% if cierra_protocolo %}
@@ -27,7 +28,7 @@
 <p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
 <h1>{{ e.numero }} · {{ etiqueta }}
-  <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span></h1>
+  <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span> {{ pill(semaforo) }}</h1>
 {% if comparte %}
 <div class="aviso">Este flujo lo comparten {{ comparte | length + 1 }} estudios de {{ tipo.nombre | lower }} de este protocolo
   ({% for h in comparte %}<a href="{{ url_for('estudio', eid=h.id) }}">{{ h.etiqueta }}</a>{{ ', ' if not loop.last }}{% endfor %}): al completar o deshacer una etapa se marca en todos a la vez.

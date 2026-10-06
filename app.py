@@ -23,6 +23,7 @@ try:
 except ImportError as _err:
     informes = None
     print(f"AVISO: los informes en PDF están desactivados ({_err}). Instalar con: {sys.executable} -m pip install -r requirements.txt")
+SEMAFOROS = {"on_time": "On time", "delayed": "Delayed", "late": "Late"}
 SIN_INFORMES = "Los informes en PDF no están disponibles: falta instalar reportlab (python -m pip install -r requirements.txt) y reiniciar el sistema."
 
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
@@ -114,7 +115,7 @@ def globales():
     u = usuario_actual()
     pendientes = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1")["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "n_borradores": pendientes, "informes_ok": informes is not None,
+            "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
@@ -243,9 +244,10 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id""", params)
-    hechas = {}
-    for r in db.q("SELECT estudio_id, etapa FROM etapas"):
+    hechas, fechas = {}, {}
+    for r in db.q("SELECT estudio_id, etapa, fecha_hora FROM etapas"):
         hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
+        fechas.setdefault(r["estudio_id"], {})[r["etapa"]] = r["fecha_hora"]
     con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(
         "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0")}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
@@ -260,7 +262,8 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
             d["estado"] = "A completar"
         d["proxima"] = prox
         d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer) if prox else None
-        d["atrasado"] = bool(d["vence"] and d["vence"] < ahora_)
+        d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["id"], {})},
+                                                         d["vence"], ahora_, fer) if d["vence"] and not f["borrador"] else "")
         d["etiqueta"] = etiqueta(f)
         out.append(d)
     return out
@@ -319,7 +322,7 @@ def tipos_lote_fijos():
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector")}
+    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo")}
     f["ver"] = f["ver"] or "pendientes"
     todos = cargar_estudios()
     conteo = {"pendientes": 0, "informados": 0, "sin_cargar": 0}
@@ -349,12 +352,19 @@ def tablero():
             return False
         if f["sector"] and not (e["proxima"] and e["proxima"][2] == f["sector"]):
             return False
+        if f["etapa"] and not (e["proxima"] and e["proxima"][0] == f["etapa"]):
+            return False
         if f["q"]:
             texto = " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower()
             return f["q"].lower() in texto
         return True
 
-    return render_template("tablero.html", estudios=[e for e in todos if pasa(e)], f=f, conteo=conteo)
+    visibles = [e for e in todos if pasa(e)]
+    por_semaforo = {k: sum(1 for e in visibles if e["semaforo"] == k) for k in SEMAFOROS}
+    if f["semaforo"]:
+        visibles = [e for e in visibles if e["semaforo"] == f["semaforo"]]
+    return render_template("tablero.html", estudios=visibles, f=f, conteo=conteo, por_semaforo=por_semaforo,
+                           etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"])
 
 
 def tipos_lote(tipo=None):
@@ -729,9 +739,13 @@ def estudio(eid):
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
     activos = [h for h in hermanos if not h["anulado"]]
     comparte = [h for h in activos if h["tipo"] == e["tipo"] and h["id"] != e["id"]]
+    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados()) if prox and not e["anulado"] and not e["borrador"] else None
+    semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
+                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados())
+                if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
-    return render_template("estudio.html", e=e, comparte=comparte, cierra_protocolo=cierra_protocolo,
+    return render_template("estudio.html", e=e, comparte=comparte, cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e),
