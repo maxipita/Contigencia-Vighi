@@ -1,10 +1,12 @@
 # Sistema web de contingencia — CAP Vighi
 
 Sistema provisorio para cuando southernbits no está disponible. Corre en **una PC del laboratorio** (servidor)
-y el resto entra con el navegador por la **red interna**: funciona aunque no haya internet.
+y el resto entra con el navegador por la **red interna**. La base de datos está en **Cloudflare D1**: el servidor necesita internet para funcionar
+(si se corta, el sistema muestra "Sin conexión con la base de datos" y vuelve solo cuando regresa).
 
 ## Poner en marcha
 
+0. **Una sola vez:** configurar el acceso a la base (sección *Base de datos en Cloudflare D1*, al final). Sin eso el sistema no arranca.
 1. En la PC servidor (con Python 3 instalado), doble clic en **`Iniciar contingencia.bat`**.
    La ventana muestra las direcciones, por ejemplo `http://192.168.1.50:8000`. **No cerrar esa ventana.**
 2. **Primera vez:** desde la PC servidor abrir `http://localhost:8000` y crear el usuario administrador.
@@ -61,31 +63,32 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 
 ## Datos y respaldos
 
-- Base de datos: `data/contingencia.db` (SQLite). **Contiene datos de pacientes.**
-- Respaldo automático cada 10 minutos en `data/respaldos/` (se guardan los últimos 48).
-- Respaldo extra en otra carpeta (ej. biblioteca de SharePoint sincronizada): completar
-  `CONTINGENCIA_RESPALDO` en `Iniciar contingencia.bat`.
-- Cuando todo esté re-cargado en el sistema, archivar o borrar la base según la política del laboratorio.
+- Base de datos: **Cloudflare D1** (ver al final). **Contiene datos de pacientes.**
+- Respaldo: Cloudflare D1 guarda un historial que permite restaurar la base a un momento anterior (*Time Travel*; la cantidad de días depende del plan,
+  verificarlo en el panel de Cloudflare). El sistema no hace copias locales.
+- Cuando todo esté re-cargado en southernbits, archivar o borrar la base según la política del laboratorio.
 
-## Configuración (variables de entorno)
+## Configuración
 
-| Variable | Para qué | Por defecto |
+El acceso a la base va en `data\cloudflare.env` (ver al final). Además:
+
+| Variable de entorno | Para qué | Por defecto |
 |---|---|---|
 | `CONTINGENCIA_PUERTO` | Puerto web | `8000` |
-| `CONTINGENCIA_DB` | Ruta de la base | `data/contingencia.db` |
-| `CONTINGENCIA_RESPALDO` | Carpeta extra de respaldos | — |
 
 ## Desarrollo (VS Code)
 
 Para modificar el sistema no hace falta cerrar y abrir el `.bat` por cada cambio:
 
 1. Abrir la carpeta del proyecto en VS Code (con la extensión de Python instalada).
-2. Apretar **F5** (o *Terminal > Ejecutar tarea > Contingencia: iniciar (desarrollo)*) y abrir `http://localhost:8001`.
+2. Abrir el panel de depuración (**Ctrl+Shift+D**), dejar elegida **"Contingencia — desarrollo (Cloudflare D1)"** en el desplegable de arriba y apretar **F5**
+   (o *Terminal > Ejecutar tarea > Contingencia: iniciar (desarrollo)*); abrir `http://localhost:8001`. Arriba a la izquierda dice con qué base está trabajando.
 3. Al guardar un archivo alcanza con actualizar el navegador: las plantillas y el CSS se ven al instante y, si se cambia
    un `.py`, el servidor se reinicia solo. Los errores se muestran en la propia página.
 
-Usa una base aparte (`data/prueba.db`) y el puerto 8001, así que no toca los datos reales ni choca con el sistema que
-esté corriendo en la PC servidor (puerto 8000). Solo se puede entrar desde la misma PC.
+Usa el puerto 8001, así que no choca con el sistema que esté corriendo en la PC servidor (puerto 8000). Solo se puede entrar desde la misma PC.
+**Ojo:** trabaja sobre la base que indique `data\cloudflare.env`. Para desarrollar sin tocar los datos reales conviene tener una segunda base de pruebas en Cloudflare
+(por ejemplo `contingencia-vighi-pruebas`) y usarla desde el `data\cloudflare.env` de cada desarrollador, dejando la de producción solo en la PC servidor.
 
 ## Actualizar templates / catálogo / usuarios
 
@@ -103,22 +106,19 @@ solo en una base nueva (vacía).
 
 ## Base de datos en Cloudflare D1
 
-Por defecto el sistema usa una base en la PC del laboratorio (`data\contingencia.db`), que funciona sin internet. Opcionalmente la base puede vivir en **Cloudflare D1**;
-en ese modo **todo necesita internet**: si se cae la conexión el sistema avisa "Sin conexión con la base de datos" y vuelve solo cuando regresa.
+La base es única y vive en Cloudflare D1. Cada PC que corre el sistema (la del laboratorio y las de desarrollo) necesita su archivo `data\cloudflare.env`
+con el acceso a la base que le corresponda.
 
 **Preparar Cloudflare (una sola vez, lo hace un administrador):**
-1. En el panel de Cloudflare: *Storage & Databases > D1 > Create database* (nombre sugerido: `contingencia`). Elegir la ubicación más cercana disponible.
+1. En el panel de Cloudflare: *Storage & Databases > D1 > Create database* (nombre sugerido: `contingencia-vighi`; para pruebas, `contingencia-vighi-pruebas`). Elegir la ubicación más cercana disponible.
 2. Anotar el **Account ID** (en la página principal de Workers & Pages) y el **Database ID** (en la página de la base).
 3. *My Profile > API Tokens > Create Token > Create Custom Token*: permiso **Account > D1 > Edit**, limitado a esa cuenta. Copiar el token (se muestra una sola vez).
-4. Crear el archivo `data\cloudflare.env` con tres líneas, sin comillas ni espacios:
-   `CLOUDFLARE_ACCOUNT_ID=...`, `CLOUDFLARE_D1_ID=...` y `CLOUDFLARE_API_TOKEN=...`. Ese archivo es secreto (la carpeta `data` no va al repositorio): no se pega en chats ni se manda por mail. En la raíz del proyecto hay una plantilla vacía, `cloudflare.env.ejemplo`, para copiar a `data\cloudflare.env`. Cada persona usa su propio token (se invita a la cuenta y crea el suyo);
-   para desarrollar no hace falta Cloudflare: F5 sigue usando la base local de prueba de cada uno.
+4. Copiar `cloudflare.env.ejemplo` (está en la raíz del proyecto) a `data\cloudflare.env` y completar, sin comillas ni espacios:
+   `CLOUDFLARE_ACCOUNT_ID=...`, `CLOUDFLARE_D1_ID=...` y `CLOUDFLARE_API_TOKEN=...`. Opcional: `CLOUDFLARE_D1_NOMBRE=pruebas` (o `producción`) para que ese nombre aparezca arriba a la izquierda en la pantalla.
+   Ese archivo es secreto (la carpeta `data` no va al repositorio): no se pega en chats ni se manda por mail. Cada persona usa su propio token (se la invita a la cuenta y crea el suyo).
+5. Con `py -m pip install -r requirements.txt` hecho, el sistema crea solo las tablas y los datos iniciales (médicos, catálogo, plantillas, feriados) la primera vez que arranca sobre una base vacía.
 
-**Subir los datos actuales:** con `py -m pip install -r requirements.txt` hecho, ejecutar en una consola `set CONTINGENCIA_D1=1` y luego `py migrar_a_d1.py`. Muestra cuántas filas va a subir
-(incluye datos de pacientes), pide escribir `SI`, sube todo y verifica que las cantidades coincidan. Si la base de Cloudflare ya tiene datos, no sube nada.
+**Subir datos de una base local vieja (opcional, una sola vez):** `py migrar_a_d1.py` toma `data\contingencia.db` (o la ruta que se le indique) y la sube a la base de Cloudflare configurada. Muestra cuántas
+filas va a subir (incluye datos de pacientes), pide escribir `SI`, sube todo y verifica que las cantidades coincidan. Si la base de Cloudflare ya tiene datos, no sube nada.
 
-**Usarlo:** abrir `Iniciar contingencia (Cloudflare).bat` en lugar del `.bat` común. Para volver al modo local alcanza con usar el `.bat` común (queda la base local tal como estaba al subirla).
-
-**Respaldos:** en este modo no se hacen los respaldos locales cada 10 minutos. Cloudflare D1 guarda un historial que permite restaurar la base a un momento anterior (*Time Travel*; la cantidad de días
-depende del plan, verificarlo en el panel). Los datos son de pacientes: el uso de un servicio en la nube lo tiene que autorizar quien responda por la protección de datos del centro.
-
+Los datos son de pacientes: el uso de un servicio en la nube lo tiene que autorizar quien responda por la protección de datos del centro.

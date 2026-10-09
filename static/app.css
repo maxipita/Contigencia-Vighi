@@ -304,3 +304,4 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .semaforo-total a.late b { color: var(--error); }
 .semaforo-total a.activo { background: var(--superficie); box-shadow: 0 0 0 2px var(--acento); }
 .filtros.auto button { display: none; }
+.marca small.base-modo { margin-top: 2px; font-weight: 700; color: #7ee2a8; }

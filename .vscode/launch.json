@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Contingencia — desarrollo (base de prueba)",
+      "name": "Contingencia — desarrollo (Cloudflare D1)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
@@ -12,7 +12,6 @@
       "noDebug": true,
       "env": {
         "CONTINGENCIA_DESARROLLO": "1",
-        "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
         "CONTINGENCIA_PUERTO": "8001"
       }
     },
@@ -27,22 +26,6 @@
       "env": {
         "CONTINGENCIA_DESARROLLO": "1",
         "CONTINGENCIA_SIN_RECARGA": "1",
-        "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
-        "CONTINGENCIA_PUERTO": "8001"
-      }
-    },
-    {
-      "name": "Contingencia — desarrollo con Cloudflare D1",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/app.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "justMyCode": true,
-      "noDebug": true,
-      "env": {
-        "CONTINGENCIA_DESARROLLO": "1",
-        "CONTINGENCIA_D1": "1",
         "CONTINGENCIA_PUERTO": "8001"
       }
     }

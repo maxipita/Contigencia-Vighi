@@ -1,8 +1,7 @@
 @echo off
 title Sistema de contingencia CAP Vighi
 cd /d "%~dp0"
-rem Carpeta extra para respaldos (ej. una biblioteca de SharePoint sincronizada). Dejar vacio si no se usa.
-set CONTINGENCIA_RESPALDO=
+rem La base esta en Cloudflare D1: los datos de acceso van en data\cloudflare.env (ver LEEME). Necesita internet.
 
 rem Usa "py" si existe; si no, "python" (Python de la Microsoft Store)
 set PY=

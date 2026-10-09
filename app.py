@@ -64,7 +64,7 @@ SQL_BORRADORES = "SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1"
 
 @app.before_request
 def adelantar_lecturas():
-    if db.MODO_D1 and session.get("uid") and request.endpoint != "static":
+    if session.get("uid") and request.endpoint != "static":
         db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ())])
 
 
@@ -135,7 +135,7 @@ def globales():
     u = usuario_actual()
     pendientes = db.uno(SQL_BORRADORES)["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
+            "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS, "nombre_base": db.nombre_base(),
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
@@ -1682,7 +1682,11 @@ def ips_locales():
 
 
 if __name__ == "__main__":
-    db.inicializar()
+    try:
+        db.inicializar()
+    except (RuntimeError, d1.ErrorD1) as error:
+        print(f"No se puede iniciar el sistema: {error}")
+        raise SystemExit(1)
     if os.environ.get("CONTINGENCIA_DESARROLLO") == "1":
         app.jinja_env.auto_reload = True
         recarga = os.environ.get("CONTINGENCIA_SIN_RECARGA") != "1"
@@ -1690,18 +1694,17 @@ if __name__ == "__main__":
             print("=" * 64)
             print(" MODO DESARROLLO — " + ("recarga automática al guardar" if recarga else "con depurador, SIN recarga (reiniciar tras cambiar un .py)"))
             print(f" Abrir:             http://localhost:{PUERTO}")
-            print(f" Base de datos:     {db.DESCRIPCION}")
+            print(f" Base de datos:     {db.nombre_base()}")
             print("=" * 64)
         app.run(host="127.0.0.1", port=PUERTO, debug=True, use_reloader=recarga)
         raise SystemExit
     from waitress import serve
-    db.iniciar_respaldos(minutos=10)
     print("=" * 64)
     print(" Sistema de contingencia CAP Vighi")
     print(f" En esta PC:        http://localhost:{PUERTO}")
     for ip in ips_locales():
         print(f" Desde otras PCs:   http://{ip}:{PUERTO}")
-    print(f" Base de datos:     {db.DESCRIPCION}")
+    print(f" Base de datos:     {db.nombre_base()}")
     print(" Para detenerlo: cerrar esta ventana.")
     print("=" * 64)
     serve(app, host="0.0.0.0", port=PUERTO, threads=12)

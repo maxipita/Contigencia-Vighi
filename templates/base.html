@@ -15,7 +15,7 @@
     {% if yo %}<button class="b-menu" id="alternarMenu" type="button" aria-label="Mostrar u ocultar el menú"><svg class="ic"><use href="#i-menu"/></svg></button>{% endif %}
     <a class="marca" href="{{ url_for('tablero') if yo else url_for('login') }}">
       <img src="{{ url_for('static', filename='img/logo.png') }}" alt="">
-      <span><b>CAP Vighi</b><small>Sistema de contingencia</small></span>
+      <span><b>CAP Vighi</b><small>Sistema de contingencia</small><small class="base-modo">● {{ nombre_base }}</small></span>
     </a>
     {% if yo %}
     <nav class="menu" id="menuPrincipal" aria-label="Menú principal">

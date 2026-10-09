@@ -1,9 +1,7 @@
 import json
 import os
 import re
-import shutil
 import sqlite3
-import threading
 import time
 from datetime import datetime
 
@@ -13,27 +11,10 @@ import d1
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
-DB_PATH = os.environ.get("CONTINGENCIA_DB", os.path.join(DATA, "contingencia.db"))
-MODO_D1 = os.environ.get("CONTINGENCIA_D1") == "1"
 ARCHIVO_CLOUDFLARE = os.path.join(DATA, "cloudflare.env")
-DESCRIPCION = "Cloudflare D1" if MODO_D1 else DB_PATH
+CLAVES_CLOUDFLARE = ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_D1_ID", "CLOUDFLARE_API_TOKEN")
+NOMBRE_OPCIONAL = "CLOUDFLARE_D1_NOMBRE"
 _credenciales = {}
-
-
-def credenciales_d1():
-    if not _credenciales:
-        valores = {k: os.environ.get(k, "") for k in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_D1_ID", "CLOUDFLARE_API_TOKEN")}
-        if os.path.exists(ARCHIVO_CLOUDFLARE):
-            with open(ARCHIVO_CLOUDFLARE, encoding="utf-8") as f:
-                for linea in f:
-                    clave, _, valor = linea.strip().partition("=")
-                    if clave in valores and not valores[clave]:
-                        valores[clave] = valor.strip().strip('"').strip("'")
-        faltan = [k for k, v in valores.items() if not v]
-        if faltan:
-            raise RuntimeError(f"Faltan datos de Cloudflare D1: {', '.join(faltan)}. Definilos como variables de entorno o en {ARCHIVO_CLOUDFLARE}.")
-        _credenciales.update(valores)
-    return _credenciales
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS perfiles (
@@ -158,6 +139,26 @@ CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
 """
 
 
+def credenciales_d1():
+    if not _credenciales:
+        valores = {k: os.environ.get(k, "") for k in CLAVES_CLOUDFLARE + (NOMBRE_OPCIONAL,)}
+        if os.path.exists(ARCHIVO_CLOUDFLARE):
+            with open(ARCHIVO_CLOUDFLARE, encoding="utf-8") as f:
+                for linea in f:
+                    clave, _, valor = linea.strip().partition("=")
+                    if clave in valores and not valores[clave]:
+                        valores[clave] = valor.strip().strip('"').strip("'")
+        faltan = [k for k in CLAVES_CLOUDFLARE if not valores[k]]
+        if faltan:
+            raise RuntimeError(f"Faltan datos de Cloudflare D1: {', '.join(faltan)}. Completalos en {ARCHIVO_CLOUDFLARE} (hay una plantilla: cloudflare.env.ejemplo).")
+        _credenciales.update(valores)
+    return _credenciales
+
+
+def nombre_base():
+    return credenciales_d1().get(NOMBRE_OPCIONAL) or "Cloudflare D1"
+
+
 IntegrityError = sqlite3.IntegrityError
 
 
@@ -166,15 +167,8 @@ def ahora():
 
 
 def _conectar():
-    if MODO_D1:
-        c = credenciales_d1()
-        return d1.Conexion(c["CLOUDFLARE_ACCOUNT_ID"], c["CLOUDFLARE_D1_ID"], c["CLOUDFLARE_API_TOKEN"])
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    con = sqlite3.connect(DB_PATH, timeout=15)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
-    con.execute("PRAGMA journal_mode = WAL")
-    return con
+    c = credenciales_d1()
+    return d1.Conexion(c["CLOUDFLARE_ACCOUNT_ID"], c["CLOUDFLARE_D1_ID"], c["CLOUDFLARE_API_TOKEN"])
 
 
 def con():
@@ -216,8 +210,6 @@ def _guardar(clave, filas, cache):
 
 
 def precargar(consultas):
-    if not MODO_D1:
-        return
     cache = g.setdefault("cache_d1", {})
     faltan, vistos = [], set()
     for sql, params in consultas:
@@ -237,8 +229,6 @@ def precargar(consultas):
 
 
 def q(sql, params=()):
-    if not MODO_D1:
-        return con().execute(sql, params).fetchall()
     cache = g.setdefault("cache_d1", {})
     clave = (sql, tuple(params))
     if _solo_referencia(sql):
@@ -251,8 +241,6 @@ def q(sql, params=()):
 
 
 def uno(sql, params=()):
-    if not MODO_D1:
-        return con().execute(sql, params).fetchone()
     filas = q(sql, params)
     return filas[0] if filas else None
 
@@ -261,11 +249,10 @@ def ex(sql, params=()):
     c = con()
     cur = c.execute(sql, params)
     c.commit()
-    if MODO_D1:
-        olvidar_cache()
-        escrita = re.match(r"\s*(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+(\w+)", sql, re.I)
-        if escrita and escrita.group(1).lower() in REFERENCIA:
-            _fijas.clear()
+    olvidar_cache()
+    escrita = re.match(r"\s*(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+(\w+)", sql, re.I)
+    if escrita and escrita.group(1).lower() in REFERENCIA:
+        _fijas.clear()
     return cur.lastrowid
 
 
@@ -279,46 +266,7 @@ def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
        (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
 
 
-def unificar_etapas(c):
-    grupos = {}
-    for r in c.execute("SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0 ORDER BY id"):
-        grupos.setdefault((r["protocolo_id"], r["tipo"]), []).append(r["id"])
-    hechas = {}
-    for r in c.execute("SELECT estudio_id, etapa FROM etapas"):
-        hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
-    for ids in grupos.values():
-        if len(ids) < 2:
-            continue
-        comun = set.intersection(*(hechas.get(i, set()) for i in ids))
-        for i in ids:
-            for etapa in hechas.get(i, set()) - comun:
-                c.execute("DELETE FROM etapas WHERE estudio_id=? AND etapa=?", (i, etapa))
-    c.commit()
-
-
-def unificar_lotes(c):
-    activos = {}
-    for r in c.execute("SELECT id, protocolo_id, lote_id FROM estudios WHERE anulado=0 ORDER BY id"):
-        activos.setdefault(r["protocolo_id"], []).append(r)
-    for filas in activos.values():
-        destino = filas[0]["lote_id"] if filas[0]["lote_id"] is not None else next((f["lote_id"] for f in filas if f["lote_id"] is not None), None)
-        for f in filas:
-            if f["lote_id"] != destino:
-                c.execute("UPDATE estudios SET lote_id=? WHERE id=?", (destino, f["id"]))
-    c.commit()
-
-
 def preparar_esquema(c):
-    if not MODO_D1 and c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='casos'").fetchone():
-        os.makedirs(os.path.join(DATA, "respaldos"), exist_ok=True)
-        copia = sqlite3.connect(os.path.join(DATA, "respaldos", f"antes_de_protocolos_{datetime.now():%Y%m%d_%H%M}.db"))
-        c.backup(copia)
-        copia.close()
-        c.execute("PRAGMA foreign_keys = OFF")
-        for tabla in ("ihq", "micro", "macro", "etapas", "casos", "etiquetas_lotes", "lotes", "auditoria"):
-            c.execute(f"DROP TABLE IF EXISTS {tabla}")
-        c.commit()
-        c.execute("PRAGMA foreign_keys = ON")
     vieja = [r["name"] for r in c.execute("PRAGMA table_info(informes_emitidos)")]
     if vieja and "protocolo_id" not in vieja:
         c.execute("DROP INDEX IF EXISTS ux_informes_estudio_version")
@@ -354,9 +302,6 @@ def preparar_esquema(c):
 def inicializar():
     c = _conectar()
     antes_de_informes = preparar_esquema(c)
-    if not MODO_D1:
-        unificar_etapas(c)
-        unificar_lotes(c)
     if antes_de_informes:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'informe' ELSE permisos || ',informe' END "
                   "WHERE nombre = 'Médico firmante' AND (',' || permisos || ',') NOT LIKE '%,informe,%'")
@@ -404,58 +349,6 @@ def inicializar():
     c.close()
 
 
-def respaldar(destinos, conservar=48):
-    marca = datetime.now().strftime("%Y%m%d_%H%M")
-    origen = sqlite3.connect(DB_PATH)
-    try:
-        for carpeta in destinos:
-            os.makedirs(carpeta, exist_ok=True)
-            archivo = os.path.join(carpeta, f"contingencia_{marca}.db")
-            dst = sqlite3.connect(archivo)
-            origen.backup(dst)
-            dst.close()
-            viejos = sorted(f for f in os.listdir(carpeta) if f.startswith("contingencia_") and f.endswith(".db"))
-            for f in viejos[:-conservar]:
-                os.remove(os.path.join(carpeta, f))
-    finally:
-        origen.close()
-
-
-def iniciar_respaldos(minutos=10):
-    if MODO_D1:
-        return
-    destinos = [os.path.join(DATA, "respaldos")]
-    extra = os.environ.get("CONTINGENCIA_RESPALDO")
-    if extra:
-        destinos.append(extra)
-
-    def ciclo():
-        while True:
-            try:
-                respaldar(destinos)
-            except Exception as e:
-                print("Respaldo fallido:", e)
-            time.sleep(minutos * 60)
-
-    threading.Thread(target=ciclo, daemon=True).start()
-
-
-def copiar_archivo_db(destino):
-    shutil.copy2(DB_PATH, destino)
-
-
-def _lote_abierto(c, tipo_lote, fecha, usuario_id):
-    f = c.execute("SELECT id, codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1",
-                  (tipo_lote, fecha)).fetchone()
-    if f:
-        return {"id": f["id"], "codigo": f["codigo"], "nuevo": False}
-    n = (c.execute("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (tipo_lote, fecha)).fetchone()["m"] or 0) + 1
-    codigo = f"{tipo_lote}-{fecha[5:7]}{fecha[8:10]}.{n}"
-    lid = c.execute("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
-                    (codigo, tipo_lote, fecha, n, usuario_id, ahora())).lastrowid
-    return {"id": lid, "codigo": codigo, "nuevo": True}
-
-
 def _bloquear(c, nombre="etiquetas"):
     for _ in range(150):
         ahora_ = time.time()
@@ -468,7 +361,7 @@ def _bloquear(c, nombre="etiquetas"):
     raise RuntimeError("Otra PC está confirmando etiquetas. Probá de nuevo en unos segundos.")
 
 
-def _etiquetas_confirmar_d1(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores, etiquetados):
+def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores=None, etiquetados=None):
     c = con()
     _bloquear(c)
     try:
@@ -532,50 +425,3 @@ def _etiquetas_confirmar_d1(tipo, grupo, desde, hasta, n, por_proto, etiquetas, 
         return {"id": resultados[pos_etiquetas].lastrowid, "lote": lote}
     finally:
         c.execute("DELETE FROM bloqueos WHERE nombre='etiquetas'")
-
-
-def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id,
-                        borradores=None, etiquetados=None):
-    if MODO_D1:
-        return _etiquetas_confirmar_d1(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores, etiquetados)
-    c = con()
-    c.execute("BEGIN IMMEDIATE")
-    try:
-        if desde is not None:
-            marcas = ",".join("?" * len(grupo))
-            choque = c.execute(f"SELECT id, tipo, desde, hasta FROM etiquetas_lotes WHERE tipo IN ({marcas}) "
-                               "AND desde IS NOT NULL AND desde <= ? AND hasta >= ? ORDER BY id LIMIT 1",
-                               list(grupo) + [hasta, desde]).fetchone()
-            if choque:
-                c.rollback()
-                return {"error": "choque", "fila": dict(choque)}
-        lote = None
-        if borradores:
-            ya = {r["numero"] for r in c.execute("SELECT numero FROM protocolos WHERE numero LIKE 'C%'")}
-            repetidos = [p for p in borradores["protocolos"] if p in ya]
-            if repetidos:
-                c.rollback()
-                return {"error": "existentes", "protocolos": repetidos, "estudio": borradores["estudio"]}
-            lote = _lote_abierto(c, borradores["tipo_lote"], borradores["fecha_lote"], usuario_id)
-        cur = c.execute("INSERT INTO etiquetas_lotes (tipo, desde, hasta, lote_id, n, por_proto, etiquetas, params, "
-                        "creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                        (tipo, desde, hasta, lote["id"] if lote else None, n, por_proto, etiquetas, params_json,
-                         usuario_id, ahora()))
-        nuevo = cur.lastrowid
-        if borradores:
-            est, ahora_ = borradores["estudio"], ahora()
-            for p in borradores["protocolos"]:
-                pid = c.execute("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) "
-                                "VALUES (?,?,1,?,?,?)", (p, borradores["fecha_rec"], nuevo, usuario_id, ahora_)).lastrowid
-                c.execute("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, responsable_id, lote_id, "
-                          "creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
-                          (pid, est, borradores["categoria"], borradores["subcategoria"], borradores["sitio"],
-                           borradores["responsable_id"], lote["id"], usuario_id, ahora_))
-        if etiquetados:
-            c.execute(f"UPDATE estudios SET lab_etiquetado_en=? WHERE id IN ({','.join('?' * len(etiquetados))})",
-                      [ahora()] + list(etiquetados))
-        c.commit()
-        return {"id": nuevo, "lote": lote}
-    except Exception:
-        c.rollback()
-        raise

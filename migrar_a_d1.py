@@ -22,9 +22,6 @@ def orden_tablas(origen):
 
 
 def main(argumentos):
-    if not db.MODO_D1:
-        print("Primero activá el modo D1: definí CONTINGENCIA_D1=1 y las credenciales de Cloudflare (ver LEEME).")
-        return 1
     ruta = next((a for a in argumentos if not a.startswith("--")), os.path.join(db.DATA, "contingencia.db"))
     if not os.path.exists(ruta):
         print(f"No existe la base local {ruta}")

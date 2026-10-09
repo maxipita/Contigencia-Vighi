@@ -10,7 +10,6 @@
         "cwd": "${workspaceFolder}",
         "env": {
           "CONTINGENCIA_DESARROLLO": "1",
-          "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
           "CONTINGENCIA_PUERTO": "8001"
         }
       },
