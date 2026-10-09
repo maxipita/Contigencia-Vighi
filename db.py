@@ -126,6 +126,14 @@ CREATE INDEX IF NOT EXISTS ix_estudios_protocolo ON estudios(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_lote ON estudios(lote_id);
 CREATE INDEX IF NOT EXISTS ix_etapas_estudio ON etapas(estudio_id);
 CREATE INDEX IF NOT EXISTS ix_auditoria_protocolo ON auditoria(protocolo_id);
+CREATE TABLE IF NOT EXISTS comentarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    usuario_id INTEGER REFERENCES usuarios(id),
+    fecha_hora VARCHAR(19) NOT NULL,
+    texto TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_comentarios_protocolo ON comentarios(protocolo_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,
