@@ -25,6 +25,8 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   los botones `+ PAP`, `+ Biopsia`, `+ Citología` (puede haber varias biopsias). Regla: **con un PAP solo pueden ir
   muestras ginecológicas**; las demás se combinan libremente (ej. biopsia + citología de líquido).
 - **Ficha del protocolo:** paciente, lista de estudios, `+ Agregar estudio` y "Vuelta al sistema" (por protocolo).
+- **Imágenes:** en la ficha del protocolo (y en la pantalla de cada estudio, junto a donde se escribe el informe) hay una tarjeta *Imágenes*: se pueden subir varias fotos a la vez (JPG, PNG o WEBP), con una descripción opcional, verlas
+  ampliadas con un clic (flechas para pasar de una a otra) y borrarlas. Quedan asociadas al protocolo, hasta 30, y se achican solas para ocupar poco. Suben y borran quienes pueden editar protocolos o cargar macro o micro.
 - **Ficha del estudio:** **trazabilidad** (fecha límite de cada etapa en días hábiles desde la recolección, OT/LT,
   demora) con el botón **✔ Completar**; macroscopía / microscopía con **templates** (solo editables mientras el
   estudio está en esa etapa), IHQ, y "Anular estudio" (anula solo ese estudio).

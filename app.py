@@ -30,7 +30,7 @@ SIN_INFORMES = "Los informes en PDF no están disponibles: falta instalar report
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
 
 
 def _clave_secreta():
@@ -46,6 +46,13 @@ def _clave_secreta():
 app.secret_key = _clave_secreta()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 app.teardown_appcontext(db.cerrar)
+
+
+@app.errorhandler(413)
+def demasiado_grande(_):
+    flash("Los archivos superan el máximo de 40 MB por envío. Subí menos imágenes a la vez.", "error")
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("tablero")
+    return redirect(destino)
 
 
 @app.errorhandler(d1.ErrorConexion)
@@ -812,6 +819,118 @@ SQL_COMENTARIOS = """SELECT c.*, u.iniciales, u.nombre AS autor FROM comentarios
                      WHERE c.protocolo_id=? ORDER BY c.id DESC"""
 
 
+SQL_IMAGENES = """SELECT i.id, i.protocolo_id, i.nombre, i.descripcion, i.creado_en, u.iniciales FROM imagenes i
+                  LEFT JOIN usuarios u ON u.id=i.usuario_id WHERE i.protocolo_id=? ORDER BY i.id"""
+MAX_IMAGENES = 30
+PERMISOS_IMAGENES = ("protocolo_editar", "macro", "micro")
+
+
+def procesar_imagen(contenido):
+    from PIL import Image, ImageOps
+    if len(contenido) > 15 * 1024 * 1024:
+        raise ValueError("pesa más de 15 MB")
+    try:
+        img = Image.open(io.BytesIO(contenido))
+        if img.format not in ("JPEG", "PNG", "WEBP"):
+            raise ValueError
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            fondo = Image.new("RGB", img.size, (255, 255, 255))
+            fondo.paste(img, mask=img.split()[-1])
+            img = fondo
+        else:
+            img = img.convert("RGB")
+    except Exception:
+        raise ValueError("no es una imagen JPG, PNG o WEBP válida")
+
+    def jpeg(lado, calidad):
+        chica = img.copy()
+        chica.thumbnail((lado, lado))
+        salida = io.BytesIO()
+        chica.save(salida, "JPEG", quality=calidad, optimize=True)
+        return salida.getvalue()
+
+    for lado, calidad in ((2000, 85), (1800, 80), (1600, 72), (1400, 65), (1200, 55), (1000, 45), (800, 40)):
+        grande = jpeg(lado, calidad)
+        if len(grande) <= 1_200_000:
+            break
+    return grande, jpeg(360, 78)
+
+
+def imagenes_de(pid):
+    return db.q(SQL_IMAGENES, (pid,))
+
+
+def volver_a_imagenes(pid):
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolo", pid=pid)
+    return redirect(destino.split("#")[0] + "#imagenes")
+
+
+@app.route("/protocolo/<int:pid>/imagenes", methods=["POST"])
+@requiere_permiso(*PERMISOS_IMAGENES)
+def imagenes_subir(pid):
+    protocolo_o_404(pid)
+    archivos = [f for f in request.files.getlist("imagenes") if f and f.filename]
+    if not archivos:
+        flash("Elegí al menos una imagen.", "error")
+        return volver_a_imagenes(pid)
+    cupo = MAX_IMAGENES - db.uno("SELECT COUNT(*) AS n FROM imagenes WHERE protocolo_id=?", (pid,))["n"]
+    descripcion = request.form.get("descripcion", "").strip()[:200]
+    yo = usuario_actual()
+    subidas, fallas = 0, []
+    for f in archivos:
+        if subidas >= cupo:
+            fallas.append(f"{f.filename}: el protocolo ya tiene el máximo de {MAX_IMAGENES} imágenes")
+            continue
+        try:
+            grande, mini = procesar_imagen(f.read())
+        except ValueError as error:
+            fallas.append(f"{f.filename}: {error}")
+            continue
+        except ImportError:
+            flash("Falta instalar Pillow para subir imágenes (python -m pip install -r requirements.txt) y reiniciar el sistema.", "error")
+            return volver_a_imagenes(pid)
+        db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, imagen, miniatura) VALUES (?,?,?,?,?,?,?)",
+              (pid, yo["id"], db.ahora(), (f.filename or "")[:120], descripcion, grande, mini))
+        subidas += 1
+    if subidas:
+        db.auditar(yo["id"], pid, "imagenes", f"{subidas} imagen(es)")
+        flash(f"{subidas} imagen(es) subida(s).", "ok")
+    for falla in fallas:
+        flash(falla, "error")
+    return volver_a_imagenes(pid)
+
+
+def enviar_imagen(iid, columna):
+    r = db.uno(f"SELECT {columna} AS datos FROM imagenes WHERE id=?", (iid,)) or abort(404)
+    respuesta = send_file(io.BytesIO(bytes(r["datos"])), mimetype="image/jpeg", conditional=False)
+    respuesta.headers["Cache-Control"] = "private, max-age=86400"
+    return respuesta
+
+
+@app.route("/imagen/<int:iid>")
+@requiere_login
+def imagen_ver(iid):
+    return enviar_imagen(iid, "imagen")
+
+
+@app.route("/imagen/<int:iid>/mini")
+@requiere_login
+def imagen_mini(iid):
+    return enviar_imagen(iid, "miniatura")
+
+
+@app.route("/imagen/<int:iid>/borrar", methods=["POST"])
+@requiere_permiso(*PERMISOS_IMAGENES)
+def imagen_borrar(iid):
+    r = db.uno("SELECT id, protocolo_id, nombre FROM imagenes WHERE id=?", (iid,)) or abort(404)
+    db.ex("DELETE FROM imagenes WHERE id=?", (iid,))
+    db.auditar(usuario_actual()["id"], r["protocolo_id"], "imagen_borrada", r["nombre"] or "")
+    flash("Imagen borrada.", "ok")
+    return volver_a_imagenes(r["protocolo_id"])
+
+
 def comentarios_de(pid):
     return db.q(SQL_COMENTARIOS, (pid,))
 
@@ -825,7 +944,7 @@ def volver_a_comentarios(pid):
 @requiere_login
 def protocolo(pid):
     db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)),
-                   (SQL_COMENTARIOS, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
+                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
     p = protocolo_o_404(pid)
     historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
@@ -833,7 +952,7 @@ def protocolo(pid):
     for x in estudios:
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
-    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid),
+    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid),
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
@@ -988,6 +1107,16 @@ def habilitada(e, etapas, solicita, etapa):
                    + (f" (ahora está en {prox[1]})." if prox else "."))
 
 
+def macro_editable(e, etapas, solicita):
+    en_macro = habilitada(e, etapas, solicita, "macroscopia")
+    if en_macro[0]:
+        return con_permiso("macro", en_macro)
+    en_micro = habilitada(e, etapas, solicita, "microscopia")
+    if en_micro[0] and "macro" in REGISTRO[e["tipo"]].secciones:
+        return (True, "") if puede("macro") or puede("micro") else (False, "No tenés permiso para cargar esta sección.")
+    return en_macro
+
+
 @app.route("/estudio/<int:eid>")
 @requiere_login
 def estudio(eid):
@@ -995,7 +1124,7 @@ def estudio(eid):
                                          (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
     primero = db.uno(SQL_FICHA, (eid,))
     if primero:
-        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
+        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],)), (SQL_IMAGENES, (primero["protocolo_id"],))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
     tipo = REGISTRO[e["tipo"]]
     est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
@@ -1013,13 +1142,13 @@ def estudio(eid):
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
-    return render_template("estudio.html", e=e, comparte=comparte, comentarios=comentarios_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudio.html", e=e, comparte=comparte, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e),
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
-                           edita_macro=con_permiso("macro", habilitada(e, etapas, solicita, "macroscopia")),
+                           edita_macro=macro_editable(e, etapas, solicita),
                            edita_micro=con_permiso("micro", habilitada(e, etapas, solicita, "microscopia")))
 
 
@@ -1032,10 +1161,10 @@ def guardar_seccion(tabla, eid, valores):
 
 
 @app.route("/estudio/<int:eid>/macro", methods=["POST"])
-@requiere_permiso("macro")
+@requiere_permiso("macro", "micro")
 def guardar_macro(eid):
     e, _, _, _, etapas, solicita = ficha(eid)
-    ok, motivo = habilitada(e, etapas, solicita, "macroscopia")
+    ok, motivo = macro_editable(e, etapas, solicita)
     if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
         flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
         return redirect(url_for("estudio", eid=eid) + "#macro")

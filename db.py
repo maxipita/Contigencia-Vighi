@@ -139,6 +139,15 @@ CREATE TABLE IF NOT EXISTS comentarios (
     texto TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_comentarios_protocolo ON comentarios(protocolo_id);
+CREATE TABLE IF NOT EXISTS imagenes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    usuario_id INTEGER REFERENCES usuarios(id),
+    creado_en VARCHAR(19) NOT NULL,
+    nombre VARCHAR(120), descripcion VARCHAR(200),
+    imagen BLOB NOT NULL, miniatura BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_imagenes_protocolo ON imagenes(protocolo_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,

@@ -204,3 +204,34 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     form.classList.remove("editando");
   }));
 });
+
+(function () {
+  const enlaces = [...document.querySelectorAll("a[data-visor]")];
+  if (!enlaces.length) return;
+  const visor = document.createElement("div");
+  visor.className = "visor";
+  visor.hidden = true;
+  visor.innerHTML = '<button type="button" class="visor-x" aria-label="Cerrar">×</button><button type="button" class="visor-ant" aria-label="Anterior">‹</button>' +
+    '<img alt=""><button type="button" class="visor-sig" aria-label="Siguiente">›</button><div class="visor-pie"></div>';
+  document.body.append(visor);
+  const img = visor.querySelector("img"), pie = visor.querySelector(".visor-pie");
+  let actual = 0;
+  const mostrar = i => {
+    actual = (i + enlaces.length) % enlaces.length;
+    img.src = enlaces[actual].href;
+    pie.textContent = (enlaces[actual].title || "") + (enlaces.length > 1 ? "  (" + (actual + 1) + "/" + enlaces.length + ")" : "");
+    visor.hidden = false;
+  };
+  const cerrar = () => { visor.hidden = true; img.removeAttribute("src"); };
+  enlaces.forEach((a, i) => a.addEventListener("click", e => { e.preventDefault(); mostrar(i); }));
+  visor.querySelector(".visor-x").addEventListener("click", cerrar);
+  visor.querySelector(".visor-ant").addEventListener("click", () => mostrar(actual - 1));
+  visor.querySelector(".visor-sig").addEventListener("click", () => mostrar(actual + 1));
+  visor.addEventListener("click", e => { if (e.target === visor) cerrar(); });
+  document.addEventListener("keydown", e => {
+    if (visor.hidden) return;
+    if (e.key === "Escape") cerrar();
+    else if (e.key === "ArrowLeft") mostrar(actual - 1);
+    else if (e.key === "ArrowRight") mostrar(actual + 1);
+  });
+})();
