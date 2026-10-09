@@ -158,6 +158,16 @@ def fecha_larga(d):
     return f"{d.day} {MESES[d.month - 1]} {d.year}" if d else ""
 
 
+@app.template_filter("edad")
+def edad(v):
+    try:
+        n = datetime.strptime(v, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return ""
+    hoy = datetime.now()
+    return f"{hoy.year - n.year - ((hoy.month, hoy.day) < (n.month, n.day))} ({n.year})"
+
+
 @app.template_filter("dh")
 def fecha_hora_dt(d):
     return d.strftime("%d/%m/%Y %H:%M hs") if d else ""
@@ -536,6 +546,19 @@ CAMPOS_ESTUDIO = ["categoria", "subcategoria", "sitio", "tipo_muestra", "cantida
                   "responsable_id"]
 
 
+CAMPOS_PACIENTE = ["apellido", "nombre", "fecha_nacimiento", "sexo", "cobertura", "n_afiliado", "exento", "email", "telefono"]
+
+
+def sincronizar_paciente(pid, dni, campos=None):
+    if not dni:
+        return
+    p = protocolo_o_404(pid)
+    campos = [c for c in CAMPOS_PACIENTE if p[c]] if campos is None else [c for c in campos if c in CAMPOS_PACIENTE]
+    if not campos:
+        return
+    db.ex(f"UPDATE protocolos SET {', '.join(c + '=?' for c in campos)} WHERE dni=? AND id<>?", [p[c] for c in campos] + [dni, pid])
+
+
 def leer_protocolo():
     d = {k: request.form.get(k, "").strip() for k in CAMPOS_PROTOCOLO}
     d["numero"] = request.form.get("numero", "").strip()
@@ -625,6 +648,7 @@ def protocolo_nuevo():
             pid = db.ex(f"INSERT INTO protocolos (creado_por, creado_en, {', '.join(cols)}) VALUES (?,?,{','.join('?' * len(cols))})",
                         [yo["id"], db.ahora()] + [p[c] for c in cols])
             db.auditar(yo["id"], pid, "ingreso", p["numero"])
+            sincronizar_paciente(pid, p["dni"])
             lote = concretar_lote(lote_valor, yo["id"])
             for e in lista:
                 crear_estudio(pid, e, lote, yo["id"])
@@ -674,6 +698,8 @@ def protocolo_editar(pid):
             cols = ["numero"] + CAMPOS_PROTOCOLO
             db.ex(f"UPDATE protocolos SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [d[c] for c in cols] + [pid])
             db.auditar(yo["id"], pid, "editar_protocolo")
+            if not p["dni"] or p["dni"] == d["dni"]:
+                sincronizar_paciente(pid, d["dni"], [c for c in CAMPOS_PACIENTE if d[c] != (p[c] or "")] if p["dni"] else None)
             if not borrador:
                 flash("Datos del protocolo actualizados.", "ok")
                 return redirect(url_for("protocolo", pid=pid))
@@ -705,6 +731,83 @@ def protocolo_editar(pid):
     return render_template("protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, ultimos=[], **ctx)
 
 
+CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "fecha_recoleccion"]
+
+
+def protocolos_del_paciente(base):
+    if base["dni"]:
+        donde, params = "p.dni=?", (base["dni"],)
+    else:
+        donde = "LOWER(p.apellido)=LOWER(?) AND LOWER(COALESCE(p.nombre,''))=LOWER(?) AND COALESCE(p.fecha_nacimiento,'')=?"
+        params = (base["apellido"] or "", base["nombre"] or "", base["fecha_nacimiento"] or "")
+    protocolos = db.q(f"SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE {donde} ORDER BY p.id DESC", params)
+    return protocolos if any(x["id"] == base["id"] for x in protocolos) else [base]
+
+
+@app.route("/paciente/<int:pid>/datos", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def paciente_datos(pid):
+    base = protocolo_o_404(pid)
+    d = {k: request.form.get(k, "").strip() for k in ["dni"] + CAMPOS_PACIENTE}
+    if not (d["apellido"] or d["nombre"]):
+        flash("Escribí al menos el apellido o el nombre del paciente.", "error")
+        return redirect(url_for("paciente", pid=pid))
+    protocolos = protocolos_del_paciente(base)
+    ajenos = [x for x in db.q("SELECT id FROM protocolos WHERE dni=?", (d["dni"],)) if x["id"] not in {y["id"] for y in protocolos}] if d["dni"] else []
+    if ajenos:
+        flash("Ya hay otro paciente con ese DNI. Si es la misma persona, corregí el DNI en el protocolo que tiene el error.", "error")
+        return redirect(url_for("paciente", pid=pid))
+    cambios = [k for k in d if d[k] != (base[k] or "")]
+    if cambios:
+        cols = list(d)
+        yo = usuario_actual()
+        db.lote_ex([(f"UPDATE protocolos SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [d[c] for c in cols] + [x["id"]]) for x in protocolos]
+                   + [("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, accion, detalle) VALUES (?,?,?,?,?)",
+                       (db.ahora(), yo["id"], x["id"], "editar_paciente", ", ".join(cambios))) for x in protocolos])
+        flash(f"Datos del paciente actualizados en {len(protocolos)} protocolo(s).", "ok")
+    return redirect(url_for("paciente", pid=pid))
+
+
+@app.route("/paciente/<int:pid>")
+@requiere_login
+def paciente(pid):
+    base = protocolo_o_404(pid)
+    protocolos = protocolos_del_paciente(base)
+    ids = [x["id"] for x in protocolos]
+    marcas = ",".join("?" * len(ids))
+    estudios = cargar_estudios(f"e.protocolo_id IN ({marcas})", ids, borradores=True)
+    por_protocolo = {}
+    for e in estudios:
+        por_protocolo.setdefault(e["protocolo_id"], []).append(e)
+    emitidos = {r["protocolo_id"]: r for r in db.q(
+        f"SELECT id, protocolo_id, estudios FROM informes_emitidos WHERE protocolo_id IN ({marcas})", ids)}
+    informes = {}
+    for x in protocolos:
+        activos = [e for e in por_protocolo.get(x["id"], []) if not e["anulado"]]
+        r = emitidos.get(x["id"])
+        cerrado = bool(activos) and not any(e["borrador"] or e["proxima"] for e in activos)
+        if r and cerrado and (not r["estudios"] or set(r["estudios"].split(",")) == {str(e["id"]) for e in activos}):
+            informes[x["id"]] = r["id"]
+    return render_template("paciente.html", p=base, listas=listas(), protocolos=protocolos, estudios=por_protocolo, informes=informes,
+                           flujos=flujos_de(ids), origen=pid)
+
+
+@app.route("/protocolo/<int:pid>/datos", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def protocolo_datos(pid):
+    p = protocolo_o_404(pid)
+    if p["borrador"]:
+        return redirect(url_for("protocolo_editar", pid=pid))
+    d = {k: request.form[k].strip() for k in CAMPOS_RAPIDOS if k in request.form}
+    cambios = [k for k in d if d[k] != (p[k] or "")]
+    if cambios:
+        db.ex(f"UPDATE protocolos SET {', '.join(k + '=?' for k in cambios)} WHERE id=?", [d[k] for k in cambios] + [pid])
+        db.auditar(usuario_actual()["id"], pid, "editar_protocolo", ", ".join(cambios))
+        sincronizar_paciente(pid, p["dni"], cambios)
+        flash("Datos del protocolo actualizados.", "ok")
+    return redirect(url_for("protocolo", pid=pid))
+
+
 SQL_COMENTARIOS = """SELECT c.*, u.iniciales, u.nombre AS autor FROM comentarios c LEFT JOIN usuarios u ON u.id=c.usuario_id
                      WHERE c.protocolo_id=? ORDER BY c.id DESC"""
 
@@ -730,7 +833,7 @@ def protocolo(pid):
     for x in estudios:
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
-    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, comentarios=comentarios_de(pid),
+    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid),
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),

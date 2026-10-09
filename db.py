@@ -269,6 +269,11 @@ def ex(sql, params=()):
     return cur.lastrowid
 
 
+def lote_ex(sentencias):
+    con().lote(sentencias)
+    olvidar_cache()
+
+
 def feriados():
     from datetime import date
     return {date.fromisoformat(r["fecha"]) for r in q("SELECT fecha FROM feriados")}

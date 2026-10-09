@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_semaforo.html" import pill with context %}
+{% import "estudios/_bloque.html" as b with context %}
 {% block titulo %}Protocolo {{ p.numero }}{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Protocolo</div>
@@ -30,6 +31,46 @@
   </div>
 </div>
 {% endif %}
+{% set activos = estudios | rejectattr('anulado') | list %}
+{% set con_lote = activos | selectattr('lote_id') | list %}
+{% macro lapiz(texto='cambiar') %}{% if editable %}<button type="button" class="lapiz" data-editar title="Editar"><svg class="ic"><use href="#i-lapiz"/></svg>{{ texto }}</button>{% endif %}{% endmacro %}
+{% macro edicion(campos) %}<form method="post" action="{{ url_for('protocolo_datos', pid=p.id) }}" class="edicion">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">{{ caller() }}
+  {% if editable %}<div class="editar">{{ campos }}<div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div></div>{% endif %}</form>{% endmacro %}
+{% set editable = puede('protocolo_editar') and not p.borrador %}
+{% set campos_paciente %}<div><label>Apellido</label><input name="apellido" value="{{ p.apellido or '' }}"></div>
+  <div><label>Nombre</label><input name="nombre" value="{{ p.nombre or '' }}"></div>
+  <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>{% endset %}
+{% set campos_cobertura %}<div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>{% endset %}
+{% set campos_medico %}<div><label>Médico solicitante</label><div class="buscador"><input name="medico" value="{{ p.medico or '' }}" data-medicos autocomplete="off" placeholder="Escribí apellido…"></div></div>{% endset %}
+{% set campos_recoleccion %}<div><label>Lugar recolección</label><input name="lugar_recoleccion" value="{{ p.lugar_recoleccion or '' }}"></div>
+  <div><label>Fecha recolección</label><input type="date" name="fecha_recoleccion" value="{{ p.fecha_recoleccion or '' }}"></div>{% endset %}
+<div class="tarjeta" id="datos-rapidos">
+  <div class="datos-fila">
+    <div class="dato"><h2>Paciente</h2>
+      {% call edicion(campos_paciente) %}
+      <div class="ver"><a href="{{ url_for('paciente', pid=p.id) }}" title="Ficha del paciente"><b>{{ (p.apellido or '') ~ (', ' ~ p.nombre if p.nombre else '') }}</b></a>{% if p.fecha_nacimiento %} <span class="muted">{{ p.fecha_nacimiento | edad }}</span>{% endif %} {{ lapiz() }}</div>
+      {% endcall %}
+      {% call edicion(campos_cobertura) %}
+      <div class="ver">{{ p.cobertura or 'Sin cobertura' }} {{ lapiz() }}</div>
+      {% endcall %}
+      {% if not p.fecha_recoleccion %}<div class="lt">Falta la fecha de recolección</div>{% endif %}
+      <div>{% if p.borrador %}<a class="lapiz" href="{{ url_for('protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>completar datos</a>
+        {% elif puede('protocolo_editar') %}<a class="lapiz" href="{{ url_for('protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>más datos</a>{% endif %}</div></div>
+    <div class="dato"><h2>Médico</h2>
+      {% call edicion(campos_medico) %}
+      <div class="ver">{{ p.medico or 'Sin médico' }} {{ lapiz() }}</div>
+      {% endcall %}</div>
+    <div class="dato"><h2>Recolección</h2>
+      {% call edicion(campos_recoleccion) %}
+      <div class="ver">{{ p.lugar_recoleccion or 'Sin lugar' }}<div class="muted">{{ p.fecha_recoleccion | f }} {{ lapiz() }}</div></div>
+      {% endcall %}</div>
+    <div class="dato"><h2>Lote</h2>
+      {% if con_lote %}<div>{{ con_lote[0].lote.split('-')[0] }}</div>
+      <div><a href="{{ url_for('lote', lote_id=con_lote[0].lote_id) }}">{{ con_lote[0].lote }}</a></div>{% else %}<div class="muted">Sin lote</div>{% endif %}</div>
+  </div>
+</div>
+
 <div class="cols">
 <div>
   <div class="tarjeta">
@@ -63,8 +104,6 @@
     {% endif %}
   </div>
 
-  {% with pid=p.id %}{% include "_comentarios.html" %}{% endwith %}
-
   <div class="tarjeta">
     <h2>Historial</h2>
     <div class="historial">
@@ -74,18 +113,7 @@
 </div>
 
 <div>
-  <div class="tarjeta">
-    <h2>Paciente</h2>
-    {% for etiqueta, valor in [("Paciente", (p.apellido or '') ~ (', ' ~ p.nombre if p.nombre else '')), ("DNI", p.dni),
-        ("Nacimiento", p.fecha_nacimiento | f), ("Sexo", p.sexo), ("Cobertura", p.cobertura), ("N° afiliado", p.n_afiliado),
-        ("Exento", p.exento), ("E-mail", p.email), ("Teléfono", p.telefono), ("Médico solicitante", p.medico),
-        ("Recolección", p.fecha_recoleccion | f), ("Lugar recolección", p.lugar_recoleccion), ("Lugar entrega", p.lugar_entrega),
-        ("Observaciones", p.observaciones), ("Ingresado", (p.creado_en | fh) ~ ' · ' ~ (p.creador or ''))] %}
-      {% if valor %}<div class="dato"><b>{{ etiqueta }}</b> {{ valor }}</div>{% endif %}
-    {% endfor %}
-    {% if not p.fecha_recoleccion %}<div class="dato lt">Falta la fecha de recolección (los plazos se cuentan desde el ingreso).</div>{% endif %}
-    {% if puede('protocolo_editar') %}<div class="acciones"><a class="btn sec" href="{{ url_for('protocolo_editar', pid=p.id) }}">Editar datos</a></div>{% endif %}
-  </div>
+  {% with pid=p.id %}{% include "_comentarios.html" %}{% endwith %}
 
   <div class="tarjeta">
     <h2>Vuelta al sistema</h2>
