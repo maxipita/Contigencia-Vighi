@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import sqlite3
 import threading
@@ -8,9 +9,31 @@ from datetime import datetime
 
 from flask import g
 
+import d1
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
 DB_PATH = os.environ.get("CONTINGENCIA_DB", os.path.join(DATA, "contingencia.db"))
+MODO_D1 = os.environ.get("CONTINGENCIA_D1") == "1"
+ARCHIVO_CLOUDFLARE = os.path.join(DATA, "cloudflare.env")
+DESCRIPCION = "Cloudflare D1" if MODO_D1 else DB_PATH
+_credenciales = {}
+
+
+def credenciales_d1():
+    if not _credenciales:
+        valores = {k: os.environ.get(k, "") for k in ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_D1_ID", "CLOUDFLARE_API_TOKEN")}
+        if os.path.exists(ARCHIVO_CLOUDFLARE):
+            with open(ARCHIVO_CLOUDFLARE, encoding="utf-8") as f:
+                for linea in f:
+                    clave, _, valor = linea.strip().partition("=")
+                    if clave in valores and not valores[clave]:
+                        valores[clave] = valor.strip().strip('"').strip("'")
+        faltan = [k for k, v in valores.items() if not v]
+        if faltan:
+            raise RuntimeError(f"Faltan datos de Cloudflare D1: {', '.join(faltan)}. Definilos como variables de entorno o en {ARCHIVO_CLOUDFLARE}.")
+        _credenciales.update(valores)
+    return _credenciales
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS perfiles (
@@ -108,6 +131,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
 CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL);
+CREATE TABLE IF NOT EXISTS bloqueos (nombre VARCHAR(40) PRIMARY KEY, vence REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS firmas (usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id), imagen BLOB NOT NULL, actualizada_en VARCHAR(19));
 CREATE TABLE IF NOT EXISTS informes_emitidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,6 +166,9 @@ def ahora():
 
 
 def _conectar():
+    if MODO_D1:
+        c = credenciales_d1()
+        return d1.Conexion(c["CLOUDFLARE_ACCOUNT_ID"], c["CLOUDFLARE_D1_ID"], c["CLOUDFLARE_API_TOKEN"])
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     con = sqlite3.connect(DB_PATH, timeout=15)
     con.row_factory = sqlite3.Row
@@ -162,18 +189,83 @@ def cerrar(_=None):
         c.close()
 
 
+REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles")
+VIGENCIA_REFERENCIA = 120
+_fijas = {}
+
+
+def olvidar_cache():
+    g.pop("cache_d1", None)
+
+
+def _solo_referencia(sql):
+    tablas = re.findall(r"\b(?:FROM|JOIN)\s+(\w+)", sql, re.I)
+    return bool(tablas) and all(t.lower() in REFERENCIA for t in tablas)
+
+
+def _fija_vigente(clave):
+    hit = _fijas.get(clave)
+    return hit is not None and hit[0] > time.time()
+
+
+def _guardar(clave, filas, cache):
+    if _solo_referencia(clave[0]):
+        _fijas[clave] = (time.time() + VIGENCIA_REFERENCIA, filas)
+    else:
+        cache[clave] = filas
+
+
+def precargar(consultas):
+    if not MODO_D1:
+        return
+    cache = g.setdefault("cache_d1", {})
+    faltan, vistos = [], set()
+    for sql, params in consultas:
+        clave = (sql, tuple(params))
+        if clave in vistos or clave in cache or (_solo_referencia(sql) and _fija_vigente(clave)):
+            continue
+        vistos.add(clave)
+        faltan.append(clave)
+    for i in range(0, len(faltan), d1.DECLARACIONES_POR_PEDIDO):
+        trozo = faltan[i:i + d1.DECLARACIONES_POR_PEDIDO]
+        try:
+            resultados = con().lote(trozo)
+        except (sqlite3.Error, d1.ErrorSQL):
+            return
+        for clave, cur in zip(trozo, resultados):
+            _guardar(clave, cur.fetchall(), cache)
+
+
 def q(sql, params=()):
-    return con().execute(sql, params).fetchall()
+    if not MODO_D1:
+        return con().execute(sql, params).fetchall()
+    cache = g.setdefault("cache_d1", {})
+    clave = (sql, tuple(params))
+    if _solo_referencia(sql):
+        if not _fija_vigente(clave):
+            _fijas[clave] = (time.time() + VIGENCIA_REFERENCIA, con().execute(sql, params).fetchall())
+        return _fijas[clave][1]
+    if clave not in cache:
+        cache[clave] = con().execute(sql, params).fetchall()
+    return cache[clave]
 
 
 def uno(sql, params=()):
-    return con().execute(sql, params).fetchone()
+    if not MODO_D1:
+        return con().execute(sql, params).fetchone()
+    filas = q(sql, params)
+    return filas[0] if filas else None
 
 
 def ex(sql, params=()):
     c = con()
     cur = c.execute(sql, params)
     c.commit()
+    if MODO_D1:
+        olvidar_cache()
+        escrita = re.match(r"\s*(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+(\w+)", sql, re.I)
+        if escrita and escrita.group(1).lower() in REFERENCIA:
+            _fijas.clear()
     return cur.lastrowid
 
 
@@ -216,9 +308,8 @@ def unificar_lotes(c):
     c.commit()
 
 
-def inicializar():
-    c = _conectar()
-    if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='casos'").fetchone():
+def preparar_esquema(c):
+    if not MODO_D1 and c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='casos'").fetchone():
         os.makedirs(os.path.join(DATA, "respaldos"), exist_ok=True)
         copia = sqlite3.connect(os.path.join(DATA, "respaldos", f"antes_de_protocolos_{datetime.now():%Y%m%d_%H%M}.db"))
         c.backup(copia)
@@ -257,8 +348,15 @@ def inicializar():
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
-    unificar_etapas(c)
-    unificar_lotes(c)
+    return antes_de_informes
+
+
+def inicializar():
+    c = _conectar()
+    antes_de_informes = preparar_esquema(c)
+    if not MODO_D1:
+        unificar_etapas(c)
+        unificar_lotes(c)
     if antes_de_informes:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'informe' ELSE permisos || ',informe' END "
                   "WHERE nombre = 'Médico firmante' AND (',' || permisos || ',') NOT LIKE '%,informe,%'")
@@ -324,6 +422,8 @@ def respaldar(destinos, conservar=48):
 
 
 def iniciar_respaldos(minutos=10):
+    if MODO_D1:
+        return
     destinos = [os.path.join(DATA, "respaldos")]
     extra = os.environ.get("CONTINGENCIA_RESPALDO")
     if extra:
@@ -356,8 +456,88 @@ def _lote_abierto(c, tipo_lote, fecha, usuario_id):
     return {"id": lid, "codigo": codigo, "nuevo": True}
 
 
+def _bloquear(c, nombre="etiquetas"):
+    for _ in range(150):
+        ahora_ = time.time()
+        try:
+            c.execute("INSERT INTO bloqueos (nombre, vence) VALUES (?,?)", (nombre, ahora_ + 30))
+            return
+        except sqlite3.IntegrityError:
+            c.execute("DELETE FROM bloqueos WHERE nombre=? AND vence<?", (nombre, ahora_))
+            time.sleep(0.2)
+    raise RuntimeError("Otra PC está confirmando etiquetas. Probá de nuevo en unos segundos.")
+
+
+def _etiquetas_confirmar_d1(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores, etiquetados):
+    c = con()
+    _bloquear(c)
+    try:
+        if desde is not None:
+            marcas = ",".join("?" * len(grupo))
+            choque = c.execute(f"SELECT id, tipo, desde, hasta FROM etiquetas_lotes WHERE tipo IN ({marcas}) "
+                               "AND desde IS NOT NULL AND desde <= ? AND hasta >= ? ORDER BY id LIMIT 1",
+                               list(grupo) + [hasta, desde]).fetchone()
+            if choque:
+                return {"error": "choque", "fila": dict(choque)}
+        declaraciones, lote, ahora_ = [], None, ahora()
+        lote_sql, lote_param = "NULL", []
+        if borradores:
+            pedidos = borradores["protocolos"]
+            repetidos = []
+            for i in range(0, len(pedidos), 90):
+                trozo = pedidos[i:i + 90]
+                repetidos += [r["numero"] for r in c.execute(f"SELECT numero FROM protocolos WHERE numero IN ({','.join('?' * len(trozo))})", trozo).fetchall()]
+            if repetidos:
+                return {"error": "existentes", "protocolos": repetidos, "estudio": borradores["estudio"]}
+            fila = c.execute("SELECT id, codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1",
+                             (borradores["tipo_lote"], borradores["fecha_lote"])).fetchone()
+            if fila:
+                lote = {"id": fila["id"], "codigo": fila["codigo"], "nuevo": False}
+                lote_sql, lote_param = "?", [fila["id"]]
+            else:
+                numero_lote = (c.execute("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?",
+                                         (borradores["tipo_lote"], borradores["fecha_lote"])).fetchone()["m"] or 0) + 1
+                fecha = borradores["fecha_lote"]
+                codigo = f"{borradores['tipo_lote']}-{fecha[5:7]}{fecha[8:10]}.{numero_lote}"
+                declaraciones.append(("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
+                                      (codigo, borradores["tipo_lote"], fecha, numero_lote, usuario_id, ahora_)))
+                lote = {"id": None, "codigo": codigo, "nuevo": True}
+                lote_sql, lote_param = "(SELECT id FROM lotes WHERE codigo=?)", [codigo]
+        pos_lote = 0 if lote and lote["nuevo"] else None
+        pos_etiquetas = len(declaraciones)
+        declaraciones.append((f"INSERT INTO etiquetas_lotes (tipo, desde, hasta, lote_id, n, por_proto, etiquetas, params, creado_por, creado_en) "
+                              f"VALUES (?,?,?,{lote_sql},?,?,?,?,?,?)",
+                              [tipo, desde, hasta] + lote_param + [n, por_proto, etiquetas, params_json, usuario_id, ahora_]))
+        if borradores:
+            fila_sql = "(?,?,1,(SELECT MAX(id) FROM etiquetas_lotes),?,?)"
+            por_sentencia = 22
+            pedidos = borradores["protocolos"]
+            for i in range(0, len(pedidos), por_sentencia):
+                trozo = pedidos[i:i + por_sentencia]
+                declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
+                                      + ",".join([fila_sql] * len(trozo)),
+                                      [v for p in trozo for v in (p, borradores["fecha_rec"], usuario_id, ahora_)]))
+            declaraciones.append((f"INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, responsable_id, lote_id, creado_por, creado_en) "
+                                  f"SELECT p.id, ?, ?, ?, ?, ?, {lote_sql}, ?, ? FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
+                                  [borradores["estudio"], borradores["categoria"], borradores["subcategoria"], borradores["sitio"], borradores["responsable_id"]]
+                                  + lote_param + [usuario_id, ahora_]))
+        if etiquetados:
+            for i in range(0, len(etiquetados), 89):
+                trozo = list(etiquetados)[i:i + 89]
+                declaraciones.append((f"UPDATE estudios SET lab_etiquetado_en=? WHERE id IN ({','.join('?' * len(trozo))})", [ahora_] + trozo))
+        resultados = c.lote(declaraciones)
+        olvidar_cache()
+        if pos_lote is not None:
+            lote["id"] = resultados[pos_lote].lastrowid
+        return {"id": resultados[pos_etiquetas].lastrowid, "lote": lote}
+    finally:
+        c.execute("DELETE FROM bloqueos WHERE nombre='etiquetas'")
+
+
 def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id,
                         borradores=None, etiquetados=None):
+    if MODO_D1:
+        return _etiquetas_confirmar_d1(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores, etiquetados)
     c = con()
     c.execute("BEGIN IMMEDIATE")
     try:

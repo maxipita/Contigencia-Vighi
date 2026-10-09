@@ -30,6 +30,21 @@
         "CONTINGENCIA_DB": "${workspaceFolder}/data/prueba.db",
         "CONTINGENCIA_PUERTO": "8001"
       }
+    },
+    {
+      "name": "Contingencia — desarrollo con Cloudflare D1",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "noDebug": true,
+      "env": {
+        "CONTINGENCIA_DESARROLLO": "1",
+        "CONTINGENCIA_D1": "1",
+        "CONTINGENCIA_PUERTO": "8001"
+      }
     }
   ]
 }

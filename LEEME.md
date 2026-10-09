@@ -100,3 +100,25 @@ solo en una base nueva (vacía).
 - `trazabilidad.py` — fechas límite, OT/LT y demoras
 - `db.py` — **todo el acceso a datos** (SQL estándar; para migrar a MySQL se cambia solo este módulo)
 - `templates/`, `static/` — interfaz · `seed/` — datos iniciales
+
+## Base de datos en Cloudflare D1
+
+Por defecto el sistema usa una base en la PC del laboratorio (`data\contingencia.db`), que funciona sin internet. Opcionalmente la base puede vivir en **Cloudflare D1**;
+en ese modo **todo necesita internet**: si se cae la conexión el sistema avisa "Sin conexión con la base de datos" y vuelve solo cuando regresa.
+
+**Preparar Cloudflare (una sola vez, lo hace un administrador):**
+1. En el panel de Cloudflare: *Storage & Databases > D1 > Create database* (nombre sugerido: `contingencia`). Elegir la ubicación más cercana disponible.
+2. Anotar el **Account ID** (en la página principal de Workers & Pages) y el **Database ID** (en la página de la base).
+3. *My Profile > API Tokens > Create Token > Create Custom Token*: permiso **Account > D1 > Edit**, limitado a esa cuenta. Copiar el token (se muestra una sola vez).
+4. Crear el archivo `data\cloudflare.env` con tres líneas, sin comillas ni espacios:
+   `CLOUDFLARE_ACCOUNT_ID=...`, `CLOUDFLARE_D1_ID=...` y `CLOUDFLARE_API_TOKEN=...`. Ese archivo es secreto (la carpeta `data` no va al repositorio): no se pega en chats ni se manda por mail. En la raíz del proyecto hay una plantilla vacía, `cloudflare.env.ejemplo`, para copiar a `data\cloudflare.env`. Cada persona usa su propio token (se invita a la cuenta y crea el suyo);
+   para desarrollar no hace falta Cloudflare: F5 sigue usando la base local de prueba de cada uno.
+
+**Subir los datos actuales:** con `py -m pip install -r requirements.txt` hecho, ejecutar en una consola `set CONTINGENCIA_D1=1` y luego `py migrar_a_d1.py`. Muestra cuántas filas va a subir
+(incluye datos de pacientes), pide escribir `SI`, sube todo y verifica que las cantidades coincidan. Si la base de Cloudflare ya tiene datos, no sube nada.
+
+**Usarlo:** abrir `Iniciar contingencia (Cloudflare).bat` en lugar del `.bat` común. Para volver al modo local alcanza con usar el `.bat` común (queda la base local tal como estaba al subirla).
+
+**Respaldos:** en este modo no se hacen los respaldos locales cada 10 minutos. Cloudflare D1 guarda un historial que permite restaurar la base a un momento anterior (*Time Travel*; la cantidad de días
+depende del plan, verificarlo en el panel). Los datos son de pacientes: el uso de un servicio en la nube lo tiene que autorizar quien responda por la protección de datos del centro.
+

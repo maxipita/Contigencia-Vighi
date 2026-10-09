@@ -23,7 +23,7 @@ py app.py                                 # servidor real en :8000 (equivale a "
   (plantillas y CSS se ven al refrescar; un cambio en `.py` reinicia solo), escucha solo en `127.0.0.1` y no hace respaldos.
   El `.bat` usa waitress (producción) y **no** recarga: es para la PC servidor, no para desarrollar.
 - Variables de entorno: `CONTINGENCIA_PUERTO`, `CONTINGENCIA_DB`, `CONTINGENCIA_RESPALDO` (carpeta extra de
-  respaldos).
+  respaldos), `CONTINGENCIA_D1` (base en Cloudflare D1, ver Notas de implementación).
 - `py preparar_semillas.py` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
   concreta** (ver constantes al inicio del script): no corre en otra máquina sin ajustarlas.
 
@@ -112,6 +112,19 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   (`WERKZEUG_RUN_MAIN`); `jinja_env.auto_reload` se activa a mano porque el entorno de plantillas ya está creado; escucha solo en `127.0.0.1` porque el depurador
   de Flask permite ejecutar código; usar siempre una base de prueba. `CONTINGENCIA_SIN_RECARGA=1` apaga el recargador para depurar con puntos de interrupción
   (el recargador termina el proceso con `SystemExit 3`, que el depurador de VS Code muestra como excepción: por eso F5 corre sin depurador).
+- **Cloudflare D1 (opcional, `CONTINGENCIA_D1=1`):** `db._conectar()` devuelve `d1.Conexion`, que imita lo que usa el código de `sqlite3` (`execute` / `executemany` / `executescript`, filas
+  accesibles por nombre o posición, `lastrowid`) hablando con la API HTTP de D1 (`POST .../d1/database/<id>/query`, un `batch` es atómico). Credenciales: variables `CLOUDFLARE_ACCOUNT_ID`,
+  `CLOUDFLARE_D1_ID`, `CLOUDFLARE_API_TOKEN` o `data/cloudflare.env`; `CONTINGENCIA_D1_URL` cambia la URL base (para pruebas con un simulador). `requests` se importa recién al usar D1.
+  Diferencias que hay que respetar: **no hay transacciones interactivas** (cada `execute` es un viaje a internet y se confirma solo), por eso `etiquetas_confirmar` toma un bloqueo en la tabla
+  `bloqueos` y escribe todo en un único `lote` atómico usando subconsultas en vez de `lastrowid`; las escrituras no se reintentan solas (podrían duplicarse) y las lecturas sí; los archivos
+  (`BLOB`) viajan como texto `~b64~...` y vuelven como `bytes`; D1 limita 100 parámetros por sentencia (`executemany` agrupa filas en `INSERT` de varias filas y lotes de 40) y no
+  permite `PRAGMA journal_mode` ni `foreign_keys`. En este modo `db.q` / `db.uno` guardan las lecturas en `g` durante el pedido (se vacía al escribir con `db.ex` o `etiquetas_confirmar`), y se saltean
+  `unificar_etapas`, `unificar_lotes`, el respaldo previo de la versión con `casos` y los respaldos locales. `d1.ErrorConexion` (red caída, 5xx, 401/403/429) se muestra como una pantalla 503 ("Sin conexión con la base de datos"); `d1.ErrorSQL` (un 400 de D1) no, para no taparlo.
+  `migrar_a_d1.py` sube una base local (tablas en orden de claves foráneas, un archivo por sentencia) y verifica las cantidades. La latencia a Cloudflare (~200 ms por consulta medida desde el laboratorio) obliga a juntar lecturas: `db.precargar(consultas)` trae varias lecturas independientes en un solo `batch`
+  y las deja en la caché del pedido (`adelantar_lecturas` en `before_request` trae usuario y cantidad de borradores; `consultas_estudios`, `consultas_ficha` y las constantes `SQL_*` de `app.py` existen
+  para que la consulta precargada y la real sean exactamente el mismo texto: si se cambia una, cambiar la constante). Las tablas de referencia (`db.REFERENCIA`: feriados, listas, plantillas,
+  catálogo, perfiles) se guardan en memoria del servidor 2 minutos y se borran al escribir en ellas con `db.ex`. Con eso las pantallas pasaron de 6–19 consultas a 2–5 (de ~1,9 s a ~0,7 s en promedio).
+  Pendiente de optimizar: `cargar_estudios` lee las tablas `etapas` y `estudios` completas en cada pantalla, y D1 cobra por filas leídas.
 - **Respaldos:** un hilo copia la base cada 10 minutos a `data/respaldos` y, si está definida, a `CONTINGENCIA_RESPALDO` (por ejemplo una carpeta de SharePoint
   sincronizada). Un respaldo que falla no tira la aplicación.
 - **Pasar a MySQL:** habría que cambiar solo `db.py`: la conexión, los placeholders (`?` → `%s`), los tipos del esquema y el bloqueo de `etiquetas_confirmar`

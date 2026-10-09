@@ -13,6 +13,7 @@ from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, r
                    session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import d1
 import db
 import permisos
 import trazabilidad
@@ -47,13 +48,32 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 app.teardown_appcontext(db.cerrar)
 
 
+@app.errorhandler(d1.ErrorConexion)
+def sin_base(error):
+    return ("<!doctype html><meta charset='utf-8'><title>Sin conexión</title>"
+            "<body style='font-family:sans-serif;max-width:560px;margin:15vh auto;padding:0 20px'>"
+            "<h1>Sin conexión con la base de datos</h1>"
+            "<p>No se pudo comunicar con Cloudflare D1. Revisá la conexión a internet y volvé a intentar en unos segundos.</p>"
+            f"<p style='color:#666;font-size:13px'>{str(error)[:200]}</p></body>"), 503
+
+
+SQL_USUARIO = """SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
+                      LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.id=? AND u.activo=1"""
+SQL_BORRADORES = "SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1"
+
+
+@app.before_request
+def adelantar_lecturas():
+    if db.MODO_D1 and session.get("uid") and request.endpoint != "static":
+        db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ())])
+
+
 def usuario_actual():
     uid = session.get("uid")
     if not uid:
         return None
     if g.get("yo_id") != uid:
-        f = db.uno("""SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
-                      LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.id=? AND u.activo=1""", (uid,))
+        f = db.uno(SQL_USUARIO, (uid,))
         g.yo = {**dict(f), "permisos": permisos.efectivos(f, f["perfil_permisos"])} if f else None
         g.yo_id = uid
     return g.yo
@@ -113,7 +133,7 @@ def verificar_csrf():
 @app.context_processor
 def globales():
     u = usuario_actual()
-    pendientes = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1")["n"] if u else 0
+    pendientes = db.uno(SQL_BORRADORES)["n"] if u else 0
     return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
             "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
@@ -226,7 +246,7 @@ def cambiar_clave():
 
 def listas():
     out = {}
-    for r in db.q("SELECT nombre, valor FROM listas ORDER BY nombre, orden"):
+    for r in db.q(SQL_LISTAS):
         out.setdefault(r["nombre"], []).append(r["valor"])
     return out
 
@@ -237,21 +257,32 @@ def responsables(tipo):
             if sector in (u["sectores"] or "").split(",")]
 
 
-def cargar_estudios(where="1=1", params=(), borradores=False):
-    filas = db.q(f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
+SQL_ETAPAS = "SELECT estudio_id, etapa, fecha_hora FROM etapas"
+SQL_CON_IHQ = "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0"
+SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
+
+
+def consultas_estudios(where="1=1", params=(), borradores=False):
+    principal = f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
                             u.iniciales AS responsable, l.codigo AS lote,
                             (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
-                     WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id""", params)
+                     WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id"""
+    return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_TIPOS, ())]
+
+
+def cargar_estudios(where="1=1", params=(), borradores=False):
+    consultas = consultas_estudios(where, params, borradores)
+    db.precargar(consultas)
+    filas = db.q(*consultas[0])
     hechas, fechas = {}, {}
-    for r in db.q("SELECT estudio_id, etapa, fecha_hora FROM etapas"):
+    for r in db.q(SQL_ETAPAS):
         hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
         fechas.setdefault(r["estudio_id"], {})[r["etapa"]] = r["fecha_hora"]
-    con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(
-        "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0")}
+    con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
-    flujos = flujos_de({f["protocolo_id"] for f in filas} or None) if filas else {}
+    flujos = flujos_de() if filas else {}
     for f in filas:
         d = dict(f)
         d["flujos"] = flujos.get(f["protocolo_id"], "")
@@ -283,14 +314,12 @@ def etiqueta_flujos(tipos, con_ihq):
 
 
 def flujos_de(protocolo_ids=None):
-    donde = f" AND e.protocolo_id IN ({','.join('?' * len(protocolo_ids))})" if protocolo_ids else ""
     tipos = {}
-    for r in db.q(f"SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0{donde}", tuple(protocolo_ids or ())):
+    for r in db.q(SQL_TIPOS):
         tipos.setdefault(r["protocolo_id"], set()).add(r["tipo"])
-    ihq = {r["protocolo_id"] for r in db.q(
-        f"SELECT DISTINCT e.protocolo_id FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0{donde}",
-        tuple(protocolo_ids or ()))}
-    return {pid: etiqueta_flujos(ts, pid in ihq) for pid, ts in tipos.items()}
+    ihq = {r["protocolo_id"] for r in db.q(SQL_CON_IHQ)}
+    todos = {pid: etiqueta_flujos(ts, pid in ihq) for pid, ts in tipos.items()}
+    return todos if not protocolo_ids else {pid: todos[pid] for pid in protocolo_ids if pid in todos}
 
 
 def miembros_flujo(e):
@@ -298,8 +327,7 @@ def miembros_flujo(e):
 
 
 def pide_ihq(protocolo_id, tipo):
-    return bool(db.uno("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
-                       "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1", (protocolo_id, tipo)))
+    return bool(db.uno(SQL_PIDE_IHQ, (protocolo_id, tipo)))
 
 
 def flujo_avanzado(protocolo_id, tipo):
@@ -381,10 +409,17 @@ def hoy():
 
 def crear_lote(tipo_lote, usuario_id):
     f = hoy()
-    n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (tipo_lote, f))["m"] or 0) + 1
-    codigo = f"{tipo_lote}-{f[5:7]}{f[8:10]}.{n}"
-    lid = db.ex("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
-                (codigo, tipo_lote, f, n, usuario_id, db.ahora()))
+    for _ in range(5):
+        n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (tipo_lote, f))["m"] or 0) + 1
+        codigo = f"{tipo_lote}-{f[5:7]}{f[8:10]}.{n}"
+        try:
+            lid = db.ex("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
+                        (codigo, tipo_lote, f, n, usuario_id, db.ahora()))
+            break
+        except db.IntegrityError:
+            continue
+    else:
+        raise RuntimeError("No se pudo crear el lote, probá de nuevo.")
     db.auditar(usuario_id, None, "nuevo_lote", codigo)
     return db.uno("SELECT * FROM lotes WHERE id=?", (lid,))
 
@@ -500,8 +535,13 @@ def contexto_formulario():
             "tipos_lote_de": {t: tipos_lote(t) for t in REGISTRO}}
 
 
+SQL_PROTOCOLO = "SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE p.id=?"
+SQL_HISTORIAL_PROTOCOLO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
+                        WHERE protocolo_id=? ORDER BY a.id DESC"""
+
+
 def protocolo_o_404(pid):
-    p = db.uno("SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE p.id=?", (pid,))
+    p = db.uno(SQL_PROTOCOLO, (pid,))
     if not p:
         abort(404)
     return p
@@ -612,9 +652,9 @@ def protocolo_editar(pid):
 @app.route("/protocolo/<int:pid>")
 @requiere_login
 def protocolo(pid):
+    db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
     p = protocolo_o_404(pid)
-    historial = db.q("""SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
-                        WHERE protocolo_id=? ORDER BY a.id DESC""", (pid,))
+    historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
     pendientes = []
     for x in estudios:
@@ -689,19 +729,36 @@ def estudio_editar(eid):
                            lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **ctx)
 
 
-def ficha(eid):
-    e = db.uno("""SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
+SQL_FICHA = """SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
                          u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote
                   FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                   LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN usuarios u2 ON u2.id=e.creado_por
-                  LEFT JOIN lotes l ON l.id=e.lote_id WHERE e.id=?""", (eid,))
+                  LEFT JOIN lotes l ON l.id=e.lote_id WHERE e.id=?"""
+SQL_ETAPAS_FICHA = """SELECT x.*, u.iniciales, u.nombre FROM etapas x
+                                            JOIN usuarios u ON u.id=x.usuario_id WHERE estudio_id=?"""
+SQL_ULTIMA_ETAPA = "SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1"
+SQL_HISTORIAL_ESTUDIO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
+                        WHERE estudio_id=? ORDER BY a.id DESC"""
+SQL_TEMPLATES = "SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo"
+SQL_LISTAS = "SELECT nombre, valor FROM listas ORDER BY nombre, orden"
+SQL_PIDE_IHQ = ("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
+                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1")
+
+
+def consultas_ficha(eid):
+    return [(SQL_FICHA, (eid,)), ("SELECT * FROM macro WHERE estudio_id=?", (eid,)), ("SELECT * FROM micro WHERE estudio_id=?", (eid,)),
+            ("SELECT * FROM ihq WHERE estudio_id=?", (eid,)), (SQL_ETAPAS_FICHA, (eid,))]
+
+
+def ficha(eid):
+    db.precargar(consultas_ficha(eid))
+    e = db.uno(SQL_FICHA, (eid,))
     if not e:
         abort(404)
     macro = db.uno("SELECT * FROM macro WHERE estudio_id=?", (eid,))
     micro = db.uno("SELECT * FROM micro WHERE estudio_id=?", (eid,))
     ihq = db.uno("SELECT * FROM ihq WHERE estudio_id=?", (eid,))
-    etapas = {x["etapa"]: x for x in db.q("""SELECT x.*, u.iniciales, u.nombre FROM etapas x
-                                            JOIN usuarios u ON u.id=x.usuario_id WHERE estudio_id=?""", (eid,))}
+    etapas = {x["etapa"]: x for x in db.q(SQL_ETAPAS_FICHA, (eid,))}
     solicita = bool(micro and micro["solicita_ihq"]) if e["anulado"] else pide_ihq(e["protocolo_id"], e["tipo"])
     return e, macro, micro, ihq, etapas, solicita
 
@@ -727,13 +784,17 @@ def habilitada(e, etapas, solicita, etapa):
 @app.route("/estudio/<int:eid>")
 @requiere_login
 def estudio(eid):
+    db.precargar(consultas_ficha(eid) + [(SQL_ULTIMA_ETAPA, (eid,)), (SQL_HISTORIAL_ESTUDIO, (eid,)), (SQL_TEMPLATES, ("macro",)),
+                                         (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
+    primero = db.uno(SQL_FICHA, (eid,))
+    if primero:
+        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
     tipo = REGISTRO[e["tipo"]]
     est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
-    ultima = db.uno("SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (eid,))
-    historial = db.q("""SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
-                        WHERE estudio_id=? ORDER BY a.id DESC""", (eid,))
-    tpl = lambda clase: db.q("SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo", (clase,))
+    ultima = db.uno(SQL_ULTIMA_ETAPA, (eid,))
+    historial = db.q(SQL_HISTORIAL_ESTUDIO, (eid,))
+    tpl = lambda clase: db.q(SQL_TEMPLATES, (clase,))
     pasos = tipo.flujo(solicita)
     traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados())
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
@@ -859,10 +920,13 @@ def marcar_listo(eid, etapa):
     return redirect(request.form.get("volver") or url_for("estudio", eid=eid))
 
 
-def informe_emitido(pid):
-    return db.uno("""SELECT i.id, i.version, i.creado_en, i.comentario, i.estudios, u.iniciales, u.nombre AS generado_por, f.nombre AS firmante
+SQL_INFORME_EMITIDO = """SELECT i.id, i.version, i.creado_en, i.comentario, i.estudios, u.iniciales, u.nombre AS generado_por, f.nombre AS firmante
                      FROM informes_emitidos i LEFT JOIN usuarios u ON u.id=i.usuario_id LEFT JOIN usuarios f ON f.id=i.firmante_id
-                     WHERE i.protocolo_id=?""", (pid,))
+                     WHERE i.protocolo_id=?"""
+
+
+def informe_emitido(pid):
+    return db.uno(SQL_INFORME_EMITIDO, (pid,))
 
 
 def informe_vigente(pid, emitido):
@@ -1626,7 +1690,7 @@ if __name__ == "__main__":
             print("=" * 64)
             print(" MODO DESARROLLO — " + ("recarga automática al guardar" if recarga else "con depurador, SIN recarga (reiniciar tras cambiar un .py)"))
             print(f" Abrir:             http://localhost:{PUERTO}")
-            print(f" Base de datos:     {db.DB_PATH}")
+            print(f" Base de datos:     {db.DESCRIPCION}")
             print("=" * 64)
         app.run(host="127.0.0.1", port=PUERTO, debug=True, use_reloader=recarga)
         raise SystemExit
@@ -1637,7 +1701,7 @@ if __name__ == "__main__":
     print(f" En esta PC:        http://localhost:{PUERTO}")
     for ip in ips_locales():
         print(f" Desde otras PCs:   http://{ip}:{PUERTO}")
-    print(f" Base de datos:     {db.DB_PATH}")
+    print(f" Base de datos:     {db.DESCRIPCION}")
     print(" Para detenerlo: cerrar esta ventana.")
     print("=" * 64)
     serve(app, host="0.0.0.0", port=PUERTO, threads=12)
