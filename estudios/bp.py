@@ -15,6 +15,7 @@ class Biopsia(Estudio):
     etiqueta_responsable = "Médico firmante"
     etiqueta_cantidad = "frascos"
     lotes = ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "HPM"]
+    tacos_por_lote = 120
 
 
 ESTUDIO = Biopsia()

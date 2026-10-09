@@ -7,11 +7,13 @@
   {% if l.cerrado %}<span class="chip cerrado">Cerrado</span>{% else %}<span class="chip activo">Abierto</span>{% endif %}</h1>
 <p class="muted">Fecha {{ l.fecha | f }} · creado {{ l.creado_en | fh }} por {{ l.creador or '?' }}
   {% if l.cerrado %} · cerrado {{ l.cerrado_en | fh }} por {{ l.cerrador or '?' }}{% endif %} · {{ estudios | length }} estudio(s)</p>
+{% if capacidad %}<p><b>{{ tacos_total }} / {{ capacidad }} tacos</b>{% if tacos_total >= capacidad %} <span class="chip anulado">Completo</span>{% endif %}
+  {% if sin_dato %}<span class="lt">· {{ sin_dato }} estudio(s) sin cantidad de tacos cargada para su órgano en este tipo de lote</span>{% endif %}</p>{% endif %}
 
 <div class="cols">
 <div>
   <table>
-    <tr><th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Estado</th><th class="no-imprimir"></th></tr>
+    <tr><th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Tacos</th><th>Estado</th><th class="no-imprimir"></th></tr>
     {% for c in estudios %}
     <tr class="{{ 'bloqueado' if c.anulado }}">
       <td class="muted">{{ loop.index }}</td>
@@ -19,6 +21,7 @@
       <td><a href="{{ url_for('estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
+      <td>{{ c.tacos if c.tacos is not none else '' }}</td>
       <td><span class="chip {{ 'anulado' if c.anulado else ('informado' if not c.proxima) }}">{{ c.estado }}</span></td>
       <td class="no-imprimir">{% if not l.cerrado and puede('lotes_armar') and (loop.first or estudios[loop.index0 - 1].protocolo_id != c.protocolo_id) %}
         <form method="post" action="{{ url_for('lote_quitar', lote_id=l.id, eid=c.id) }}" data-confirmar="¿Quitar el protocolo {{ c.numero }} del lote?">
@@ -26,7 +29,7 @@
       {% endif %}</td>
     </tr>
     {% else %}
-    <tr><td colspan="7" class="muted">El lote todavía no tiene estudios.</td></tr>
+    <tr><td colspan="8" class="muted">El lote todavía no tiene estudios.</td></tr>
     {% endfor %}
   </table>
   {% if l.observaciones %}<p><b>Observaciones:</b> {{ l.observaciones }}</p>{% endif %}

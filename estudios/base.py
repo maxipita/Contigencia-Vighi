@@ -47,6 +47,7 @@ class Estudio:
     bethesda = False
     lotes = []
     lote_por_citotecnico = False
+    tacos_por_lote = None
 
     def flujo(self, solicita_ihq=False):
         claves = self.pasos + (self.pasos_ihq if solicita_ihq else [])

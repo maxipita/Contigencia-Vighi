@@ -7,16 +7,17 @@
 <div class="cols">
 <div>
   <table>
-    <tr><th>Lote</th><th>Estudios</th><th>Creado</th><th>Estado</th></tr>
+    <tr><th>Lote</th><th>Estudios</th><th>Tacos</th><th>Creado</th><th>Estado</th></tr>
     {% for l in lotes %}
     <tr>
       <td><a href="{{ url_for('lote', lote_id=l.id) }}"><b>{{ l.codigo }}</b></a></td>
       <td>{{ l.cantidad }}</td>
+      <td>{% if l.tipo_lote in lotes_bp %}{% set total = tacos[l.id][0] if l.id in tacos else 0 %}<b>{{ total }}</b> <span class="muted">/ {{ capacidad }}</span>{% if total >= capacidad %} <span class="chip anulado">Completo</span>{% endif %}{% endif %}</td>
       <td class="muted">{{ l.creado_en | fh }} · {{ l.creador or '' }}</td>
       <td>{% if l.cerrado %}<span class="chip cerrado">Cerrado</span>{% else %}<span class="chip activo">Abierto</span>{% endif %}</td>
     </tr>
     {% else %}
-    <tr><td colspan="4" class="muted">No hay lotes {{ 'hoy todavía' if es_hoy else 'ese día' }}.</td></tr>
+    <tr><td colspan="5" class="muted">No hay lotes {{ 'hoy todavía' if es_hoy else 'ese día' }}.</td></tr>
     {% endfor %}
   </table>
 </div>

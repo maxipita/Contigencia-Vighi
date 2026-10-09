@@ -1,0 +1,1457 @@
+[
+  {
+    "organo": "Adenoides",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Adenoides",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Adenoides",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Amigdala",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Amigdala",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Amigdala",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Anexo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Anexo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Anexo",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Anexohisterectomia total",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Anexohisterectomia total",
+    "tipo_lote": "NO ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Anexohisterectomia total",
+    "tipo_lote": "ONCO",
+    "tacos": 10
+  },
+  {
+    "organo": "Ano",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ano",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ano",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Apéndice",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Apéndice",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Apéndice",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Arteria",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Arteria",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Arteria",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Arteria Temporal",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Arteria Temporal",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Arteria Temporal",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Articulacion",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Articulacion",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Articulacion",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Axila",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Axila",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Axila",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Bazo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Bazo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Bazo",
+    "tipo_lote": "ONCO",
+    "tacos": 3
+  },
+  {
+    "organo": "Boca",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Boca",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Boca",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Bronquio",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Bronquio",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Bronquio",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cartilago",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cartilago",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cartilago",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cavidad Oral",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cavidad Oral",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cavidad Oral",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cerebro",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cerebro",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Cerebro",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Colon",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Colon",
+    "tipo_lote": "NO ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Colon",
+    "tipo_lote": "ONCO",
+    "tacos": 8
+  },
+  {
+    "organo": "Cuello",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuello",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuello",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuello Uterino",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuello Uterino",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Cuello Uterino",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Cuerdas Vocales",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuerdas Vocales",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuerdas Vocales",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuerpos Libres Intraaarticulares",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuerpos Libres Intraaarticulares",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Cuerpos Libres Intraaarticulares",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Deferentes",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Deferentes",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Deferentes",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Discos Intervertebrales",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Discos Intervertebrales",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Discos Intervertebrales",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Duodeno",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Duodeno",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Duodeno",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Endometrio",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Endometrio",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Endometrio",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epididimo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epididimo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epididimo",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epiplon",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epiplon",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Epiplon",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Escroto",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Escroto",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Escroto",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Estómago",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Estómago",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Estómago",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Esófago",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Esófago",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Esófago",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Faringe",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Faringe",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Faringe",
+    "tipo_lote": "ONCO",
+    "tacos": 8
+  },
+  {
+    "organo": "Feto",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Feto",
+    "tipo_lote": "NO ONCO",
+    "tacos": 15
+  },
+  {
+    "organo": "Feto",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Ganglio Axilar",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Axilar",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Axilar",
+    "tipo_lote": "ONCO",
+    "tacos": 3
+  },
+  {
+    "organo": "Ganglio Centinela",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Centinela",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Centinela",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Linfático",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Linfático",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglio Linfático",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Ganglios",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglios",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ganglios",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glande",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glande",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glande",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Glandula Submaxilar",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glandula Submaxilar",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glandula Submaxilar",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Glándula Parótida",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándula Parótida",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Glándula Parótida",
+    "tipo_lote": "ONCO",
+    "tacos": 3
+  },
+  {
+    "organo": "Glándulas Paratiroides",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándulas Paratiroides",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Glándulas Paratiroides",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Glándulas Salivales",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándulas Salivales",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Glándulas Salivales",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Glándulas Sublingual",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándulas Sublingual",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándulas Sublingual",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Glándulas Tiroides",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Glándulas Tiroides",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Glándulas Tiroides",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Hipófisis",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hipófisis",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hipófisis",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Hueso",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hueso",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hueso",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Hígado",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hígado",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Hígado",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Intestino",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Intestino",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Intestino",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Intestino Delgado",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Intestino Delgado",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Intestino Delgado",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Intraoperatoria",
+    "tipo_lote": "ENDO",
+    "tacos": 0
+  },
+  {
+    "organo": "Intraoperatoria",
+    "tipo_lote": "NO ONCO",
+    "tacos": 0
+  },
+  {
+    "organo": "Intraoperatoria",
+    "tipo_lote": "ONCO",
+    "tacos": 0
+  },
+  {
+    "organo": "Laringe",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Laringe",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Laringe",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Lengua",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Lengua",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Lengua",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Ligamentos",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ligamentos",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ligamentos",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mama",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mama",
+    "tipo_lote": "NO ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Mama",
+    "tipo_lote": "ONCO",
+    "tacos": 10
+  },
+  {
+    "organo": "Mama Masculina",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mama Masculina",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mama Masculina",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mango Vaginal",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mango Vaginal",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mango Vaginal",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mediastino",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mediastino",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mediastino",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Mejilla",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mejilla",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Mejilla",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Menisco",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Menisco",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Menisco",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Médula Osea",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Médula Osea",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Médula Osea",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Músculo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Músculo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Músculo",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Nariz",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Nariz",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Nariz",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Nervio",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Nervio",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Nervio",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Oido",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Oido",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Oido",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Ojo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ojo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ojo",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Ovario",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ovario",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Ovario",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Pancreas",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pancreas",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Pancreas",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Parametrios",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Parametrios",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Parametrios",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pene",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pene",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pene",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Pericardio",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pericardio",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pericardio",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Peritoneo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Peritoneo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Peritoneo",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Piel",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Piel",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Piel",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Pleura",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pleura",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pleura",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Prostata",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Prostata",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Prostata",
+    "tipo_lote": "ONCO",
+    "tacos": 20
+  },
+  {
+    "organo": "Pulmon",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Pulmon",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Pulmon",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Recto",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Recto",
+    "tipo_lote": "NO ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Recto",
+    "tipo_lote": "ONCO",
+    "tacos": 8
+  },
+  {
+    "organo": "Riñon",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Riñon",
+    "tipo_lote": "NO ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Riñon",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Sinovial",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Sinovial",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Sinovial",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Sistema Pielocalicial",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Sistema Pielocalicial",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Sistema Pielocalicial",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Suprarenales",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Suprarenales",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Suprarenales",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Taco en consulta",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Taco en consulta",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Taco en consulta",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Tejidos Blandos",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Tejidos Blandos",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Tejidos Blandos",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Testiculo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Testiculo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Testiculo",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Testículos",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Testículos",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Testículos",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Timo",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Timo",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Timo",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Traquea",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Traquea",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Traquea",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Trompa",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Trompa",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Trompa",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Ureter",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ureter",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Ureter",
+    "tipo_lote": "ONCO",
+    "tacos": 5
+  },
+  {
+    "organo": "Uretra",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Uretra",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Uretra",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Utero",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Utero",
+    "tipo_lote": "NO ONCO",
+    "tacos": 3
+  },
+  {
+    "organo": "Utero",
+    "tipo_lote": "ONCO",
+    "tacos": 8
+  },
+  {
+    "organo": "Vaciamiento Linfático",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vaciamiento Linfático",
+    "tipo_lote": "NO ONCO",
+    "tacos": 3
+  },
+  {
+    "organo": "Vaciamiento Linfático",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Vagina",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vagina",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vagina",
+    "tipo_lote": "ONCO",
+    "tacos": 4
+  },
+  {
+    "organo": "Vejiga",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vejiga",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vejiga",
+    "tipo_lote": "ONCO",
+    "tacos": 6
+  },
+  {
+    "organo": "Vesícula",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vesícula",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vesícula",
+    "tipo_lote": "ONCO",
+    "tacos": 2
+  },
+  {
+    "organo": "Vesícula Seminal",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vesícula Seminal",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vesícula Seminal",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vulva",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vulva",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Vulva",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Válvula Aortica",
+    "tipo_lote": "ENDO",
+    "tacos": 1
+  },
+  {
+    "organo": "Válvula Aortica",
+    "tipo_lote": "NO ONCO",
+    "tacos": 1
+  },
+  {
+    "organo": "Válvula Aortica",
+    "tipo_lote": "ONCO",
+    "tacos": 1
+  }
+]

@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 from flask import g
@@ -104,6 +105,10 @@ CREATE TABLE IF NOT EXISTS catalogo (
     tipo VARCHAR(3) NOT NULL, categoria VARCHAR(40), subcategoria VARCHAR(60),
     sitio VARCHAR(80), tipo_muestra VARCHAR(80)
 );
+CREATE TABLE IF NOT EXISTS tacos_organo (
+    organo VARCHAR(80) NOT NULL, tipo_lote VARCHAR(20) NOT NULL, tacos INTEGER NOT NULL,
+    PRIMARY KEY (organo, tipo_lote)
+);
 CREATE TABLE IF NOT EXISTS listas (nombre VARCHAR(30) NOT NULL, orden INTEGER, valor VARCHAR(80));
 CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,7 +196,7 @@ def cerrar(_=None):
         c.close()
 
 
-REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles")
+REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo")
 VIGENCIA_REFERENCIA = 120
 _fijas = {}
 
@@ -328,6 +333,9 @@ def inicializar():
         c.executemany("INSERT INTO catalogo VALUES (?,?,?,?,?)",
                       [(x["tipo"], x["categoria"], x["subcategoria"], x["sitio"], x["tipo_muestra"])
                        for x in cargar("catalogo.json")])
+    if not c.execute("SELECT 1 FROM tacos_organo LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "tacos_organo.json")):
+        c.executemany("INSERT INTO tacos_organo (organo, tipo_lote, tacos) VALUES (?,?,?)",
+                      [(x["organo"], x["tipo_lote"], x["tacos"]) for x in cargar("tacos_organo.json")])
     if not c.execute("SELECT 1 FROM listas LIMIT 1").fetchone():
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [(n, i, v) for n, vals in cargar("listas.json").items() for i, v in enumerate(vals)])
@@ -367,6 +375,16 @@ def _bloquear(c, nombre="etiquetas"):
             c.execute("DELETE FROM bloqueos WHERE nombre=? AND vence<?", (nombre, ahora_))
             time.sleep(0.2)
     raise RuntimeError("Otra PC está confirmando etiquetas. Probá de nuevo en unos segundos.")
+
+
+@contextmanager
+def bloqueo(nombre):
+    c = con()
+    _bloquear(c, nombre)
+    try:
+        yield
+    finally:
+        c.execute("DELETE FROM bloqueos WHERE nombre=?", (nombre,))
 
 
 def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, params_json, usuario_id, borradores=None, etiquetados=None):

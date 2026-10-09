@@ -51,6 +51,15 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   **El lote es del protocolo, no de cada estudio:** lo marca el **primer flujo** (el primer estudio cargado) y todos los estudios del protocolo van en ese mismo
   lote. Un protocolo de biopsia con una citología agregada queda en el lote de biopsias; no hay lotes compuestos. En el formulario el lote se elige en el primer
   estudio; en la pantalla del lote se agrega o se quita el protocolo completo.
+  **Tacos (lotes de biopsias):** cada lote de ENDO, NO ONCO u ONCO admite hasta **120 tacos**. Los tacos de un estudio dependen del **órgano y del tipo de lote** en que está (el mismo órgano ocupa
+  distinta cantidad en ENDO, NO ONCO u ONCO) y se multiplican por la cantidad de frascos. La tabla sale de la planilla `TACOS POR LOTE MACRO.xlsx`; donde un órgano tiene varios valores en el mismo lote (por ejemplo
+  Mama o Próstata en ONCO, según el procedimiento) se usa el **mayor**. El lote muestra su contador (*87 / 120 tacos*, también en la lista de lotes y en cada estudio). Cuando se **completa** un protocolo
+  (o se agrega o edita un estudio) y el lote se pasaría de 120, el protocolo pasa solo al primer lote **del mismo tipo y del mismo día** que tenga lugar (o a uno nuevo) y el sistema avisa; el protocolo siempre va
+  entero en un lote. Si un protocolo solo ya supera 120, queda solo en un lote nuevo. Los lotes cerrados no se tocan y, si alguien agrega un protocolo a mano a un lote que se pasa, solo se avisa. Los órganos
+  sin dato de tacos para ese tipo de lote cuentan 0 y el lote avisa cuántos estudios quedaron así. **Cargar o corregir la tabla:** `py cargar_tacos.py <planilla>` con la planilla de Excel original o con un CSV
+  (`organo;ENDO;NO ONCO;ONCO`, un valor por celda); muestra qué va a guardar, pide escribir `SI`, suma o corrige lo cargado y lo deja en la base y en `seed/tacos_organo.json`. Los órganos del sistema que no están
+  en la planilla quedan en `organos_sin_tacos.csv` para completar y volver a cargar. Los nombres de la planilla que no coinciden con un órgano del sistema (por ejemplo "Prostata RTU") se traducen con
+  `seed/alias_organos.json`.
 - **Tablero:** una fila por estudio: pendientes, informados, sin cargar al sistema; filtros y búsqueda (por tipo de estudio, sector, **etapa** y semáforo).
   Arriba de la tabla está el **semáforo total**: cuántos estudios hay On time, Delayed y Late; se recalcula con los filtros (tipo, sector, etapa, pestaña y búsqueda)
   y sus cuadros sirven para filtrar por semáforo (otro clic en el elegido lo quita). Al elegir uno, los totales siguen mostrando los tres de lo que se está viendo.

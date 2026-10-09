@@ -1,0 +1,20 @@
+{
+  "Hígado Puncion Bp": ["Hígado"],
+  "Mama Puncion Biopsia": ["Mama"],
+  "Mama BRQ": ["Mama"],
+  "Mama cuadrant": ["Mama"],
+  "Mastectomia": ["Mama"],
+  "Mediastino Puncion Biopsia": ["Mediastino"],
+  "Pene biopsia": ["Pene"],
+  "Piel Punch": ["Piel"],
+  "Prostata Puncion": ["Prostata"],
+  "Prostata Radical": ["Prostata"],
+  "Prostata RTU": ["Prostata"],
+  "Pulmon BTB": ["Pulmon"],
+  "Riñon Puncion Bp": ["Riñon"],
+  "Tejidos Blandos Puncion BP": ["Tejidos Blandos"],
+  "Testiculo": ["Testiculo", "Testículos"],
+  "Testiculo bp fert": ["Testiculo", "Testículos"],
+  "Timo Puncion Bp": ["Timo"],
+  "Glándula Tiroides": ["Glándulas Tiroides"]
+}

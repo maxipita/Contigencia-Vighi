@@ -133,6 +133,14 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   lo aplica a todos y audita una sola línea; `crear_estudio` hereda el del protocolo; solo el primer bloque de los formularios muestra el selector (CSS `.campo-lote`, y
   `sin-lote` en el formulario cuando el estudio no es el primero); `lote_agregar` y `lote_quitar` mueven el protocolo completo y exigen que el tipo de lote sirva al primer
   flujo.
+- **Tacos por lote:** `estudios/bp.py` define `tacos_por_lote = 120` (solo lotes de biopsias). La tabla `tacos_organo (organo, tipo_lote, tacos)` (tabla de referencia, `db.REFERENCIA`) dice cuántos tacos **por frasco** ocupa
+  un órgano en cada tipo de lote (ENDO / NO ONCO / ONCO): `organo` es el `sitio` exacto del catálogo y `tipo_lote` el del lote en que está el estudio, así que el mismo órgano cambia de valor según el lote. `cargar_estudios`
+  la trae como `tacos_muestra` y calcula `tacos` del estudio = frascos (`cantidad`, 1 si no es número) × tacos_muestra (None si no hay dato). `tacos_por` / `tacos_de_lote` / `tacos_de_protocolo` suman en SQL (sin
+  dato = 0 y cuentan `sin_dato`). `ubicar_en_lote(protocolo_id, usuario_id)` corre bajo `db.bloqueo('lotes')` en protocolo nuevo, al completar un borrador, al agregar o editar un estudio y al reactivar uno: si el lote
+  del protocolo (abierto y de biopsias) con sus otros protocolos se pasaría de la capacidad, lo pasa al primer lote abierto del mismo tipo y de hoy con lugar (o crea uno) con `asignar_lote`, deja `lote_lleno` en el
+  historial y `avisar_lote_lleno` lo muestra; un protocolo que solo supera la capacidad no se mueve si ya está solo. `lote_agregar` solo avisa. `cargar_tacos.py` lee el Excel original (bloques "Organo / Tipo lote /
+  Tacos") o un CSV ancho, resuelve los nombres contra los sitios del catálogo (sin tildes ni mayúsculas, más `seed/alias_organos.json` para los que no coinciden), usa el mayor cuando un órgano y lote tienen varios
+  valores, **suma o corrige** (no reemplaza todo), actualiza `seed/tacos_organo.json` (las bases nuevas se siembran de ahí) y escribe `organos_sin_tacos.csv` con los órganos sin ningún dato.
 - **Semáforo:** `trazabilidad.semaforo(limite, ahora, feriados)` da `on_time` (hasta el límite), `delayed` (pasado el límite, antes de 1 día hábil a la misma hora) o `late`.
   `semaforo_acumulado` toma el peor de la etapa en curso y de cada etapa ya completada (incluido el ingreso) contra su propio límite, así el atraso se arrastra aunque las
   etapas siguientes se hagan en término. `cargar_estudios` lo calcula por estudio (`semaforo`, vacío si está informado, anulado o a completar); el estudio lo calcula en su ficha.

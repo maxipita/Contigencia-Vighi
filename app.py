@@ -264,13 +264,65 @@ SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 
 def consultas_estudios(where="1=1", params=(), borradores=False):
     principal = f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
-                            u.iniciales AS responsable, l.codigo AS lote,
+                            u.iniciales AS responsable, l.codigo AS lote, t.tacos AS tacos_muestra,
                             (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos,
                             (SELECT COUNT(*) FROM comentarios c WHERE c.protocolo_id=e.protocolo_id) AS n_comentarios
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
+                     LEFT JOIN tacos_organo t ON t.organo=e.sitio AND t.tipo_lote=l.tipo_lote
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id"""
     return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_TIPOS, ())]
+
+
+def tacos_del_estudio(e):
+    if e["tipo"] != "BP" or e["tacos_muestra"] is None:
+        return None
+    frascos = int(e["cantidad"]) if (e["cantidad"] or "").isdigit() else 1
+    return frascos * e["tacos_muestra"]
+
+
+def sql_tacos(campo):
+    return f"""SELECT e.{campo} AS clave,
+                      SUM((CASE WHEN e.cantidad GLOB '[0-9]*' THEN CAST(e.cantidad AS INTEGER) ELSE 1 END) * COALESCE(t.tacos, 0)) AS tacos,
+                      SUM(CASE WHEN t.tacos IS NULL THEN 1 ELSE 0 END) AS sin_dato
+               FROM estudios e LEFT JOIN lotes l ON l.id=e.lote_id LEFT JOIN tacos_organo t ON t.organo=e.sitio AND t.tipo_lote=l.tipo_lote
+               WHERE e.tipo='BP' AND e.anulado=0 AND e.{campo} IS NOT NULL{{filtro}} GROUP BY e.{campo}"""
+
+
+def tacos_por(campo, valor=None):
+    filas = db.q(sql_tacos(campo).format(filtro="" if valor is None else f" AND e.{campo}=?"), () if valor is None else (valor,))
+    return {f["clave"]: (f["tacos"] or 0, f["sin_dato"] or 0) for f in filas}
+
+
+def tacos_de_lote(lote_id):
+    return tacos_por("lote_id", lote_id).get(lote_id, (0, 0))
+
+
+def tacos_de_protocolo(protocolo_id):
+    return tacos_por("protocolo_id", protocolo_id).get(protocolo_id, (0, 0))
+
+
+def ubicar_en_lote(protocolo_id, usuario_id):
+    capacidad = REGISTRO["BP"].tacos_por_lote
+    with db.bloqueo("lotes"):
+        actual = lote_del_protocolo(protocolo_id)
+        if not actual or actual["cerrado"] or actual["tipo_lote"] not in REGISTRO["BP"].lotes:
+            return None
+        propios = tacos_de_protocolo(protocolo_id)[0]
+        ocupados = tacos_de_lote(actual["id"])[0] - propios
+        if not propios or not ocupados or ocupados + propios <= capacidad:
+            return None
+        destino = next((l for l in db.q("SELECT * FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 AND id<>? ORDER BY numero",
+                                        (actual["tipo_lote"], hoy(), actual["id"])) if tacos_de_lote(l["id"])[0] + propios <= capacidad), None)
+        destino = destino or crear_lote(actual["tipo_lote"], usuario_id)
+        asignar_lote(protocolo_id, destino, usuario_id)
+        db.auditar(usuario_id, protocolo_id, "lote_lleno", f"{actual['codigo']} llegó a {ocupados}/{capacidad} tacos: pasó a {destino['codigo']}")
+        return {"desde": actual["codigo"], "hacia": destino["codigo"], "ocupados": ocupados, "capacidad": capacidad}
+
+
+def avisar_lote_lleno(resultado):
+    if resultado:
+        flash(f"El lote {resultado['desde']} se llenó ({resultado['ocupados']}/{resultado['capacidad']} tacos): el protocolo pasó al lote {resultado['hacia']}.", "ok")
 
 
 def cargar_estudios(where="1=1", params=(), borradores=False):
@@ -297,6 +349,7 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["id"], {})},
                                                          d["vence"], ahora_, fer) if d["vence"] and not f["borrador"] else "")
         d["etiqueta"] = etiqueta(f)
+        d["tacos"] = tacos_del_estudio(f)
         out.append(d)
     return out
 
@@ -575,6 +628,7 @@ def protocolo_nuevo():
             lote = concretar_lote(lote_valor, yo["id"])
             for e in lista:
                 crear_estudio(pid, e, lote, yo["id"])
+            avisar_lote_lleno(ubicar_en_lote(pid, yo["id"]))
             flash(f"Protocolo {p['numero']} ingresado con {len(lista)} estudio(s).", "ok")
             if not numero_emitido(p["numero"]):
                 flash(f"Atención: {p['numero']} no figura en ningún lote de etiquetas confirmado (menú Etiquetas).", "error")
@@ -638,6 +692,7 @@ def protocolo_editar(pid):
             if completo(d, [dict(x) for x in db.q("SELECT cantidad, anulado FROM estudios WHERE protocolo_id=?", (pid,))]):
                 db.ex("UPDATE protocolos SET borrador=0 WHERE id=?", (pid,))
                 db.auditar(yo["id"], pid, "completar", d["numero"])
+                avisar_lote_lleno(ubicar_en_lote(pid, yo["id"]))
                 flash(f"Protocolo {d['numero']} completo.", "ok")
                 return redirect(url_for("protocolo", pid=pid))
             flash("Datos guardados. Para completar el protocolo faltan apellido, nombre y la cantidad de cada estudio.", "ok")
@@ -736,6 +791,7 @@ def estudio_nuevo(pid):
             lote = lote_del_prot if primer_estudio(pid) else concretar_lote(lote_valor, yo["id"])
             for e in lista:
                 crear_estudio(pid, e, lote, yo["id"])
+            avisar_lote_lleno(ubicar_en_lote(pid, yo["id"]))
             flash(f"Se agregó {', '.join(etiqueta(e) for e in lista)} al protocolo {p['numero']}.", "ok")
             return redirect(url_for("protocolo", pid=pid))
     lote_fijo = lote_del_protocolo(pid)
@@ -765,6 +821,7 @@ def estudio_editar(eid):
             db.auditar(yo["id"], p["id"], "editar_estudio", etiqueta(e), eid)
             if es_primero:
                 asignar_lote(p["id"], concretar_lote(lote_valor, yo["id"]), yo["id"])
+            avisar_lote_lleno(ubicar_en_lote(p["id"], yo["id"]))
             flash("Datos del estudio actualizados.", "ok")
             return redirect(url_for("estudio", eid=eid))
     else:
@@ -1100,6 +1157,8 @@ def anular(eid):
         db.ex("UPDATE estudios SET anulado=?, motivo_anulacion=? WHERE id=?", (nuevo, motivo if nuevo else None, eid))
         db.auditar(usuario_actual()["id"], e["protocolo_id"], "anular" if nuevo else "reactivar", motivo, eid)
         flash("Estudio anulado." if nuevo else "Estudio reactivado.", "ok")
+        if not nuevo:
+            avisar_lote_lleno(ubicar_en_lote(e["protocolo_id"], usuario_actual()["id"]))
     return redirect(url_for("estudio", eid=eid))
 
 
@@ -1125,6 +1184,7 @@ def lotes():
                     WHERE l.fecha=? GROUP BY l.id ORDER BY l.cerrado, l.tipo_lote, l.numero""", (fecha_sel,))
     dias = db.q("SELECT fecha, COUNT(*) AS n FROM lotes GROUP BY fecha ORDER BY fecha DESC LIMIT 15")
     return render_template("lotes.html", lotes=filas, fecha_sel=fecha_sel, es_hoy=fecha_sel == hoy(), dias=dias,
+                           tacos=tacos_por("lote_id"), lotes_bp=REGISTRO["BP"].lotes, capacidad=REGISTRO["BP"].tacos_por_lote,
                            grupos_lote=[("Biopsias", tipos_lote("BP")), ("Citologías", tipos_lote("CT")),
                                         ("PAP · citotécnico", tipos_lote("PAP"))])
 
@@ -1164,7 +1224,10 @@ def lote(lote_id):
     primeros = {r["id"] for r in db.q("SELECT MIN(id) AS id FROM estudios WHERE anulado=0 GROUP BY protocolo_id")}
     sin_lote = [x for x in cargar_estudios("e.lote_id IS NULL AND e.anulado=0")
                 if x["id"] in primeros and l["tipo_lote"] in tipos_lote(x["tipo"])][:300]
-    return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote,
+    en_bp = l["tipo_lote"] in REGISTRO["BP"].lotes
+    tacos_total, sin_dato = tacos_de_lote(lote_id) if en_bp else (0, 0)
+    return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
+                           tacos_total=tacos_total, sin_dato=sin_dato,
                            etiquetas_lab=(l["tipo_lote"] in tipos_lote("BP") or l["tipo_lote"] in tipos_lote("PAP"))
                            and any(not x["anulado"] and not x["borrador"] for x in del_lote))
 
@@ -1197,6 +1260,10 @@ def lote_agregar(lote_id):
         previo = lote_del_protocolo(p["id"])
         asignar_lote(p["id"], l, yo["id"])
         flash(f"{p['numero']} agregado al lote" + (f" (estaba en {previo['codigo']})." if previo else "."), "ok")
+        capacidad = REGISTRO["BP"].tacos_por_lote
+        total = tacos_de_lote(lote_id)[0] if l["tipo_lote"] in REGISTRO["BP"].lotes else 0
+        if total > capacidad:
+            flash(f"Atención: el lote {l['codigo']} queda en {total}/{capacidad} tacos.", "error")
     return redirect(url_for("lote", lote_id=lote_id))
 
 
