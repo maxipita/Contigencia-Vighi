@@ -30,7 +30,8 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   estudio está en esa etapa), IHQ, y "Anular estudio" (anula solo ese estudio).
 - **Flujo compartido por tipo de estudio:** el recorrido (macroscopía, procesamiento, microscopía...) es de cada **tipo** dentro del protocolo, no
   de cada estudio. Si un protocolo tiene 4 biopsias, las 4 comparten el mismo recorrido: al completar una etapa se marca en todas a la vez (y
-  al deshacerla, también), pero cada una carga su macroscopía y su diagnóstico, y para completar la etapa tienen que estar cargados los de todas.
+  al deshacerla, también), y la **macroscopía, la microscopía y la IHQ se cargan una sola vez** para todas (son del recorrido, no de cada estudio). La pantalla de uno de esos estudios
+  es la del recorrido completo: lista todos los estudios del tipo y tiene una sola trazabilidad.
   Si tiene una biopsia y una citología, cada una tiene su propio recorrido. Si una biopsia pide IHQ, todo el recorrido de biopsias la incluye.
   Cuando el recorrido de un tipo ya empezó no se puede sumar ni reactivar otro estudio de ese tipo (primero hay que deshacer las etapas).
 - **Informe en PDF:** el informe es **uno por protocolo** y junta todos sus estudios (cada uno con su material, macroscopía, microscopía y

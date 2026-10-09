@@ -27,19 +27,18 @@
 <div class="eyebrow">Estudio</div>
 <p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
-<h1>{{ e.numero }} · {{ etiqueta }}
+<h1>{{ e.numero }} · {{ etiqueta }}{% if miembros | length > 1 %} <span class="chip flujos">{{ miembros | length }} estudios</span>{% endif %}
   <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span> {{ pill(semaforo) }}</h1>
-{% if comparte %}
-<div class="aviso">Este flujo lo comparten {{ comparte | length + 1 }} estudios de {{ tipo.nombre | lower }} de este protocolo
-  ({% for h in comparte %}<a href="{{ url_for('estudio', eid=h.id) }}">{{ h.etiqueta }}</a>{{ ', ' if not loop.last }}{% endfor %}): al completar o deshacer una etapa se marca en todos a la vez.
-  Cada uno carga su propia macroscopía y diagnóstico.</div>
+{% if miembros | length > 1 %}
+<div class="aviso">Los {{ miembros | length }} estudios de {{ tipo.nombre | lower }} de este protocolo tienen <b>un solo flujo</b>: la macroscopía, la microscopía y las etapas se cargan una vez y valen para todos
+  ({% for h in miembros %}{{ h.etiqueta }}{{ ', ' if not loop.last }}{% endfor %}).</div>
 {% endif %}
 {% if puede('informe') and not e.borrador %}
 <p style="margin:-4px 0 12px"><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}#informe">El informe en PDF es del protocolo completo →</a></p>
 {% endif %}
-{% if hermanos | length > 1 %}
+{% if pestanas | length > 1 %}
 <div class="tabs">
-  {% for h in hermanos %}<a href="{{ url_for('estudio', eid=h.id) }}" class="{{ 'activo' if h.id == e.id }}{{ ' bloqueado' if h.anulado }}">{{ h.etiqueta }}</a>{% endfor %}
+  {% for t in pestanas %}<a href="{{ url_for('estudio', eid=t.id) }}" class="{{ 'activo' if t.activa }}{{ ' bloqueado' if t.anulado }}">{{ t.texto }}</a>{% endfor %}
 </div>
 {% endif %}
 {% if e.borrador %}<div class="aviso">Protocolo a completar: faltan los datos del paciente y la cantidad.
@@ -159,34 +158,41 @@
 
 <div>
   <div class="tarjeta">
-    <h2>Estudio</h2>
-    <div class="dato"><b>Lote</b> {% if e.lote_id %}<a href="{{ url_for('lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}</div>
-    {% for rotulo, valor in [("Categoría", e.categoria), ("Muestra", (e.subcategoria or '') ~ ' / ' ~ (e.sitio or '')),
-        ("Tipo de muestra", e.tipo_muestra), ("Cantidad", e.cantidad), ("Citología hormonal", e.citologia_hormonal),
-        (tipo.etiqueta_responsable, e.responsable), ("Médico solicitante", e.medico), ("Cobertura", e.cobertura),
-        ("Observaciones", e.observaciones), ("Anulado por", e.motivo_anulacion)] %}
+    <h2>{{ 'Estudios del flujo' if miembros | length > 1 else 'Estudio' }}</h2>
+    {% for m in miembros %}
+    <div class="miembro{{ ' bloqueado' if m.anulado }}">
+      {% if miembros | length > 1 %}<div class="dato"><b><u>{{ m.etiqueta }}</u></b></div>{% endif %}
+      <div class="dato"><b>Lote</b> {% if m.lote_id %}<a href="{{ url_for('lote', lote_id=m.lote_id) }}">{{ m.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}</div>
+      {% for rotulo, valor in [("Categoría", m.categoria), ("Muestra", (m.subcategoria or '') ~ ' / ' ~ (m.sitio or '')),
+          ("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad), ("Citología hormonal", m.citologia_hormonal),
+          (tipo.etiqueta_responsable, m.responsable), ("Observaciones", m.observaciones), ("Anulado por", m.motivo_anulacion)] %}
+        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
+      {% endfor %}
+      <div class="acciones">
+        {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudio_editar', eid=m.id) }}">Editar estudio</a>{% endif %}
+        {% if puede('estudio_anular') %}
+        <form method="post" action="{{ url_for('anular', eid=m.id) }}" class="en-linea" data-confirmar="{{ '¿Reactivar este estudio?' if m.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          {% if not m.anulado %}<input name="motivo" placeholder="Motivo de anulación">{% endif %}
+          <button class="btn peligro">{{ 'Reactivar estudio' if m.anulado else 'Anular' }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% for rotulo, valor in [("Médico solicitante", e.medico), ("Cobertura", e.cobertura)] %}
       {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
     {% endfor %}
-    <div class="acciones">
-      {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudio_editar', eid=e.id) }}">Editar estudio</a>{% endif %}
-      <a class="btn sec" href="{{ url_for('protocolo', pid=e.protocolo_id) }}">Ver protocolo</a>
-    </div>
+    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolo', pid=e.protocolo_id) }}">Ver protocolo</a></div>
   </div>
 
   {% with pid=e.protocolo_id %}{% include "_comentarios.html" %}{% endwith %}
 
   <div class="tarjeta">
-    <h2>Historial del estudio</h2>
+    <h2>{{ 'Historial del flujo' if miembros | length > 1 else 'Historial del estudio' }}</h2>
     <div class="historial">
       {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
     </div>
-    {% if puede('estudio_anular') %}
-    <form method="post" action="{{ url_for('anular', eid=e.id) }}" class="acciones" data-confirmar="{{ '¿Reactivar este estudio?' if e.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
-      <input type="hidden" name="_csrf" value="{{ csrf }}">
-      {% if not e.anulado %}<input name="motivo" placeholder="Motivo de anulación" style="flex:1">{% endif %}
-      <button class="btn peligro">{{ 'Reactivar estudio' if e.anulado else 'Anular estudio' }}</button>
-    </form>
-    {% endif %}
   </div>
 </div>
 </div>

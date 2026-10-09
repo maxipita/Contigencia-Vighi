@@ -312,3 +312,8 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .semaforo-total a.activo { background: var(--superficie); box-shadow: 0 0 0 2px var(--acento); }
 .filtros.auto button { display: none; }
 .marca small.base-modo { margin-top: 2px; font-weight: 700; color: #7ee2a8; }
+.miembro { padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--borde); }
+.miembro:last-of-type { border-bottom: 0; }
+.miembro .acciones { align-items: center; }
+form.en-linea { display: flex; gap: 6px; flex: 1; min-width: 200px; margin: 0; }
+form.en-linea input { flex: 1; }

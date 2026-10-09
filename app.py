@@ -833,8 +833,10 @@ def estudio_editar(eid):
                            lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **ctx)
 
 
+DUENO = ("(SELECT CASE WHEN d.anulado=1 THEN d.id ELSE (SELECT MIN(x.id) FROM estudios x WHERE x.protocolo_id=d.protocolo_id "
+         "AND x.tipo=d.tipo AND x.anulado=0) END FROM estudios d WHERE d.id=?)")
 SQL_FICHA = """SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
-                         u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote
+                         u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote, """ + DUENO.replace("?", "e.id") + """ AS dueno
                   FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                   LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN usuarios u2 ON u2.id=e.creado_por
                   LEFT JOIN lotes l ON l.id=e.lote_id WHERE e.id=?"""
@@ -842,7 +844,12 @@ SQL_ETAPAS_FICHA = """SELECT x.*, u.iniciales, u.nombre FROM etapas x
                                             JOIN usuarios u ON u.id=x.usuario_id WHERE estudio_id=?"""
 SQL_ULTIMA_ETAPA = "SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1"
 SQL_HISTORIAL_ESTUDIO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
-                        WHERE estudio_id=? ORDER BY a.id DESC"""
+                        WHERE a.estudio_id IN (SELECT x.id FROM estudios x JOIN estudios d ON d.protocolo_id=x.protocolo_id AND d.tipo=x.tipo
+                                               WHERE d.id=? AND (d.anulado=1 AND x.id=d.id OR d.anulado=0 AND x.anulado=0))
+                        ORDER BY a.id DESC"""
+SQL_MACRO = "SELECT * FROM macro WHERE estudio_id=" + DUENO
+SQL_MICRO = "SELECT * FROM micro WHERE estudio_id=" + DUENO
+SQL_IHQ = "SELECT * FROM ihq WHERE estudio_id=" + DUENO
 SQL_TEMPLATES = "SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo"
 SQL_LISTAS = "SELECT nombre, valor FROM listas ORDER BY nombre, orden"
 SQL_PIDE_IHQ = ("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
@@ -850,8 +857,7 @@ SQL_PIDE_IHQ = ("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
 
 
 def consultas_ficha(eid):
-    return [(SQL_FICHA, (eid,)), ("SELECT * FROM macro WHERE estudio_id=?", (eid,)), ("SELECT * FROM micro WHERE estudio_id=?", (eid,)),
-            ("SELECT * FROM ihq WHERE estudio_id=?", (eid,)), (SQL_ETAPAS_FICHA, (eid,))]
+    return [(SQL_FICHA, (eid,)), (SQL_MACRO, (eid,)), (SQL_MICRO, (eid,)), (SQL_IHQ, (eid,)), (SQL_ETAPAS_FICHA, (eid,))]
 
 
 def ficha(eid):
@@ -859,9 +865,9 @@ def ficha(eid):
     e = db.uno(SQL_FICHA, (eid,))
     if not e:
         abort(404)
-    macro = db.uno("SELECT * FROM macro WHERE estudio_id=?", (eid,))
-    micro = db.uno("SELECT * FROM micro WHERE estudio_id=?", (eid,))
-    ihq = db.uno("SELECT * FROM ihq WHERE estudio_id=?", (eid,))
+    macro = db.uno(SQL_MACRO, (eid,))
+    micro = db.uno(SQL_MICRO, (eid,))
+    ihq = db.uno(SQL_IHQ, (eid,))
     etapas = {x["etapa"]: x for x in db.q(SQL_ETAPAS_FICHA, (eid,))}
     solicita = bool(micro and micro["solicita_ihq"]) if e["anulado"] else pide_ihq(e["protocolo_id"], e["tipo"])
     return e, macro, micro, ihq, etapas, solicita
@@ -903,17 +909,26 @@ def estudio(eid):
     traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados())
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
     activos = [h for h in hermanos if not h["anulado"]]
-    comparte = [h for h in activos if h["tipo"] == e["tipo"] and h["id"] != e["id"]]
+    miembros = [h for h in hermanos if h["id"] == e["id"]] if e["anulado"] else [h for h in activos if h["tipo"] == e["tipo"]]
+    pestanas, vistos = [], set()
+    for h in hermanos:
+        if h["anulado"]:
+            pestanas.append({"id": h["id"], "texto": f"{h['etiqueta']} (anulado)", "activa": e["anulado"] and h["id"] == e["id"], "anulado": True})
+        elif h["tipo"] not in vistos:
+            vistos.add(h["tipo"])
+            n = sum(1 for x in activos if x["tipo"] == h["tipo"])
+            pestanas.append({"id": h["id"], "texto": h["etiqueta"] if n == 1 else f"{REGISTRO[h['tipo']].nombre} ({n} estudios)",
+                             "activa": not e["anulado"] and h["tipo"] == e["tipo"], "anulado": False})
     limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados()) if prox and not e["anulado"] and not e["borrador"] else None
     semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
                                                 {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados())
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
-    return render_template("estudio.html", e=e, comparte=comparte, comentarios=comentarios_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudio.html", e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
-                           hermanos=hermanos, etiqueta=etiqueta(e),
+                           hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
                            edita_macro=con_permiso("macro", habilitada(e, etapas, solicita, "macroscopia")),
@@ -937,7 +952,7 @@ def guardar_macro(eid):
         flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
         return redirect(url_for("estudio", eid=eid) + "#macro")
     cas = request.form.get("cassettes", "")
-    guardar_seccion("macro", eid, {"template": request.form.get("template", "").strip(),
+    guardar_seccion("macro", e["dueno"], {"template": request.form.get("template", "").strip(),
                                    "descripcion": request.form.get("descripcion", "").strip(),
                                    "cassettes": int(cas) if cas.isdigit() else None})
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", "", eid)
@@ -957,7 +972,7 @@ def guardar_micro(eid):
         return redirect(url_for("estudio", eid=eid) + "#micro")
     con_ihq = "ihq" in REGISTRO[e["tipo"]].secciones
     pide_ihq = 1 if con_ihq and request.form.get("solicita_ihq") == "1" else 0
-    guardar_seccion("micro", eid, {"template": request.form.get("template", "").strip(),
+    guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(),
                                    "descripcion": request.form.get("descripcion", "").strip(),
                                    "conclusion": request.form.get("conclusion", "").strip(),
                                    "bethesda": request.form.get("bethesda", "").strip(),
@@ -974,7 +989,7 @@ def guardar_micro(eid):
 @requiere_permiso("micro")
 def guardar_ihq(eid):
     e = ficha(eid)[0]
-    guardar_seccion("ihq", eid, {"marcadores": request.form.get("marcadores", "").strip(),
+    guardar_seccion("ihq", e["dueno"], {"marcadores": request.form.get("marcadores", "").strip(),
                                  "resultado": request.form.get("resultado", "").strip()})
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_ihq", "", eid)
     flash("IHQ guardada.", "ok")
@@ -994,15 +1009,7 @@ def marcar_listo(eid, etapa):
     tipo = REGISTRO[e["tipo"]]
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     miembros = miembros_flujo(e)
-    falta = None
-    for m in miembros:
-        if etapa in PASOS_IHQ and not db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (m["id"],)):
-            continue
-        problema = tipo.requisito(etapa, db.uno("SELECT * FROM macro WHERE estudio_id=?", (m["id"],)),
-                                  db.uno("SELECT * FROM micro WHERE estudio_id=?", (m["id"],)), db.uno("SELECT * FROM ihq WHERE estudio_id=?", (m["id"],)))
-        if problema:
-            falta = f"{etiqueta(m)}: {problema}" if len(miembros) > 1 else problema
-            break
+    falta = None if etapa in PASOS_IHQ and not solicita else tipo.requisito(etapa, macro, micro, ihq)
     if not prox or prox[0] != etapa:
         flash("Esa etapa no es la próxima pendiente de este estudio.", "error")
     elif not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
@@ -1079,7 +1086,7 @@ def informe_pdf(pid):
         return redirect(url_for("protocolo", pid=pid))
     pdf = informes.generar_pdf(d)
     previo = db.uno("SELECT i.id, i.version, i.creado_en, u.iniciales FROM informes_emitidos i LEFT JOIN usuarios u ON u.id=i.usuario_id WHERE i.protocolo_id=?", (pid,))
-    campos = (yo["id"], d["medico"]["id"], db.ahora(), d["comentario"], informes.nombre_archivo(d), pdf, ",".join(str(s["eid"]) for s in d["estudios"]))
+    campos = (yo["id"], d["medico"]["id"], db.ahora(), d["comentario"], informes.nombre_archivo(d), pdf, ",".join(str(i) for s in d["estudios"] for i in s["eids"]))
     try:
         if previo:
             db.ex("UPDATE informes_emitidos SET usuario_id=?, firmante_id=?, creado_en=?, comentario=?, archivo=?, pdf=?, estudios=?, version=version+1 WHERE id=?",
@@ -1155,6 +1162,8 @@ def anular(eid):
               "flujo. Primero hay que deshacer las etapas.", "error")
     else:
         db.ex("UPDATE estudios SET anulado=?, motivo_anulacion=? WHERE id=?", (nuevo, motivo if nuevo else None, eid))
+        db.consolidar_diagnosticos(db.con(), e["protocolo_id"], e["tipo"], extra=[eid] if nuevo else [])
+        db.olvidar_cache()
         db.auditar(usuario_actual()["id"], e["protocolo_id"], "anular" if nuevo else "reactivar", motivo, eid)
         flash("Estudio anulado." if nuevo else "Estudio reactivado.", "ok")
         if not nuevo:
@@ -1754,9 +1763,13 @@ def exportar():
             "Bethesda", "Técnicas especiales", "Solicita IHQ", "Marcadores IHQ", "Resultado IHQ"]
            + [f"{NOMBRE_ETAPA[k]} - {x}" for k in orden_etapas for x in ("usuario", "fecha/hora")])
     ws.append(cab)
+    cabecera = {}
+    for r in db.q("SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0 ORDER BY id"):
+        cabecera.setdefault((r["protocolo_id"], r["tipo"]), r["id"])
     for e in cargar_estudios():
         p = protocolos[e["protocolo_id"]]
-        ma, mi, ih, et = macro.get(e["id"]), micro.get(e["id"]), ihq.get(e["id"]), etapas.get(e["id"], {})
+        dueno = e["id"] if e["anulado"] else cabecera.get((e["protocolo_id"], e["tipo"]), e["id"])
+        ma, mi, ih, et = macro.get(dueno), micro.get(dueno), ihq.get(dueno), etapas.get(e["id"], {})
         g = lambda r, k: (r[k] if r else "") or ""
         fila = [p["numero"], e["etiqueta"], e["estado"], e["lote"], "Si" if e["anulado"] else "", p["protocolo_sistema"],
                 "Si" if p["cargado_sistema"] else "No", e["responsable"], fecha_hora(e["creado_en"]),

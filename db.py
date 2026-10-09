@@ -312,6 +312,61 @@ def preparar_esquema(c):
     return antes_de_informes
 
 
+SECCIONES_FLUJO = (("macro", ("template", "descripcion"), ("descripcion",)),
+                   ("micro", ("template", "descripcion", "conclusion", "bethesda", "tecnicas_especiales"), ("descripcion", "conclusion")),
+                   ("ihq", ("marcadores", "resultado"), ("marcadores", "resultado")))
+
+
+def consolidar_diagnosticos(c, protocolo_id=None, tipo=None, extra=()):
+    filtro, par = "", []
+    if protocolo_id is not None:
+        filtro, par = " AND protocolo_id=? AND tipo=?", [protocolo_id, tipo]
+    grupos = {}
+    for r in c.execute(f"SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0{filtro} ORDER BY id", par).fetchall():
+        grupos.setdefault((r["protocolo_id"], r["tipo"]), []).append(r["id"])
+    for ids in grupos.values():
+        cabecera = ids[0]
+        todos = list(ids) + [i for i in extra if i not in ids]
+        if len(todos) < 2:
+            continue
+        marcas = ",".join("?" * len(todos))
+        for tabla, textos, largos in SECCIONES_FLUJO:
+            filas = {r["estudio_id"]: dict(r) for r in c.execute(f"SELECT * FROM {tabla} WHERE estudio_id IN ({marcas})", todos).fetchall()}
+            if not filas or set(filas) == {cabecera}:
+                continue
+            base = dict(filas.get(cabecera) or {})
+            for eid in sorted(filas):
+                if eid == cabecera:
+                    continue
+                otra = filas[eid]
+                if not base:
+                    base = dict(otra)
+                    continue
+                for campo in textos:
+                    nuevo_, actual = (otra.get(campo) or "").strip(), (base.get(campo) or "").strip()
+                    if nuevo_ and nuevo_ != actual:
+                        base[campo] = actual + "\n\n" + nuevo_ if actual and campo in largos else (actual or nuevo_)
+                if tabla == "macro":
+                    base["cassettes"] = (base.get("cassettes") or 0) + (otra.get("cassettes") or 0) or None
+                if tabla == "micro":
+                    base["solicita_ihq"] = max(base.get("solicita_ihq") or 0, otra.get("solicita_ihq") or 0)
+            columnas = [k for k in base if k != "estudio_id"]
+            if cabecera in filas:
+                c.execute(f"UPDATE {tabla} SET {', '.join(k + '=?' for k in columnas)} WHERE estudio_id=?", [base[k] for k in columnas] + [cabecera])
+            else:
+                c.execute(f"INSERT INTO {tabla} (estudio_id, {', '.join(columnas)}) VALUES (?,{','.join('?' * len(columnas))})", [cabecera] + [base[k] for k in columnas])
+            otros = [i for i in filas if i != cabecera]
+            if otros:
+                c.execute(f"DELETE FROM {tabla} WHERE estudio_id IN ({','.join('?' * len(otros))})", otros)
+    c.commit()
+
+
+def flujos_por_consolidar(c):
+    return any(c.execute(f"SELECT 1 FROM {tabla} m JOIN estudios e ON e.id=m.estudio_id WHERE e.anulado=0 AND e.id <> "
+                         "(SELECT MIN(x.id) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.tipo=e.tipo AND x.anulado=0) LIMIT 1").fetchone()
+               for tabla, _, _ in SECCIONES_FLUJO)
+
+
 def inicializar():
     c = _conectar()
     antes_de_informes = preparar_esquema(c)
@@ -362,6 +417,8 @@ def inicializar():
             pid, extra = permisos.perfil_por_sectores(sectores, perfiles)
             c.execute("UPDATE usuarios SET perfil_id=?, permisos_mas=? WHERE id=?", (pid, permisos.texto(extra), uid))
     c.commit()
+    if flujos_por_consolidar(c):
+        consolidar_diagnosticos(c)
     c.close()
 
 

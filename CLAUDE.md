@@ -46,9 +46,13 @@ py app.py                                 # servidor real en :8000 (equivale a "
 - `trazabilidad.py` — fecha límite de cada etapa en días hábiles desde la recolección (plazos de cada estudio, `FERIADOS_2026`),
   para mostrar OT/LT como southernbits. Horario hábil 8–20.
 - `templates/` (Jinja) y `static/` — interfaz. `seed/` — datos iniciales en JSON.
+- **Macro / micro / IHQ por flujo:** también son del flujo (protocolo + tipo), no de cada estudio. Se guardan en el estudio **cabecera** (el activo de menor `id` del tipo; `DUENO` en `app.py` lo
+  resuelve en SQL y `ficha` lo devuelve como `e["dueno"]`) y todas las rutas leen y escriben ahí, así que `/estudio/<id>` de cualquiera de los estudios del tipo muestra y guarda lo mismo. Un estudio
+  anulado conserva sus propios datos. `db.consolidar_diagnosticos` (en el arranque, si `flujos_por_consolidar`, y en `anular` / reactivar) junta en la cabecera lo que haya quedado en otros estudios
+  (concatena textos y suma cassettes). El informe tiene una sección por flujo (`eids` con todos sus estudios) y la exportación a Excel repite en cada estudio lo del flujo.
 - **Flujo compartido:** las etapas (`etapas`) siguen guardadas por `estudio_id`, pero el flujo es de cada **tipo dentro del protocolo**: los
-  estudios activos del mismo tipo (`miembros_flujo`) tienen siempre las mismas etapas. `marcar_listo` las inserta en todos (y exige los requisitos de
-  cada uno: macro / micro / IHQ), `deshacer` las borra en todos, `pide_ihq(protocolo, tipo)` decide si el flujo incluye IHQ (basta con que un estudio
+  estudios activos del mismo tipo (`miembros_flujo`) tienen siempre las mismas etapas. `marcar_listo` las inserta en todos (y exige los requisitos del flujo:
+  macro / micro / IHQ, que son uno solo), `deshacer` las borra en todos, `pide_ihq(protocolo, tipo)` decide si el flujo incluye IHQ (basta con que un estudio
   la pida; `ficha` y `cargar_estudios` lo usan) y `estudio_nuevo` / reactivar rechazan sumar un estudio a un tipo con `flujo_avanzado`. Al arrancar,
   Un tipo distinto en el mismo protocolo es otro flujo, con su propio tracking.
   `protocolo_cerrado(pid)` = todos los estudios activos informados.
