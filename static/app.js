@@ -192,3 +192,15 @@ document.querySelectorAll("form[data-confirmar]").forEach(f =>
     });
   });
 })();
+
+document.querySelectorAll("form.edicion").forEach(function (form) {
+  form.querySelectorAll("[data-editar]").forEach(b => b.addEventListener("click", () => {
+    form.classList.add("editando");
+    const primero = form.querySelector(".editar input, .editar select");
+    if (primero) primero.focus();
+  }));
+  form.querySelectorAll("[data-cancelar]").forEach(b => b.addEventListener("click", () => {
+    form.reset();
+    form.classList.remove("editando");
+  }));
+});

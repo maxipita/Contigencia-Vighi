@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "estudios/_bloque.html" as b with context %}
+{% block titulo %}{{ p.apellido or '' }}{{ ', ' ~ p.nombre if p.nombre }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Paciente</div>
+<h1>{{ p.apellido or '' }}{{ ', ' ~ p.nombre if p.nombre }}{% if p.fecha_nacimiento %} <span class="muted">{{ p.fecha_nacimiento | edad }}</span>{% endif %}</h1>
+{% set editable = puede('protocolo_editar') %}
+<div class="tarjeta">
+  <h2>Datos</h2>
+  <form method="post" action="{{ url_for('paciente_datos', pid=p.id) }}" class="edicion">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <div class="ver">
+      <div class="datos-fila">
+        {% for etiqueta, valor in [("Apellido", p.apellido), ("Nombre", p.nombre), ("DNI", p.dni), ("Nacimiento", p.fecha_nacimiento | f), ("Sexo", p.sexo), ("Cobertura", p.cobertura),
+            ("N° afiliado", p.n_afiliado), ("Exento", p.exento), ("E-mail", p.email), ("Teléfono", p.telefono)] %}
+        {% if valor %}<div class="dato"><div class="muted">{{ etiqueta }}</div><div>{{ valor }}</div></div>{% endif %}
+        {% endfor %}
+      </div>
+      <div class="pie-datos">
+        <span class="muted">Los cambios se aplican a los {{ protocolos | length }} protocolo(s) del paciente.</span>
+        {% if editable %}<button type="button" class="btn" data-editar><svg class="ic"><use href="#i-lapiz"/></svg>Editar datos</button>{% endif %}
+      </div>
+    </div>
+    {% if editable %}
+    <div class="editar">
+      <div class="grilla">
+        <div><label>Apellido</label><input name="apellido" value="{{ p.apellido or '' }}"></div>
+        <div><label>Nombre</label><input name="nombre" value="{{ p.nombre or '' }}"></div>
+        <div><label>DNI</label><input name="dni" value="{{ p.dni or '' }}"></div>
+        <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>
+        <div><label>Sexo</label><select name="sexo">{{ b.opciones(listas.sexo, p.sexo or '') }}</select></div>
+        <div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>
+        <div><label>N° afiliado</label><input name="n_afiliado" value="{{ p.n_afiliado or '' }}"></div>
+        <div><label>Exento</label><select name="exento">{{ b.opciones(['Si', 'No'], p.exento or '') }}</select></div>
+        <div><label>E-mail</label><input type="email" name="email" value="{{ p.email or '' }}"></div>
+        <div><label>Teléfono</label><input name="telefono" value="{{ p.telefono or '' }}"></div>
+      </div>
+      <div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div>
+    </div>
+    {% endif %}
+  </form>
+</div>
+<div class="tarjeta">
+  <h2>Protocolos y estudios ({{ protocolos | length }})</h2>
+  <table>
+    <tr><th>Protocolo</th><th>Recolección</th><th>Médico</th><th>Estudios</th><th>Informe</th></tr>
+    {% for x in protocolos %}
+    <tr class="{{ 'actual' if x.id == origen }}">
+      <td><a href="{{ url_for('protocolo', pid=x.id) }}"><b>#{{ x.numero }}</b></a>{% if (x.apellido or '', x.nombre or '') != (p.apellido or '', p.nombre or '') %}<div class="muted">{{ x.apellido or '' }}{{ ', ' ~ x.nombre if x.nombre }}</div>{% endif %}{% if flujos.get(x.id) %}<div><span class="chip flujos">{{ flujos[x.id] }}</span></div>{% endif %}</td>
+      <td>{{ x.fecha_recoleccion | f }}</td>
+      <td>{{ x.medico or '' }}</td>
+      <td>{% if x.borrador %}<span class="chip">A completar</span>{% endif %}
+        {% for e in estudios.get(x.id, []) %}
+        <div class="{{ 'bloqueado' if e.anulado }}"><a href="{{ url_for('estudio', eid=e.id) }}">{{ e.etiqueta }}</a>
+          <span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
+          {% if e.lote_id %}<a class="muted" href="{{ url_for('lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</div>
+        {% endfor %}</td>
+      <td>{% if informes.get(x.id) and puede('informe') %}<a class="btn sec" href="{{ url_for('informe_ver', iid=informes[x.id]) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Ver informe</a>{% elif informes.get(x.id) %}Emitido{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

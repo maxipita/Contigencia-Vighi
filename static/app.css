@@ -215,6 +215,10 @@ table table { box-shadow: none; }
 .paso .det { font-size: 12px; color: var(--pizarra); }
 .dato { font-size: 13px; }
 .dato b { color: var(--pizarra); font-weight: 400; display: inline-block; min-width: 130px; }
+.datos-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 32px; }
+.datos-fila .dato h2 { margin: 0 0 8px; padding: 0 0 6px; background: none; }
+.datos-fila .dato b { display: inline; min-width: 0; color: var(--texto); font-weight: 600; }
+.datos-fila .dato > div { line-height: 1.6; }
 .bloqueado { opacity: .6; }
 .traza-enc { display: grid; gap: 3px; margin-bottom: 12px; font-size: 13px; }
 .traza-enc b { color: var(--pizarra); font-weight: 400; display: inline-block; min-width: 170px; }
@@ -312,3 +316,14 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .semaforo-total a.activo { background: var(--superficie); box-shadow: 0 0 0 2px var(--acento); }
 .filtros.auto button { display: none; }
 .marca small.base-modo { margin-top: 2px; font-weight: 700; color: #7ee2a8; }
+.edicion .editar { display: none; }
+.edicion.editando .editar { display: block; }
+.edicion.editando .ver { display: none; }
+.edicion .editar label { margin-top: 6px; }
+.edicion .acciones { margin-top: 8px; }
+.lapiz { display: inline-flex; align-items: center; gap: 4px; margin-left: 4px; padding: 1px 8px; font-size: 12px; line-height: 1.5; color: var(--pizarra);
+         background: #fff; border: 1px solid var(--borde); border-radius: 4px; cursor: pointer; text-decoration: none; }
+.lapiz:hover { color: var(--primario); border-color: var(--acento); background: rgba(166, 87, 237, .06); }
+.lapiz .ic { width: 12px; height: 12px; }
+.pie-datos { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.pie-datos .btn { margin-left: auto; }
