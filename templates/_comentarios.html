@@ -1,0 +1,21 @@
+<div class="tarjeta" id="comentarios">
+  <h2>Comentarios del protocolo{% if comentarios %} <span class="muted">({{ comentarios | length }})</span>{% endif %}</h2>
+  <form method="post" action="{{ url_for('comentario_nuevo', pid=pid) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <textarea name="texto" rows="2" maxlength="2000" placeholder="Escribí un comentario para el resto del equipo…" required></textarea>
+    <div class="acciones"><button class="btn sec">Agregar comentario</button></div>
+  </form>
+  <div class="comentarios">
+    {% for c in comentarios %}
+    <div class="comentario">
+      <div class="comentario-cab"><b>{{ c.autor or c.iniciales or '?' }}</b> <span class="muted">{{ c.fecha_hora | fh }}</span>
+        {% if yo and (yo.admin or c.usuario_id == yo.id) %}
+        <form method="post" action="{{ url_for('comentario_borrar', cid=c.id) }}" data-confirmar="¿Borrar este comentario?">
+          <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="enlace" title="Borrar comentario">Borrar</button>
+        </form>
+        {% endif %}</div>
+      <div class="comentario-texto">{{ c.texto }}</div>
+    </div>
+    {% else %}<p class="muted">Todavía no hay comentarios.</p>{% endfor %}
+  </div>
+</div>

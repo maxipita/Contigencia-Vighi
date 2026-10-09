@@ -142,6 +142,7 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   etapas siguientes se hagan en término. `cargar_estudios` lo calcula por estudio (`semaforo`, vacío si está informado, anulado o a completar); el estudio lo calcula en su ficha.
   El umbral de 1 día hábil y los nombres (`SEMAFOROS`) están en `trazabilidad.py` / `app.py`; la pastilla es el macro `templates/_semaforo.html`.
   En el tablero, `por_semaforo` (el semáforo total) se cuenta sobre los estudios que pasan todos los filtros **menos** el de semáforo; el filtro por etapa compara con `proxima[0]`.
+- **Comentarios:** son del **protocolo** (tabla `comentarios`), no del estudio: la tarjeta es el parcial `templates/_comentarios.html`, incluido en la ficha del protocolo y en la de cada estudio, y muestra los mismos. Cualquier usuario con sesión comenta; borra el autor o un admin (no hay permiso propio). `comentario_nuevo` / `comentario_borrar` vuelven a la página de origen (`volver_a_comentarios`) y auditan (`comentario`, `comentario_borrado`). El tablero muestra `n_comentarios` como insignia.
 - **Carga de macro y micro:** solo se puede editar mientras el estudio está en esa etapa (`habilitada`); `con_permiso` suma el permiso del usuario.
 - **Excel de exportación:** una fila por estudio con los datos de su protocolo y sus etapas, para volver a cargarlos en southernbits.
 - **Permisos:** el orden de `PERMISOS` es el orden en la pantalla de perfiles. Los usuarios que ya existían arrancan con el perfil de su sector.

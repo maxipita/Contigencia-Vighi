@@ -265,7 +265,8 @@ SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 def consultas_estudios(where="1=1", params=(), borradores=False):
     principal = f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
                             u.iniciales AS responsable, l.codigo AS lote,
-                            (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos
+                            (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos,
+                            (SELECT COUNT(*) FROM comentarios c WHERE c.protocolo_id=e.protocolo_id) AS n_comentarios
                      FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id"""
@@ -649,10 +650,24 @@ def protocolo_editar(pid):
     return render_template("protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, ultimos=[], **ctx)
 
 
+SQL_COMENTARIOS = """SELECT c.*, u.iniciales, u.nombre AS autor FROM comentarios c LEFT JOIN usuarios u ON u.id=c.usuario_id
+                     WHERE c.protocolo_id=? ORDER BY c.id DESC"""
+
+
+def comentarios_de(pid):
+    return db.q(SQL_COMENTARIOS, (pid,))
+
+
+def volver_a_comentarios(pid):
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolo", pid=pid)
+    return redirect(destino.split("#")[0] + "#comentarios")
+
+
 @app.route("/protocolo/<int:pid>")
 @requiere_login
 def protocolo(pid):
-    db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
+    db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)),
+                   (SQL_COMENTARIOS, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
     p = protocolo_o_404(pid)
     historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
@@ -660,10 +675,42 @@ def protocolo(pid):
     for x in estudios:
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
-    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, emitido=informe_emitido(pid),
+    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, comentarios=comentarios_de(pid),
+                           emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
                            pendientes=pendientes, informe_vigente=informe_vigente(pid, informe_emitido(pid)))
+
+
+@app.route("/protocolo/<int:pid>/comentario", methods=["POST"])
+@requiere_login
+def comentario_nuevo(pid):
+    protocolo_o_404(pid)
+    texto = request.form.get("texto", "").strip()
+    if not texto:
+        flash("Escribí el comentario.", "error")
+    elif len(texto) > 2000:
+        flash("El comentario es demasiado largo (máximo 2000 caracteres).", "error")
+    else:
+        db.ex("INSERT INTO comentarios (protocolo_id, usuario_id, fecha_hora, texto) VALUES (?,?,?,?)",
+              (pid, usuario_actual()["id"], db.ahora(), texto))
+        db.auditar(usuario_actual()["id"], pid, "comentario", texto[:60] + ("…" if len(texto) > 60 else ""))
+        flash("Comentario agregado.", "ok")
+    return volver_a_comentarios(pid)
+
+
+@app.route("/comentario/<int:cid>/borrar", methods=["POST"])
+@requiere_login
+def comentario_borrar(cid):
+    yo = usuario_actual()
+    c = db.uno("SELECT * FROM comentarios WHERE id=?", (cid,)) or abort(404)
+    if c["usuario_id"] != yo["id"] and not yo["admin"]:
+        flash("Solo podés borrar tus propios comentarios.", "error")
+    else:
+        db.ex("DELETE FROM comentarios WHERE id=?", (cid,))
+        db.auditar(yo["id"], c["protocolo_id"], "comentario_borrado", c["texto"][:60] + ("…" if len(c["texto"]) > 60 else ""))
+        flash("Comentario borrado.", "ok")
+    return volver_a_comentarios(c["protocolo_id"])
 
 
 @app.route("/protocolo/<int:pid>/estudio/nuevo", methods=["GET", "POST"])
@@ -788,7 +835,7 @@ def estudio(eid):
                                          (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
     primero = db.uno(SQL_FICHA, (eid,))
     if primero:
-        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
+        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
     tipo = REGISTRO[e["tipo"]]
     est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
@@ -806,7 +853,7 @@ def estudio(eid):
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
-    return render_template("estudio.html", e=e, comparte=comparte, cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudio.html", e=e, comparte=comparte, comentarios=comentarios_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e),

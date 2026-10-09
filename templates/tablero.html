@@ -42,7 +42,7 @@
   <tr><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th><th>Ingresado</th></tr>
   {% for c in estudios %}
   <tr>
-    <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
+    <td><a href="{{ url_for('protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.n_comentarios %} <a class="chip" href="{{ url_for('protocolo', pid=c.protocolo_id) }}#comentarios" title="Comentarios del protocolo">{{ c.n_comentarios }} com.</a>{% endif %}{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
         {% if c.hermanos > 1 %}<div class="muted">{{ c.hermanos }} estudios</div>{% endif %}</td>
     <td><a href="{{ url_for('estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
     <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
