@@ -7,12 +7,18 @@
   {% if l.cerrado %}<span class="chip cerrado">Cerrado</span>{% else %}<span class="chip activo">Abierto</span>{% endif %}</h1>
 <p class="muted">Fecha {{ l.fecha | f }} · creado {{ l.creado_en | fh }} por {{ l.creador or '?' }}
   {% if l.cerrado %} · cerrado {{ l.cerrado_en | fh }} por {{ l.cerrador or '?' }}{% endif %} · {{ estudios | length }} estudio(s)</p>
+<div class="cols cols-lote">
+<div>
 <div class="lote-cabecera">
-{% if capacidad %}<p style="margin:0"><b>{{ tacos_total }} / {{ capacidad }} tacos</b>{% if tacos_total >= capacidad %} <span class="chip anulado">Completo</span>{% endif %}
-  {% if sin_dato %}<span class="lt">· {{ sin_dato }} estudio(s) sin cantidad de tacos cargada para su órgano en este tipo de lote</span>{% endif %}</p>{% endif %}
 <div class="acciones barra-lote no-imprimir">
   <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
   {% if etiquetas_lab and puede('etiquetas_lab') %}<a class="btn sec" href="{{ url_for('etiquetas', lote=l.id) }}">Etiquetas de laboratorio</a>{% endif %}
+  {% if avance and puede('etapas') and (yo.admin or avance.sector in mis_sectores) %}
+  <form method="post" action="{{ url_for('lote_avanzar', lote_id=l.id) }}"
+        data-confirmar="¿Marcar {{ NOMBRE_ETAPA[avance.etapa] }} como completada en los {{ avance.flujos | length }} protocolo(s) del lote {{ l.codigo }}?">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="etapa" value="{{ avance.etapa }}">
+    <button class="btn listo">✔ Avanzar lote: completar {{ NOMBRE_ETAPA[avance.etapa] }}</button></form>
+  {% endif %}
   {% if puede('lotes_cerrar') %}
   <form method="post" action="{{ url_for('lote_cerrar', lote_id=l.id) }}" data-confirmar="{{ '¿Reabrir el lote?' if l.cerrado else '¿Cerrar el lote? Ya no se podrán agregar ni quitar estudios.' }}">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
@@ -23,10 +29,11 @@
     <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn peligro">Eliminar</button></form>
   {% endif %}
 </div>
+{% if capacidad %}<p class="tacos-contador"><b>{{ tacos_total }} / {{ capacidad }} tacos</b>{% if tacos_total >= capacidad %} <span class="chip anulado">Completo</span>{% endif %}</p>
+{% if sin_dato %}<p class="lt aviso-avance">{{ sin_dato }} estudio(s) sin cantidad de tacos cargada para su órgano en este tipo de lote</p>{% endif %}{% endif %}
+{% if sin_avance and puede('etapas') and estudios %}<p class="muted no-imprimir aviso-avance">No se puede avanzar el lote: {{ sin_avance }}</p>{% endif %}
 </div>
 
-<div class="cols">
-<div>
   <table>
     <tr><th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Tacos</th><th>Estado</th><th class="no-imprimir"></th></tr>
     {% for c in estudios %}

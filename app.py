@@ -429,49 +429,83 @@ def tablero():
     yo = usuario_actual()
     f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion")}
     f["ver"] = f["ver"] or "pendientes"
-    todos = cargar_estudios()
-    conteo = {"pendientes": 0, "informados": 0, "sin_cargar": 0}
-    for e in todos:
-        if e["anulado"]:
-            continue
-        if e["proxima"]:
-            conteo["pendientes"] += 1
-        else:
-            conteo["informados"] += 1
-            if not e["cargado_sistema"]:
-                conteo["sin_cargar"] += 1
+    grupos = {}
+    for e in cargar_estudios():
+        grupos.setdefault(e["protocolo_id"], []).append(e)
     mis = set((yo["sectores"] or "").split(","))
+    conteo = {"pendientes": 0, "informados": 0, "sin_cargar": 0}
+    for g in grupos.values():
+        activos = [e for e in g if not e["anulado"]]
+        if any(e["proxima"] for e in activos):
+            conteo["pendientes"] += 1
+        elif activos:
+            conteo["informados"] += 1
+            if not activos[0]["cargado_sistema"]:
+                conteo["sin_cargar"] += 1
 
-    def pasa(e):
+    def del_ver(g):
+        activos = [e for e in g if not e["anulado"]]
+        pendientes = [e for e in activos if e["proxima"]]
+        v = f["ver"]
+        if v == "pendientes":
+            return bool(pendientes)
+        if v == "mios":
+            return any(e["proxima"][2] in mis for e in pendientes)
+        if v == "informados":
+            return bool(activos) and not pendientes
+        if v == "sin_cargar":
+            return bool(activos) and not pendientes and not activos[0]["cargado_sistema"]
+        if v == "anulados":
+            return any(e["anulado"] for e in g)
+        return True
+
+    def estudio_ok(e):
         if f["tipo"] and e["tipo"] != f["tipo"]:
-            return False
-        if f["ver"] == "pendientes" and (e["anulado"] or not e["proxima"]):
-            return False
-        if f["ver"] == "mios" and (e["anulado"] or not e["proxima"] or e["proxima"][2] not in mis):
-            return False
-        if f["ver"] == "informados" and (e["anulado"] or e["proxima"]):
-            return False
-        if f["ver"] == "sin_cargar" and (e["anulado"] or e["proxima"] or e["cargado_sistema"]):
-            return False
-        if f["ver"] == "anulados" and not e["anulado"]:
             return False
         if f["sector"] and not (e["proxima"] and e["proxima"][2] == f["sector"]):
             return False
         if f["etapa"] and not (e["proxima"] and e["proxima"][0] == f["etapa"]):
             return False
-        if f["ubicacion"] and f["ubicacion"] not in (e["lugar_recoleccion"], e["lugar_entrega"]):
-            return False
-        if f["q"]:
-            texto = " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower()
-            return f["q"].lower() in texto
         return True
 
-    visibles = [e for e in todos if pasa(e)]
-    por_semaforo = {k: sum(1 for e in visibles if e["semaforo"] == k) for k in SEMAFOROS}
+    def con_texto(g):
+        q = f["q"].lower()
+        return any(q in " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower() for e in g)
+
+    filas = []
+    for g in grupos.values():
+        if not del_ver(g) or (f["q"] and not con_texto(g)):
+            continue
+        if f["ubicacion"] and f["ubicacion"] not in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]):
+            continue
+        elegidos = [e for e in g if estudio_ok(e)]
+        if f["ver"] == "anulados":
+            vista = [e for e in elegidos if e["anulado"]]
+        elif f["ver"] in ("pendientes", "mios"):
+            vista = [e for e in elegidos if not e["anulado"] and e["proxima"] and (f["ver"] != "mios" or e["proxima"][2] in mis)]
+        else:
+            vista = [e for e in elegidos if not e["anulado"]] or elegidos
+        if not vista:
+            continue
+        primero = g[0]
+        estados = list(dict.fromkeys((e["estado"], SECTORES[e["proxima"][2]] if e["proxima"] else "", bool(e["anulado"]), not e["proxima"]) for e in vista))
+        vencen = [e["vence"] for e in vista if e["vence"]]
+        filas.append({
+            "protocolo_id": primero["protocolo_id"], "numero": primero["numero"], "flujos": primero["flujos"],
+            "n_comentarios": primero.get("n_comentarios"), "estudios": sum(1 for e in g if not e["anulado"]),
+            "apellido": primero["apellido"], "nombre": primero["nombre"], "dni": primero["dni"],
+            "muestras": list(dict.fromkeys((e["subcategoria"] or "", e["tipo_muestra"] or "") for e in vista)),
+            "lote_id": primero["lote_id"], "lote": primero["lote"],
+            "responsables": list(dict.fromkeys(e["responsable"] for e in vista if e["responsable"])),
+            "estados": estados,
+            "semaforo": max((e["semaforo"] for e in vista), key=lambda s: trazabilidad.GRAVEDAD[s or ""]),
+            "vence": min(vencen) if vencen else None,
+            "creado_en": min(e["creado_en"] for e in g)})
+    por_semaforo = {k: sum(1 for r in filas if r["semaforo"] == k) for k in SEMAFOROS}
     if f["semaforo"]:
-        visibles = [e for e in visibles if e["semaforo"] == f["semaforo"]]
-    lugares = sorted({l for e in todos for l in (e["lugar_recoleccion"], e["lugar_entrega"]) if l} | ({f["ubicacion"]} if f["ubicacion"] else set()), key=db.clave_nombre)
-    return render_template("tablero.html", estudios=visibles, f=f, conteo=conteo, por_semaforo=por_semaforo, lugares=lugares,
+        filas = [r for r in filas if r["semaforo"] == f["semaforo"]]
+    lugares = sorted({l for g in grupos.values() for l in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]) if l} | ({f["ubicacion"]} if f["ubicacion"] else set()), key=db.clave_nombre)
+    return render_template("tablero.html", filas=filas, f=f, conteo=conteo, por_semaforo=por_semaforo, lugares=lugares,
                            etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"])
 
 
@@ -1117,7 +1151,7 @@ SQL_HISTORIAL_ESTUDIO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN us
 SQL_MACRO = "SELECT * FROM macro WHERE estudio_id=" + DUENO
 SQL_MICRO = "SELECT * FROM micro WHERE estudio_id=" + DUENO
 SQL_IHQ = "SELECT * FROM ihq WHERE estudio_id=" + DUENO
-SQL_TEMPLATES = "SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo"
+SQL_TEMPLATES = "SELECT id, titulo, tipo_biopsia AS zona, organo, tipo_muestra AS tipo FROM templates WHERE clase=? ORDER BY titulo"
 SQL_LISTAS = "SELECT nombre, valor FROM listas ORDER BY nombre, orden"
 SQL_VARIANTE = ("SELECT (SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
                 "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1) AS ihq, "
@@ -1233,6 +1267,7 @@ def estudio(eid):
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
                            tecnicas_pedidas=sin_repetidos(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";")),
                            lista_ihq=listas().get("ihq_marcadores", []),
+                           filtro_templates={"zona": e["subcategoria"] or "", "organo": e["sitio"] or "", "tipo": e["tipo_muestra"] or ""},
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
                            edita_macro=macro_editable(e, etapas, solicita),
                            decal_cambiable=macro_editable(e, etapas, solicita)[0] and "procesamiento" not in etapas and "decal" not in etapas,
@@ -1359,6 +1394,17 @@ def guardar_ihq(eid):
     return redirect(url_for("estudio", eid=eid) + "#ihq")
 
 
+def motivo_no_listo(yo, tipo, etapa, prox, solicita, macro, micro, ihq, sin_tecnicas):
+    falta = None if etapa in PASOS_IHQ and not solicita else REGISTRO[tipo].requisito(etapa, macro, micro, ihq)
+    if not falta and sin_tecnicas:
+        falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin_tecnicas) + "."
+    if not prox or prox[0] != etapa:
+        return "Esa etapa no es la próxima pendiente de este estudio."
+    if not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
+        return f"La etapa {prox[1]} la marca el sector {SECTORES[prox[2]]}."
+    return falta
+
+
 @app.route("/estudio/<int:eid>/listo/<etapa>", methods=["POST"])
 @requiere_permiso("etapas")
 def marcar_listo(eid, etapa):
@@ -1370,17 +1416,10 @@ def marcar_listo(eid, etapa):
     tipo = REGISTRO[e["tipo"]]
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     miembros = miembros_flujo(e)
-    falta = None if etapa in PASOS_IHQ and not solicita else tipo.requisito(etapa, macro, micro, ihq)
-    if not falta and etapa == "macroscopia" and "macro" in tipo.secciones:
-        sin = estudios_sin_tecnicas(miembros)
-        if sin:
-            falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin) + "."
-    if not prox or prox[0] != etapa:
-        flash("Esa etapa no es la próxima pendiente de este estudio.", "error")
-    elif not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
-        flash(f"La etapa {prox[1]} la marca el sector {SECTORES[prox[2]]}.", "error")
-    elif falta:
-        flash(falta, "error")
+    sin = estudios_sin_tecnicas(miembros) if etapa == "macroscopia" and "macro" in tipo.secciones else []
+    motivo = motivo_no_listo(yo, e["tipo"], etapa, prox, solicita, macro, micro, ihq, sin)
+    if motivo:
+        flash(motivo, "error")
     else:
         ahora_ = db.ahora()
         for m in miembros:
@@ -1589,6 +1628,85 @@ def orden_numero(numero):
     return (m.group(1), int(m.group(2)), m.group(3)) if m else (numero or "", 0, "")
 
 
+def plan_avance(lote_id):
+    return plan_avance_de(cargar_estudios("e.lote_id=?", (lote_id,), borradores=True))
+
+
+def plan_avance_de(estudios):
+    activos = [x for x in estudios if not x["anulado"]]
+    if not activos:
+        return None, "El lote no tiene estudios para avanzar."
+    borradores = sorted({x["numero"] for x in activos if x["borrador"]}, key=orden_numero)
+    if borradores:
+        return None, "Hay protocolos a completar en el lote (" + ", ".join(borradores[:8]) + (", …" if len(borradores) > 8 else "") + "): completalos antes de avanzar."
+    flujos = {}
+    for x in activos:
+        flujos.setdefault((x["protocolo_id"], x["tipo"]), []).append(x)
+    por_etapa = {}
+    for f in flujos.values():
+        por_etapa.setdefault(f[0]["proxima"][0] if f[0]["proxima"] else None, []).append(f)
+    if len(por_etapa) > 1:
+        partes = [f"{NOMBRE_ETAPA[k] if k else 'Informado'}: {len(v)}" for k, v in sorted(por_etapa.items(), key=lambda kv: -len(kv[1]))]
+        return None, "Las muestras del lote no están todas en la misma etapa (" + " · ".join(partes) + ")."
+    etapa = next(iter(por_etapa))
+    if etapa is None:
+        return None, "Todos los estudios del lote ya están informados."
+    return {"etapa": etapa, "flujos": list(flujos.values()), "sector": por_etapa[etapa][0][0]["proxima"][2]}, None
+
+
+@app.route("/lotes/<int:lote_id>/avanzar", methods=["POST"])
+@requiere_permiso("etapas")
+def lote_avanzar(lote_id):
+    yo = usuario_actual()
+    l = lote_o_404(lote_id)
+    destino = url_for("lote", lote_id=lote_id)
+    plan, error = plan_avance(lote_id)
+    if not error and request.form.get("etapa") != plan["etapa"]:
+        error = "El lote cambió de etapa mientras tenías la pantalla abierta: revisá y volvé a intentar."
+    if not error and not yo["admin"] and plan["sector"] not in (yo["sectores"] or "").split(","):
+        error = f"La etapa {NOMBRE_ETAPA[plan['etapa']]} la marca el sector {SECTORES[plan['sector']]}."
+    if error:
+        flash(error, "error")
+        return redirect(destino)
+    etapa = plan["etapa"]
+    db.precargar([(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,)) for t in ("macro", "micro", "ihq")]
+                 + [("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))])
+    por_tabla = {t: {r["estudio_id"]: r for r in db.q(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,))}
+                 for t in ("macro", "micro", "ihq")}
+    con_tecnicas = {r["estudio_id"] for r in db.q("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))}
+    problemas = []
+    for flujo in plan["flujos"]:
+        cabecera = min(m["id"] for m in flujo)
+        primero = flujo[0]
+        sin = [m for m in flujo if m["id"] not in con_tecnicas] if etapa == "macroscopia" and "macro" in REGISTRO[primero["tipo"]].secciones else []
+        motivo = motivo_no_listo(yo, primero["tipo"], etapa, primero["proxima"], Variante(primero["solicita_ihq"], primero["decal"]),
+                                 por_tabla["macro"].get(cabecera), por_tabla["micro"].get(cabecera), por_tabla["ihq"].get(cabecera), sin)
+        if motivo:
+            problemas.append(f"{primero['numero']}: {motivo}")
+    if problemas:
+        flash(f"No se avanzó el lote ({NOMBRE_ETAPA[etapa]}): " + " · ".join(problemas[:6]) + (f" · y {len(problemas) - 6} más" if len(problemas) > 6 else ""), "error")
+        return redirect(destino)
+    ahora_ = db.ahora()
+    estudios = [m for f in plan["flujos"] for m in f]
+    sentencias = []
+    for i in range(0, len(estudios), 25):
+        grupo = estudios[i:i + 25]
+        sentencias.append(("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES " + ",".join(["(?,?,?,?)"] * len(grupo)),
+                           tuple(v for m in grupo for v in (m["id"], etapa, yo["id"], ahora_))))
+    for i in range(0, len(plan["flujos"]), 16):
+        grupo = plan["flujos"][i:i + 16]
+        sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES " + ",".join(["(?,?,?,?,?,?)"] * len(grupo)),
+                           tuple(v for f in grupo for v in (ahora_, yo["id"], f[0]["protocolo_id"], f[0]["id"], "listo",
+                                                            f"{NOMBRE_ETAPA[etapa]} (lote {l['codigo']})"))))
+    try:
+        db.lote_ex(sentencias)
+    except db.IntegrityError:
+        flash("No se avanzó el lote: alguna etapa se registró en el medio. Recargá la pantalla y volvé a intentar.", "error")
+        return redirect(destino)
+    flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']} en {len(plan['flujos'])} protocolo(s) / {len(estudios)} estudio(s) del lote {l['codigo']}.", "ok")
+    return redirect(destino)
+
+
 @app.route("/lotes/<int:lote_id>")
 @requiere_login
 def lote(lote_id):
@@ -1600,7 +1718,8 @@ def lote(lote_id):
                 if x["id"] in primeros and l["tipo_lote"] in tipos_lote(x["tipo"])][:300]
     en_bp = l["tipo_lote"] in REGISTRO["BP"].lotes
     tacos_total, sin_dato = tacos_de_lote(lote_id) if en_bp else (0, 0)
-    return render_template("lote.html", l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
+    avance, sin_avance = plan_avance_de(del_lote)
+    return render_template("lote.html", avance=avance, sin_avance=sin_avance, l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
                            tacos_total=tacos_total, sin_dato=sin_dato,
                            etiquetas_lab=(l["tipo_lote"] in tipos_lote("BP") or l["tipo_lote"] in tipos_lote("PAP"))
                            and any(not x["anulado"] and not x["borrador"] for x in del_lote))
@@ -1699,6 +1818,80 @@ def api_catalogo(tipo):
     for r in db.q("SELECT subcategoria, sitio, tipo_muestra FROM catalogo WHERE tipo=?", (tipo,)):
         arbol.setdefault(r["subcategoria"], {}).setdefault(r["sitio"], []).append(r["tipo_muestra"])
     return jsonify(arbol)
+
+
+def sin_acentos(texto):
+    t = unicodedata.normalize("NFD", texto or "")
+    return " ".join("".join(c for c in t if unicodedata.category(c) != "Mn").lower().split())
+
+
+def tipos_de_muestra_bp():
+    cuentas = {}
+    for r in db.q("SELECT tipo_muestra, COUNT(*) AS n FROM catalogo WHERE tipo='BP' AND tipo_muestra IS NOT NULL AND tipo_muestra<>'' GROUP BY tipo_muestra"):
+        cuentas.setdefault(sin_acentos(r["tipo_muestra"]), []).append((r["n"], r["tipo_muestra"]))
+    return sorted(max(v)[1] for v in cuentas.values())
+
+
+@app.route("/templates", methods=["GET", "POST"])
+@requiere_admin
+def templates_admin():
+    yo = usuario_actual()
+    catalogo = db.q("SELECT DISTINCT subcategoria, sitio FROM catalogo WHERE tipo='BP' ORDER BY subcategoria, sitio")
+    zonas = sorted({r["subcategoria"] for r in catalogo})
+    tipos = tipos_de_muestra_bp()
+    if request.method == "POST":
+        ids = [int(x) for x in request.form.getlist("ids") if x.isdigit()]
+        cambios = {}
+        for campo, columna in (("zona", "tipo_biopsia"), ("organo", "organo"), ("tipo", "tipo_muestra")):
+            valor = request.form.get(campo, "")
+            if valor == "__vaciar__":
+                cambios[columna] = None
+            elif valor:
+                cambios[columna] = valor
+        organo = cambios.get("organo")
+        if organo and "tipo_biopsia" not in cambios:
+            propias = {r["subcategoria"] for r in catalogo if r["sitio"] == organo}
+            if len(propias) == 1:
+                cambios["tipo_biopsia"] = next(iter(propias))
+        if not ids:
+            flash("Marcá al menos un template.", "error")
+        elif not cambios:
+            flash("Elegí qué querés asignar (zona, órgano o tipo).", "error")
+        else:
+            sets = ", ".join(f"{k}=?" for k in cambios)
+            for i in range(0, len(ids), 40):
+                db.lote_ex([(f"UPDATE templates SET {sets} WHERE id=?", tuple(cambios.values()) + (tid,)) for tid in ids[i:i + 40]])
+            db.auditar(yo["id"], None, "templates", f"{len(ids)} templates: " + ", ".join(f"{k}={v or '(vacío)'}" for k, v in cambios.items()))
+            flash(f"Se actualizaron {len(ids)} templates.", "ok")
+        return redirect(url_for("templates_admin", **{k: v for k, v in request.args.items()}))
+    f = {k: request.args.get(k, "") for k in ("clase", "zona", "organo", "tipo", "estado", "q")}
+    where, par = ["1=1"], []
+    if f["clase"] in ("macro", "micro"):
+        where.append("clase=?")
+        par.append(f["clase"])
+    if f["zona"]:
+        where.append("tipo_biopsia=?")
+        par.append(f["zona"])
+    if f["organo"]:
+        where.append("organo=?")
+        par.append(f["organo"])
+    if f["tipo"]:
+        where.append("tipo_muestra=?")
+        par.append(f["tipo"])
+    if f["estado"] == "sin_organo":
+        where.append("(organo IS NULL OR organo='')")
+    elif f["estado"] == "sin_tipo":
+        where.append("(tipo_muestra IS NULL OR tipo_muestra='')")
+    elif f["estado"] == "sin_zona":
+        where.append("(tipo_biopsia IS NULL OR tipo_biopsia='')")
+    if f["q"]:
+        where.append("LOWER(titulo) LIKE ?")
+        par.append("%" + f["q"].lower() + "%")
+    total = db.uno("SELECT COUNT(*) AS n FROM templates")["n"]
+    filas = db.q(f"SELECT id, clase, titulo, tipo_biopsia, organo, tipo_muestra FROM templates WHERE {' AND '.join(where)} ORDER BY clase, titulo LIMIT 400", par)
+    sin_clasificar = db.uno("SELECT COUNT(*) AS n FROM templates WHERE organo IS NULL OR organo=''")["n"]
+    return render_template("templates_admin.html", filas=filas, f=f, zonas=zonas, tipos=tipos, total=total, sin_clasificar=sin_clasificar,
+                           organos=[(z, [r["sitio"] for r in catalogo if r["subcategoria"] == z]) for z in zonas])
 
 
 @app.route("/api/template/<int:tid>")
@@ -2129,6 +2322,22 @@ def etiquetas_cantidad(cantidad):
     return int(cantidad) if (cantidad or "").isdigit() else (1 if cantidad else 0)
 
 
+def tecnicas_por_estudio():
+    out = {}
+    for r in db.q("SELECT estudio_id, numero, cassettes FROM tecnicas ORDER BY id"):
+        out.setdefault(r["estudio_id"], []).append(r)
+    return out
+
+
+def rotulos_cassettes(tecnicas):
+    out = []
+    for t in tecnicas:
+        n = t["cassettes"] or 1
+        numero = (t["numero"] or "").strip()
+        out += [numero] if n == 1 else [f"{numero} {k}/{n}".strip() for k in range(1, n + 1)]
+    return out
+
+
 def etiquetas_casos():
     limite = (datetime.now() - timedelta(days=DIAS_ETIQUETADOS)).strftime("%Y-%m-%d")
     filas = db.q("""SELECT e.id, e.tipo, p.numero, p.apellido, p.nombre, e.cantidad, e.lote_id, l.codigo AS lote,
@@ -2137,12 +2346,15 @@ def etiquetas_casos():
                     LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                     WHERE p.borrador=0 AND e.anulado=0 AND e.tipo IN ('BP','PAP') AND e.cantidad IS NOT NULL AND e.cantidad<>''
                       AND (e.lab_etiquetado_en IS NULL OR e.lab_etiquetado_en >= ?) ORDER BY e.lote_id, e.id""", (limite,))
+    tecnicas = tecnicas_por_estudio()
+    rotulos = {f["id"]: rotulos_cassettes(tecnicas.get(f["id"], [])) if f["tipo"] == "BP" else [] for f in filas}
     return [{"id": f["id"], "estudio": f["tipo"], "protocolo": f["numero"], "apellido": f["apellido"] or "",
-             "nombre": f["nombre"] or "", "cantidad": etiquetas_cantidad(f["cantidad"]), "loteId": f["lote_id"],
+             "nombre": f["nombre"] or "", "cantidad": len(rotulos[f["id"]]) or etiquetas_cantidad(f["cantidad"]),
+             "nros": rotulos[f["id"]], "frascos": etiquetas_cantidad(f["cantidad"]), "loteId": f["lote_id"],
              "loteCodigo": f["lote"] or "", "fechaRec": f["fecha_recoleccion"] or "", "resp": f["resp"] or "",
              "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if f["tipo"] == "PAP" else "",
              "etiquetado": bool(f["lab_etiquetado_en"])}
-            for f in filas]
+            for f in sorted(filas, key=lambda f: (f["lote_id"] or 0, orden_numero(f["numero"]), f["id"]))]
 
 
 def siguiente_libre():
@@ -2250,19 +2462,22 @@ def api_etiquetas_confirmar():
                 LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                 WHERE e.id IN ({','.join('?' * len(ids))})""", ids)}
         items = []
+        tecnicas = tecnicas_por_estudio() if tipo == "lab" else {}
         for i in ids:
             f = filas.get(i)
             if not f or f["anulado"] or f["borrador"] or f["tipo"] != ESTUDIO_LAB[tipo] or not etiquetas_cantidad(f["cantidad"]):
                 return error(f"El protocolo {f['numero'] if f else i} no está listo para {TIPOS_ETIQUETA[tipo]}: "
                              "tiene que estar completo (paciente y cantidad) y ser del estudio que corresponde.")
-            items.append({"casoId": f["id"], "protocolo": f["numero"], "cantidad": etiquetas_cantidad(f["cantidad"]),
+            nros = rotulos_cassettes(tecnicas.get(f["id"], [])) if tipo == "lab" else []
+            items.append({"casoId": f["id"], "protocolo": f["numero"], "cantidad": len(nros) or etiquetas_cantidad(f["cantidad"]),
                           "loteCodigo": f["lote_codigo"] or "", "resp": f["resp"] or "", "fechaRec": f["fecha_recoleccion"] or "",
-                          "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if tipo == "pap" else ""})
+                          "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if tipo == "pap" else "", "nros": nros})
         n, total, por_proto = len(items), sum(i["cantidad"] for i in items), 1
         params = {"items": items}
         por_etiqueta = lambda campo: [i[campo] for i in items for _ in range(i["cantidad"])]
         if tipo == "lab":
             params["patos"] = por_etiqueta("resp")
+            params["nros"] = [x for i in items for x in (i["nros"] + [""] * (i["cantidad"] - len(i["nros"])))]
         else:
             params["muestras"] = por_etiqueta("muestra")
         etiquetados = ids

@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS ihq (
 CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     clase VARCHAR(10) NOT NULL, titulo VARCHAR(120) NOT NULL, tipo_biopsia VARCHAR(40),
-    texto TEXT, conclusion TEXT,
+    texto TEXT, conclusion TEXT, organo VARCHAR(80), tipo_muestra VARCHAR(80),
     UNIQUE (clase, titulo)
 );
 CREATE TABLE IF NOT EXISTS catalogo (
@@ -392,6 +392,8 @@ def preparar_esquema(c):
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
                                    ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
                                    ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
+                                   ("templates", "organo", "VARCHAR(80)"),
+                                   ("templates", "tipo_muestra", "VARCHAR(80)"),
                                    ("ubicaciones", "nombre", "VARCHAR(200)")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")

@@ -378,3 +378,14 @@ table.tecnicas form { margin: 0; }
 fieldset[disabled] .chip-sel { cursor: default; opacity: .6; }
 .otra-tecnica { display: flex; gap: 8px; margin-top: 6px; max-width: 420px; }
 .otra-tecnica input { flex: 1; }
+.lote-cabecera .tacos-contador { margin: 0 0 0 auto; text-align: right; }
+.lote-cabecera .aviso-avance { flex-basis: 100%; margin: 0; }
+.cols-lote > div:first-child { display: contents; }
+.cols-lote > div:first-child > * { grid-column: 1; }
+.cols-lote > div:last-child { grid-column: 2; grid-row: 2 / span 2; }
+@media (max-width: 1000px) { .cols-lote > div:last-child { grid-column: 1; grid-row: auto; } }
+.cols-lote .lote-cabecera { margin: 0; }
+.templates-usados { margin-top: 4px; }
+.templates-usados .lapiz { margin-left: 6px; }
+.filtro-templates { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 6px; }
+.filtro-templates select { width: auto; min-width: 150px; max-width: 230px; }

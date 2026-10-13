@@ -62,16 +62,106 @@ document.querySelectorAll("[data-agregar-estudio]").forEach(btn => btn.addEventL
 document.querySelectorAll("select[data-templates]").forEach(sel => {
   const destino = document.getElementById(sel.dataset.destino);
   const concl = sel.dataset.conclusion ? document.getElementById(sel.dataset.conclusion) : null;
-  let ultimo = sel.value;
+  const guardados = sel.value && !sel.selectedOptions[0].dataset.id ? sel.value : "";
+  const usados = guardados ? guardados.split("; ").filter(Boolean) : [];
+  const oculto = document.createElement("input");
+  oculto.type = "hidden";
+  oculto.name = sel.name;
+  sel.removeAttribute("name");
+  sel.after(oculto);
+  const resumen = document.createElement("div");
+  resumen.className = "muted templates-usados";
+  oculto.after(resumen);
+  [...sel.options].forEach(o => { if (!o.dataset.id && o.value) o.remove(); });
+  sel.value = "";
+  const marcador = sel.options[0];
+  const maestra = [...sel.options].filter(o => o.dataset.id).map(o => o.cloneNode(true));
+  const panel = sel.previousElementSibling && sel.previousElementSibling.classList.contains("filtro-templates") ? sel.previousElementSibling : null;
+  const normTpl = s => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const dibujar = () => {
+    const fz = panel ? normTpl(panel.querySelector('[data-filtro="zona"]').value) : "";
+    const fo = panel ? normTpl(panel.querySelector('[data-filtro="organo"]').value) : "";
+    const ft = panel ? normTpl(panel.querySelector('[data-filtro="tipo"]').value) : "";
+    const coinciden = [], generales = [];
+    maestra.forEach(o => {
+      let excluido = false, coincide = false;
+      for (const [attr, f] of [[o.dataset.zona, fz], [o.dataset.organo, fo], [o.dataset.tipo, ft]]) {
+        const a = normTpl(attr);
+        if (!f || !a) continue;
+        if (a === f) coincide = true; else { excluido = true; break; }
+      }
+      if (!excluido) (coincide ? coinciden : generales).push(o);
+    });
+    sel.innerHTML = "";
+    sel.append(marcador);
+    if (coinciden.length && generales.length) {
+      const g1 = document.createElement("optgroup");
+      g1.label = "Para esta selección";
+      coinciden.forEach(o => g1.append(o.cloneNode(true)));
+      const g2 = document.createElement("optgroup");
+      g2.label = "Generales (sin clasificar)";
+      generales.forEach(o => g2.append(o.cloneNode(true)));
+      sel.append(g1, g2);
+    } else {
+      coinciden.concat(generales).forEach(o => sel.append(o.cloneNode(true)));
+    }
+    sel.value = "";
+    const cuenta = panel && panel.querySelector(".cuenta-templates");
+    if (cuenta) cuenta.textContent = `${coinciden.length + generales.length} de ${maestra.length} templates`;
+  };
+  if (panel) {
+    const fz = panel.querySelector('[data-filtro="zona"]'), fo = panel.querySelector('[data-filtro="organo"]'), ft = panel.querySelector('[data-filtro="tipo"]');
+    const llenar = (select, valores, actual) => {
+      const primero = select.options[0];
+      select.innerHTML = "";
+      select.append(primero);
+      valores.forEach(v => { const op = document.createElement("option"); op.textContent = v; op.value = v; select.append(op); });
+      const coincide = valores.find(v => normTpl(v) === normTpl(actual));
+      select.value = coincide || "";
+    };
+    catalogo(panel.dataset.catalogo).then(arbol => {
+      const zonas = Object.keys(arbol).sort((x, y) => x.localeCompare(y, "es"));
+      const unicos = lista => { const vistos = {}; lista.forEach(v => { const k = normTpl(v); if (k && !vistos[k]) vistos[k] = v; }); return Object.values(vistos).sort((x, y) => x.localeCompare(y, "es")); };
+      const organosDe = z => { const set = new Set(); (z ? [z] : zonas).forEach(k => Object.keys(arbol[k] || {}).forEach(s => set.add(s))); return [...set].sort((x, y) => x.localeCompare(y, "es")); };
+      const tiposDe = (z, o) => { const l = []; (z ? [z] : zonas).forEach(k => Object.entries(arbol[k] || {}).forEach(([s, ts]) => { if (!o || s === o) l.push(...ts); })); return unicos(l); };
+      llenar(fz, zonas, panel.dataset.zona);
+      llenar(fo, organosDe(fz.value), panel.dataset.organo);
+      llenar(ft, tiposDe(fz.value, fo.value), panel.dataset.tipo);
+      dibujar();
+      fz.addEventListener("change", () => { llenar(fo, organosDe(fz.value), ""); llenar(ft, tiposDe(fz.value, ""), ft.value); dibujar(); });
+      fo.addEventListener("change", () => { llenar(ft, tiposDe(fz.value, fo.value), ft.value); dibujar(); });
+      ft.addEventListener("change", dibujar);
+    });
+  }
+  const pintar = () => {
+    oculto.value = usados.join("; ");
+    resumen.textContent = "";
+    if (!usados.length) return;
+    resumen.append("Templates agregados: " + usados.join(" · ") + " ");
+    const limpiar = document.createElement("button");
+    limpiar.type = "button";
+    limpiar.className = "lapiz";
+    limpiar.textContent = "limpiar lista";
+    limpiar.addEventListener("click", () => { usados.length = 0; pintar(); });
+    resumen.append(limpiar);
+  };
+  const sumar = (campo, texto, separador) => {
+    texto = (texto || "").trim();
+    if (!texto) return;
+    const actual = campo.value.replace(/\s+$/, "");
+    campo.value = actual ? actual + separador + texto : texto;
+  };
+  pintar();
   sel.addEventListener("change", async () => {
     const id = sel.selectedOptions[0] && sel.selectedOptions[0].dataset.id;
-    if (!id) { ultimo = sel.value; return; }
+    if (!id) return;
+    const titulo = sel.selectedOptions[0].value;
     const t = await (await fetch(`/api/template/${id}`)).json();
-    const ocupado = destino.value.trim() || (concl && concl.value.trim());
-    if (ocupado && !confirm("Ya hay texto escrito. ¿Reemplazarlo por el del template?")) { sel.value = ultimo; return; }
-    destino.value = t.texto || "";
-    if (concl) concl.value = t.conclusion || "";
-    ultimo = sel.value;
+    sumar(destino, t.texto, "\n\n");
+    if (concl) sumar(concl, t.conclusion, "\n");
+    if (!usados.includes(titulo)) usados.push(titulo);
+    pintar();
+    sel.value = "";
     destino.focus();
   });
 });
