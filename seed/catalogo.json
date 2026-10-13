@@ -1564,20 +1564,6 @@
     "tipo": "BP",
     "categoria": "Biopsias",
     "subcategoria": "Ginecológica",
-    "sitio": "Epiplon",
-    "tipo_muestra": "Reseccion"
-  },
-  {
-    "tipo": "BP",
-    "categoria": "Biopsias",
-    "subcategoria": "Ginecológica",
-    "sitio": "Epiplon",
-    "tipo_muestra": "Reseccion maligna"
-  },
-  {
-    "tipo": "BP",
-    "categoria": "Biopsias",
-    "subcategoria": "Ginecológica",
     "sitio": "Feto",
     "tipo_muestra": "Biopsia"
   },
@@ -1867,13 +1853,6 @@
     "subcategoria": "Ginecológica",
     "sitio": "Taco en consulta",
     "tipo_muestra": "Taco en consulta IMQ"
-  },
-  {
-    "tipo": "BP",
-    "categoria": "Biopsias",
-    "subcategoria": "Ginecológica",
-    "sitio": "Testiculo",
-    "tipo_muestra": "Biopsia Seriada"
   },
   {
     "tipo": "BP",

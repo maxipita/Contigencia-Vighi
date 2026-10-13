@@ -1230,21 +1230,6 @@
     "tacos": 6
   },
   {
-    "organo": "Testiculo",
-    "tipo_lote": "ENDO",
-    "tacos": 1
-  },
-  {
-    "organo": "Testiculo",
-    "tipo_lote": "NO ONCO",
-    "tacos": 1
-  },
-  {
-    "organo": "Testiculo",
-    "tipo_lote": "ONCO",
-    "tacos": 6
-  },
-  {
     "organo": "Testículos",
     "tipo_lote": "ENDO",
     "tacos": 1

@@ -199,7 +199,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     var ESTUDIO = {pap: 'PAP', lab: 'BP'};
     var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;
 
-    var elec = {pato: {}, muestra: {}};
+    var elec = {pato: {}, muestra: {}, nro: {}};
     var seleccion = {};
     var itemsFijos = null;
     var loteActual = null;
@@ -261,8 +261,9 @@ window.ETIQUETAS = {{ datos|tojson }};
         var html = '';
         d.pos.forEach(function (p) {
             var pa = (elec.pato[p.key] !== undefined ? elec.pato[p.key] : p.item.resp) || '';
+            var nro = (elec.nro[p.key] !== undefined ? elec.nro[p.key] : ((p.item.nros || [])[p.k] || '')) || '';
             html += '<div class="lab-pagina">' +
-                '<div class="lab-l1">' + esc(p.item.protocolo) + '</div>' +
+                '<div class="lab-l1">' + esc(p.item.protocolo) + (nro ? ' · ' + esc(nro) : '') + '</div>' +
                 '<div class="lab-l2">' + (pa ? esc(pa) : '&nbsp;') + '</div>' +
                 '<div class="lab-l3">' + esc(p.item.loteCodigo) + '</div>' +
                 '</div>';
@@ -376,7 +377,7 @@ window.ETIQUETAS = {{ datos|tojson }};
                 : 'Todavía no hay protocolos generados. La primera generación arranca en <b>' + numero(1) + '</b>.') +
                 '<br>Al confirmar se crean los protocolos <b>a completar</b> y quedan asignados al lote abierto de hoy del tipo elegido.';
         }
-        return 'Etiquetas de laboratorio de protocolos que ya tienen paciente y cantidad (una etiqueta por cada unidad de la cantidad). ' +
+        return 'Etiquetas de laboratorio de protocolos que ya tienen paciente y cantidad (una etiqueta por cada frasco o, si ya tienen técnicas cargadas en la macro, una por cada cassette, con el Nro de la técnica). ' +
             'No consumen numeración. Protocolos pendientes de etiquetar: <b>' + pendientes(t) + '</b>.';
     }
     function descripcionLote(b) {
@@ -484,7 +485,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
 
     function reiniciarLab() {
-        itemsFijos = null; elec = {pato: {}, muestra: {}}; seleccion = {};
+        itemsFijos = null; elec = {pato: {}, muestra: {}, nro: {}}; seleccion = {};
     }
     function nuevaGeneracion() {
         loteActual = null;
@@ -502,10 +503,11 @@ window.ETIQUETAS = {{ datos|tojson }};
         reiniciarLab();
         if (b.tipo !== 'bp') {
             itemsFijos = b.params.items.map(function (i) {
-                return {id: i.casoId, protocolo: i.protocolo, cantidad: i.cantidad, loteCodigo: i.loteCodigo, resp: i.resp, fechaRec: i.fechaRec, muestra: i.muestra};
+                return {id: i.casoId, protocolo: i.protocolo, cantidad: i.cantidad, loteCodigo: i.loteCodigo, resp: i.resp, fechaRec: i.fechaRec, muestra: i.muestra, nros: i.nros || []};
             });
             posicionesDe(itemsFijos).forEach(function (p, i) {
                 elec.pato[p.key] = (b.params.patos || [])[i] || '';
+                elec.nro[p.key] = (b.params.nros || [])[i] || '';
                 elec.muestra[p.key] = (b.params.muestras || [])[i] || '';
             });
         }
@@ -537,7 +539,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     function posicionesDe(items) {
         var pos = [];
         items.forEach(function (it) {
-            for (var k = 0; k < it.cantidad; k++) pos.push({item: it, key: it.id + ':' + k});
+            for (var k = 0; k < it.cantidad; k++) pos.push({item: it, key: it.id + ':' + k, k: k});
         });
         return pos;
     }

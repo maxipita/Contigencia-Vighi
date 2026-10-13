@@ -32,6 +32,18 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   estudio está en esa etapa), IHQ, y "Anular estudio" (anula solo ese estudio).
 - **Listados (administrador, menú Más → Listados):** se cargan, uno por línea, las **técnicas especiales** y los **marcadores de IHQ**. Las técnicas especiales se tildan al agregar o editar un estudio de
   biopsia o citología (y se ven en la ficha del estudio); ahí mismo, **"Otra técnica…"** suma una que no esté: queda en el estudio y se agrega sola al listado para los siguientes y llegan ya cargadas a la microscopía (ahí solo se ven, no se eligen de nuevo); los marcadores se eligen al cargar la IHQ de la biopsia cuando el diagnóstico la solicita.
+- **Avanzar un lote completo:** en la pantalla del lote, el botón **✔ Avanzar lote: completar <etapa>** marca la etapa pendiente en todos sus protocolos de una sola vez. Solo se ofrece si **todas** las muestras están en la misma
+  etapa (si no, la pantalla dice cuántas hay en cada una), si no hay protocolos a completar y si cada flujo cumple lo que pide esa etapa (por ejemplo macro y técnicas cargadas en macroscopía, diagnóstico en microscopía). Es todo o nada:
+  si algún protocolo no cumple, no se avanza ninguno y se indica cuál falta. Respeta los sectores como el botón de cada estudio, y deja una línea en el historial de cada protocolo.
+- **Varios templates en la macro y la micro:** al elegir un template se **suma** al texto que ya está (separado por una línea en blanco; la conclusión, en una línea nueva) en vez de reemplazarlo, así se pueden usar varios cuando el caso
+  tiene más de una muestra. Debajo del selector queda la lista de los templates agregados (con "limpiar lista"); el texto se puede seguir editando a mano.
+- **Tablero:** una fila por **protocolo** (con la cantidad de estudios). Si sus flujos están en estados distintos, la celda de Estado muestra uno debajo del otro; el semáforo es el peor de ellos y "Vence" la fecha más próxima. Para ver cada
+  estudio se entra al protocolo. Los contadores de las pestañas cuentan protocolos.
+- **Etiquetas de laboratorio y técnicas:** las etiquetas de BP-Laboratorio salen una por frasco; si el estudio ya tiene técnicas cargadas en la macro, salen **una por cada cassette** y llevan el Nro de la técnica junto al N° de protocolo
+  (por ejemplo "C000001 · A", o "A 1/2" y "A 2/2" cuando una técnica tiene dos cassettes).
+- **Templates por órgano y tipo (administrador, Más → Templates):** cada template de macro y micro puede tener **zona del cuerpo, órgano y tipo de muestra**. En la pantalla se filtra por esos datos, se marcan varios y se les asigna de una vez.
+  Al informar, el selector de templates de la macro y la micro trae tres filtros (zona, órgano, tipo) ya puestos con los datos del estudio: primero salen los templates de esa selección y después los generales (sin clasificar);
+  se pueden cambiar o vaciar los filtros para ver todos.
 - **Macro > Decal (biopsias):** en la tarjeta de Macroscopía hay un condicional **"Macro > Decal"**. Si se tilda, el tracking suma la etapa **Decalcificación** (sector Laboratorio) entre la macroscopía y el procesamiento, y las
   fechas límite de las etapas siguientes se corren un día hábil. Se puede tildar o destildar mientras el estudio no haya pasado por la decalcificación ni el procesamiento (si ya pasó, hay que deshacer esas etapas).
 - **Técnicas (biopsias):** antes de la macroscopía, la ficha del estudio tiene la tarjeta **Técnicas**: por cada estudio del flujo se registra el número (Nro), los fragmentos, si la inclusión

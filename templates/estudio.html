@@ -20,10 +20,16 @@
   {% if lista %}<div class="chips" data-chips="{{ destino }}">{% for x in lista %}<button type="button" class="chip-sel" data-valor="{{ x }}">{{ x }}</button>{% endfor %}</div>{% endif %}
 {% endmacro %}
 {% macro select_template(lista, actual, destino, conclusion='') %}
+  <div class="filtro-templates" data-catalogo="BP" data-zona="{{ filtro_templates.zona }}" data-organo="{{ filtro_templates.organo }}" data-tipo="{{ filtro_templates.tipo }}">
+    <select data-filtro="zona" title="Zona del cuerpo"><option value="">Todas las zonas</option></select>
+    <select data-filtro="organo" title="Órgano"><option value="">Todos los órganos</option></select>
+    <select data-filtro="tipo" title="Tipo de muestra"><option value="">Todos los tipos</option></select>
+    <span class="muted cuenta-templates"></span>
+  </div>
   <select name="template" data-templates data-destino="{{ destino }}"{% if conclusion %} data-conclusion="{{ conclusion }}"{% endif %}>
-    <option value="">— Sin template —</option>
+    <option value="">— Agregar template —</option>
     {% if actual and actual not in lista|map(attribute="titulo") %}<option selected>{{ actual }}</option>{% endif %}
-    {% for t in lista %}<option value="{{ t.titulo }}" data-id="{{ t.id }}" {{ 'selected' if t.titulo == actual }}>{{ t.titulo }}</option>{% endfor %}
+    {% for t in lista %}<option value="{{ t.titulo }}" data-id="{{ t.id }}" data-zona="{{ t.zona or '' }}" data-organo="{{ t.organo or '' }}" data-tipo="{{ t.tipo or '' }}" {{ 'selected' if t.titulo == actual }}>{{ t.titulo }}</option>{% endfor %}
   </select>
 {% endmacro %}
 {% block contenido %}
