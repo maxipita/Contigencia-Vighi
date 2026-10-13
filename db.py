@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -149,6 +150,19 @@ CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
+CREATE TABLE IF NOT EXISTS ubicaciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre VARCHAR(120) NOT NULL UNIQUE,
+    direccion VARCHAR(200), contactos TEXT, emails TEXT
+);
+CREATE TABLE IF NOT EXISTS ubicacion_medicos (
+    ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+    medico_id INTEGER NOT NULL REFERENCES medicos(id),
+    PRIMARY KEY (ubicacion_id, medico_id)
+);
+CREATE INDEX IF NOT EXISTS ix_ubicacion_medicos_medico ON ubicacion_medicos(medico_id);
+CREATE INDEX IF NOT EXISTS ix_protocolos_recoleccion ON protocolos(lugar_recoleccion);
+CREATE INDEX IF NOT EXISTS ix_protocolos_entrega ON protocolos(lugar_entrega);
 """
 
 
@@ -279,6 +293,46 @@ def feriados():
     return {date.fromisoformat(r["fecha"]) for r in q("SELECT fecha FROM feriados")}
 
 
+def clave_nombre(texto):
+    s = unicodedata.normalize("NFD", (texto or "").lower())
+    return re.sub(r"[^a-z0-9]+", " ", "".join(ch for ch in s if unicodedata.category(ch) != "Mn")).strip()
+
+
+def _en_trozos(c, sentencias):
+    for i in range(0, len(sentencias), d1.DECLARACIONES_POR_PEDIDO):
+        c.lote(sentencias[i:i + d1.DECLARACIONES_POR_PEDIDO])
+
+
+def ubicaciones_importar(filas):
+    c = con()
+    existentes = {r["nombre"]: r["id"] for r in c.execute("SELECT id, nombre FROM ubicaciones").fetchall()}
+    nuevas = [f for f in filas if f["nombre"] not in existentes]
+    c.executemany("INSERT INTO ubicaciones (nombre, direccion, contactos, emails) VALUES (?,?,?,?)",
+                  [(f["nombre"], f["direccion"], f["contactos"], f["emails"]) for f in nuevas])
+    _en_trozos(c, [("UPDATE ubicaciones SET direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos), "
+                    "emails=CASE WHEN COALESCE(emails,'')='' THEN ? ELSE emails END WHERE id=?",
+                    (f["direccion"], f["contactos"], f["emails"], existentes[f["nombre"]])) for f in filas if f["nombre"] in existentes])
+    ids = {r["nombre"]: r["id"] for r in c.execute("SELECT id, nombre FROM ubicaciones").fetchall()}
+    medicos = {}
+    for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
+        medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
+    pedidos = {}
+    for f in filas:
+        for m in f["medicos"]:
+            pedidos.setdefault(clave_nombre(m), m)
+    faltan = [(m,) for k, m in pedidos.items() if k not in medicos]
+    c.executemany("INSERT INTO medicos (nombre) VALUES (?)", faltan)
+    if faltan:
+        for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
+            medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
+    ya = {(r["ubicacion_id"], r["medico_id"]) for r in c.execute("SELECT ubicacion_id, medico_id FROM ubicacion_medicos").fetchall()}
+    vinculos = {(ids[f["nombre"]], medicos[clave_nombre(m)]) for f in filas for m in f["medicos"]} - ya
+    c.executemany("INSERT INTO ubicacion_medicos (ubicacion_id, medico_id) VALUES (?,?)", sorted(vinculos))
+    c.commit()
+    olvidar_cache()
+    return {"nuevas": len(nuevas), "actualizadas": len(filas) - len(nuevas), "medicos_nuevos": len(faltan), "vinculos": len(vinculos)}
+
+
 def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
     ex("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
        (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
@@ -374,7 +428,11 @@ def flujos_por_consolidar(c):
 
 def inicializar():
     c = _conectar()
+    sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
     antes_de_informes = preparar_esquema(c)
+    if sin_ubicaciones:
+        c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'ubicaciones' ELSE permisos || ',ubicaciones' END "
+                  "WHERE nombre = 'Ingreso' AND (',' || permisos || ',') NOT LIKE '%,ubicaciones,%'")
     if antes_de_informes:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'informe' ELSE permisos || ',informe' END "
                   "WHERE nombre = 'Médico firmante' AND (',' || permisos || ',') NOT LIKE '%,informe,%'")

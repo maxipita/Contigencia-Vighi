@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Nueva ubicación' if nueva else u.nombre }}{% endblock %}
+{% block contenido %}
+{% set editable = puede('ubicaciones') %}
+<div class="eyebrow"><a href="{{ url_for('ubicaciones_lista') }}">Ubicaciones</a></div>
+<h1>{{ 'Nueva ubicación' if nueva else u.nombre }}</h1>
+<div class="cols">
+<div>
+  {% if not nueva %}
+  <div class="tarjeta" id="medicos">
+    <h2>Médicos asociados ({{ medicos | length }})</h2>
+    {% if medicos %}
+    <input type="search" data-filtrar="#lista-medicos" placeholder="Filtrar la lista…" style="max-width:320px;margin-bottom:8px">
+    <form method="post" action="{{ url_for('ubicacion_medico_quitar', uid=u.id) }}" data-confirmar="¿Quitar los médicos marcados de esta ubicación?">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="lista-medicos" id="lista-medicos">
+        {% for m in medicos %}<label>{% if editable %}<input type="checkbox" name="medico" value="{{ m.id }}"> {% endif %}{{ m.nombre }}</label>{% endfor %}
+      </div>
+      {% if editable %}<div class="acciones"><button class="btn sec">Quitar los marcados</button></div>{% endif %}
+    </form>
+    {% else %}<p class="muted">Todavía no tiene médicos asociados.</p>{% endif %}
+    {% if editable %}
+    <form method="post" action="{{ url_for('ubicacion_medico_agregar', uid=u.id) }}" class="en-linea" style="margin-top:12px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="buscador"><input name="medico" data-medicos autocomplete="off" placeholder="Agregar médico: escribí el apellido…" size="40" required></div>
+      <button class="btn">Agregar</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+<div>
+  <div class="tarjeta">
+    <h2>Datos</h2>
+    {% if editable %}
+    <form method="post" action="{{ url_for('ubicacion_nueva') if nueva else url_for('ubicacion_editar', uid=u.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Nombre *</label><input name="nombre" value="{{ u.nombre or '' }}" required {{ 'autofocus' if nueva }}>
+      <label style="margin-top:8px">Dirección</label><input name="direccion" value="{{ u.direccion or '' }}">
+      <label style="margin-top:8px">Contactos (teléfonos, horarios, referentes)</label><textarea name="contactos" style="min-height:60px">{{ u.contactos or '' }}</textarea>
+      <label style="margin-top:8px">E-mails para enviar informes</label><input name="emails" value="{{ u.emails or '' }}" placeholder="uno@ejemplo.com, otro@ejemplo.com">
+      <div class="acciones"><button class="btn">{{ 'Crear' if nueva else 'Guardar' }}</button>
+        <a class="btn sec" href="{{ url_for('ubicaciones_lista') }}">{{ 'Cancelar' if nueva else 'Volver' }}</a></div>
+    </form>
+    {% else %}
+    <div class="dato"><div>{{ u.direccion or 'Sin dirección' }}</div>
+      <div>{{ u.contactos or 'Sin contactos' }}</div>
+      {% if u.emails %}<div>{{ u.emails }}</div>{% endif %}</div>
+    {% endif %}
+  </div>
+  {% if not nueva %}
+  <div class="tarjeta">
+    <h2>Estudios</h2>
+    <div>Como lugar de recolección: <b>{{ recoleccion }}</b> protocolo(s)</div>
+    <div>Como lugar de entrega: <b>{{ entrega }}</b> protocolo(s)</div>
+    <div class="acciones"><a class="btn sec" href="{{ url_for('tablero', ver='todos', ubicacion=u.nombre) }}">Ver en el tablero</a></div>
+  </div>
+  {% if editable %}
+  <form method="post" action="{{ url_for('ubicacion_eliminar', uid=u.id) }}" data-confirmar="¿Eliminar la ubicación «{{ u.nombre }}»?">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <button class="btn peligro" {{ 'disabled title="Hay protocolos con esta ubicación"' if recoleccion or entrega }}>Eliminar ubicación</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</div>
+</div>
+{% endblock %}

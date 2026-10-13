@@ -77,8 +77,9 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
 });
 
 const sinAcentos = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-document.querySelectorAll("input[data-medicos]").forEach(async inp => {
-  const nombres = (await (await fetch("/api/medicos")).json()).map(n => [n, sinAcentos(n)]);
+document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEach(async inp => {
+  const deLista = inp.hasAttribute("data-ubicaciones");
+  const nombres = (await (await fetch(deLista ? "/api/ubicaciones" : "/api/medicos")).json()).map(n => [n, sinAcentos(n)]);
   const caja = document.createElement("div");
   caja.className = "sugerencias";
   caja.hidden = true;
@@ -106,7 +107,7 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
       el.addEventListener("mousedown", e => { e.preventDefault(); elegir(n); });
       caja.append(el);
     });
-    if (!hallados.length) caja.innerHTML = '<div class="nada">Sin coincidencias (se guarda lo escrito)</div>';
+    if (!hallados.length) caja.innerHTML = '<div class="nada">' + (deLista ? "Sin coincidencias: elegí una de la lista" : "Sin coincidencias (se guarda lo escrito)") + "</div>";
     caja.hidden = false;
   };
   inp.addEventListener("input", mostrar);
@@ -117,6 +118,14 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); marcar(activo + (e.key === "ArrowDown" ? 1 : -1)); }
     else if (e.key === "Enter" && activo >= 0 && caja.children[activo].textContent) { e.preventDefault(); elegir(caja.children[activo].textContent); }
     else if (e.key === "Escape") caja.hidden = true;
+  });
+});
+
+document.querySelectorAll("input[data-filtrar]").forEach(inp => {
+  const items = [...document.querySelectorAll(inp.dataset.filtrar + " > label")].map(el => [el, sinAcentos(el.textContent)]);
+  inp.addEventListener("input", () => {
+    const palabras = sinAcentos(inp.value).split(/\s+/).filter(Boolean);
+    items.forEach(([el, s]) => { el.hidden = !palabras.every(p => s.includes(p)); });
   });
 });
 

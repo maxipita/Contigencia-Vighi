@@ -13,6 +13,7 @@ PERMISOS = {
     "etapas": ("Etapas", "Marcar etapas como listas (las de su sector)"),
     "etapas_deshacer": ("Etapas", "Deshacer etapas registradas por otros"),
     "exportar": ("Consultas", "Exportar a Excel"),
+    "ubicaciones": ("Administración", "Ubicaciones (crear, editar, importar y asignar médicos)"),
     "feriados": ("Administración", "Feriados"),
 }
 
@@ -20,7 +21,7 @@ GRUPOS = list(dict.fromkeys(g for g, _ in PERMISOS.values()))
 
 PERFILES_INICIALES = {
     "Ingreso": ("ingreso", ["protocolo_crear", "protocolo_editar", "estudio_anular", "sistema", "etiquetas_recepcion",
-                            "lotes_armar", "etapas", "exportar"]),
+                            "lotes_armar", "etapas", "exportar", "ubicaciones"]),
     "Laboratorio": ("laboratorio", ["etiquetas_lab", "lotes_armar", "lotes_cerrar", "etapas"]),
     "Macroscopía": ("macroscopia", ["macro", "lotes_armar", "etapas"]),
     "Traslados": ("traslados", ["etapas"]),

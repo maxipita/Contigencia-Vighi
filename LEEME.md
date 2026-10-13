@@ -69,6 +69,10 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   lo sigue contando aunque la etapa actual todavía esté en término (se toma el peor estado de todo el recorrido, incluido el ingreso). Los informados y anulados no llevan semáforo.
 - **Deshacer:** la última etapa la puede deshacer quien la registró o un administrador.
 - **Feriados** (administrador): se descuentan de los plazos. Verificar la lista cada año.
+- **Ubicaciones** (menú Más › Ubicaciones): lista de lugares con dirección, **contactos** (teléfonos y referentes), **e-mails para enviar informes** y los **médicos asociados**.
+  «Lugar recolección» y «Lugar entrega» del protocolo se **eligen de esta lista** (escribí parte del nombre y elegí; si falta, se crea desde Ubicaciones). El **tablero** se filtra por ubicación (recolección o entrega)
+  y en la ficha del protocolo se ve la de entrega con sus e-mails. Con el permiso *Ubicaciones* se crean, editan (renombrar actualiza los protocolos), eliminan (solo si ningún protocolo la usa), se asocian o quitan médicos
+  y se **importa un CSV** (`nombre, direccion, medicos, telefonos`, médicos separados con « | »): suma lo que falte y completa direcciones y contactos vacíos, sin borrar nada. Los e-mails que aparezcan en los contactos se copian al campo de e-mails.
 - **Exportar Excel:** una fila por estudio con los datos del protocolo, para re-cargarlos en southernbits.
 
 ## Datos y respaldos

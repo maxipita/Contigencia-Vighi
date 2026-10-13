@@ -34,8 +34,10 @@
       <div><label>Teléfono</label><input name="telefono" value="{{ v('telefono') }}"></div>
       <div><label>Médico solicitante</label><div class="buscador"><input name="medico" value="{{ v('medico') }}" data-medicos autocomplete="off"
         placeholder="Escribí apellido…"></div></div>
-      <div><label>Lugar recolección</label><input name="lugar_recoleccion" value="{{ v('lugar_recoleccion') }}"></div>
-      <div><label>Lugar entrega</label><input name="lugar_entrega" value="{{ v('lugar_entrega') }}"></div>
+      <div><label>Lugar recolección</label><div class="buscador"><input name="lugar_recoleccion" value="{{ v('lugar_recoleccion') }}" data-ubicaciones autocomplete="off"
+        placeholder="Escribí la ubicación…"></div></div>
+      <div><label>Lugar entrega</label><div class="buscador"><input name="lugar_entrega" value="{{ v('lugar_entrega') }}" data-ubicaciones autocomplete="off"
+        placeholder="Escribí la ubicación…"></div></div>
       <div class="ancho"><label>Observaciones del protocolo</label><textarea name="observaciones" style="min-height:50px">{{ v('observaciones') }}</textarea></div>
     </div>
   </div>
