@@ -341,3 +341,40 @@ form.en-linea .buscador { flex: 1; }
 details.importar { padding: 10px 16px; }
 details.importar summary { cursor: pointer; font-weight: 600; color: var(--primario); }
 details.importar[open] summary { margin-bottom: 8px; }
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.galeria figure { margin: 0; }
+.galeria img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--borde); border-radius: 6px; background: var(--superficie); }
+.galeria figcaption { font-size: 11px; line-height: 1.35; margin-top: 4px; word-break: break-word; }
+.galeria figcaption form { display: inline; margin-left: 4px; }
+.galeria .enlace { background: none; border: 0; padding: 0; color: var(--pizarra); font-size: 11px; cursor: pointer; text-decoration: underline; }
+.galeria .enlace:hover { color: var(--error); }
+.subida { display: grid; gap: 8px; }
+.visor { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(20, 10, 30, .88); }
+.visor[hidden] { display: none; }
+.visor img { max-width: 92vw; max-height: 86vh; object-fit: contain; border-radius: 4px; background: #fff; }
+.visor button { position: absolute; background: rgba(255, 255, 255, .15); color: #fff; border: 0; border-radius: 999px; width: 44px; height: 44px; font-size: 28px; line-height: 1; cursor: pointer; }
+.visor button:hover { background: rgba(255, 255, 255, .3); }
+.visor-x { top: 16px; right: 16px; }
+.visor-ant { left: 16px; top: 50%; }
+.visor-sig { right: 16px; top: 50%; }
+.visor-pie { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; }
+.lote-cabecera { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin: 14px 0 16px; }
+.lote-cabecera .acciones { margin-top: 0; }
+.lote-cabecera form { margin: 0; }
+table.tecnicas { margin-bottom: 4px; }
+table.tecnicas form { margin: 0; }
+.tecnica-form { margin-top: 14px; }
+.tecnica-form fieldset { border: 0; padding: 0; margin: 0; }
+.tecnica-form h3 { font-size: 15px; margin: 0 0 8px; }
+.tecnica-form .grilla { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 640px) { .tecnica-form .grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 4px 0; }
+.checks .check { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; cursor: pointer; }
+.checks .check input { width: auto; margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip-sel { border: 1px solid var(--borde); background: #fff; color: var(--texto); border-radius: 999px; padding: 3px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip-sel:hover { border-color: var(--acento); }
+.chip-sel.on { background: var(--acento); border-color: var(--acento); color: #fff; }
+fieldset[disabled] .chip-sel { cursor: default; opacity: .6; }
+.otra-tecnica { display: flex; gap: 8px; margin-top: 6px; max-width: 420px; }
+.otra-tecnica input { flex: 1; }

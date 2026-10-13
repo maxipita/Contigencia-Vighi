@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS estudios (
     responsable_id INTEGER REFERENCES usuarios(id),
     lote_id INTEGER REFERENCES lotes(id),
     anulado INTEGER NOT NULL DEFAULT 0, motivo_anulacion VARCHAR(200),
-    lab_etiquetado_en VARCHAR(19),
+    lab_etiquetado_en VARCHAR(19), tecnicas_especiales VARCHAR(500),
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS etapas (
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS etapas (
 );
 CREATE TABLE IF NOT EXISTS macro (
     estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
-    template VARCHAR(120), descripcion TEXT, cassettes INTEGER
+    template VARCHAR(120), descripcion TEXT, cassettes INTEGER, decal INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS micro (
     estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
@@ -140,6 +140,23 @@ CREATE TABLE IF NOT EXISTS comentarios (
     texto TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_comentarios_protocolo ON comentarios(protocolo_id);
+CREATE TABLE IF NOT EXISTS imagenes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    usuario_id INTEGER REFERENCES usuarios(id),
+    creado_en VARCHAR(19) NOT NULL,
+    nombre VARCHAR(120), descripcion VARCHAR(200),
+    imagen BLOB NOT NULL, miniatura BLOB NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_imagenes_protocolo ON imagenes(protocolo_id);
+CREATE TABLE IF NOT EXISTS tecnicas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    estudio_id INTEGER NOT NULL REFERENCES estudios(id),
+    numero VARCHAR(10), fragmentos INTEGER, inclusion VARCHAR(30) NOT NULL,
+    tacos INTEGER, cassettes INTEGER, comentarios VARCHAR(300),
+    usuario_id INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_tecnicas_estudio ON tecnicas(estudio_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,
@@ -287,6 +304,11 @@ def ex(sql, params=()):
 def lote_ex(sentencias):
     con().lote(sentencias)
     olvidar_cache()
+    for sql, _ in sentencias:
+        escrita = re.match(r"\s*(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+(\w+)", sql, re.I)
+        if escrita and escrita.group(1).lower() in REFERENCIA:
+            _fijas.clear()
+            break
 
 
 def feriados():
@@ -368,6 +390,8 @@ def preparar_esquema(c):
                                    ("informes_emitidos", "estudios", "VARCHAR(500)"),
                                    ("protocolos", "firmante_id", "INTEGER"),
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
+                                   ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
+                                   ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
                                    ("ubicaciones", "nombre", "VARCHAR(200)")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
@@ -411,6 +435,7 @@ def consolidar_diagnosticos(c, protocolo_id=None, tipo=None, extra=()):
                         base[campo] = actual + "\n\n" + nuevo_ if actual and campo in largos else (actual or nuevo_)
                 if tabla == "macro":
                     base["cassettes"] = (base.get("cassettes") or 0) + (otra.get("cassettes") or 0) or None
+                    base["decal"] = max(base.get("decal") or 0, otra.get("decal") or 0)
                 if tabla == "micro":
                     base["solicita_ihq"] = max(base.get("solicita_ihq") or 0, otra.get("solicita_ihq") or 0)
             columnas = [k for k in base if k != "estudio_id"]

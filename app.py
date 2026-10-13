@@ -18,7 +18,7 @@ import db
 import permisos
 import trazabilidad
 import ubicaciones as ubicaciones_csv
-from estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, TIPOS, validar_combinacion
+from estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, TIPOS, Variante, con_decal, validar_combinacion
 
 try:
     import informes
@@ -31,7 +31,7 @@ SIN_INFORMES = "Los informes en PDF no están disponibles: falta instalar report
 PUERTO = int(os.environ.get("CONTINGENCIA_PUERTO", "8000"))
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
 
 
 def _clave_secreta():
@@ -47,6 +47,13 @@ def _clave_secreta():
 app.secret_key = _clave_secreta()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 app.teardown_appcontext(db.cerrar)
+
+
+@app.errorhandler(413)
+def demasiado_grande(_):
+    flash("Los archivos superan el máximo de 40 MB por envío. Subí menos imágenes a la vez.", "error")
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("tablero")
+    return redirect(destino)
 
 
 @app.errorhandler(d1.ErrorConexion)
@@ -270,6 +277,7 @@ def responsables(tipo):
 
 SQL_ETAPAS = "SELECT estudio_id, etapa, fecha_hora FROM etapas"
 SQL_CON_IHQ = "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0"
+SQL_CON_DECAL = "SELECT e.protocolo_id, e.tipo FROM macro m JOIN estudios e ON e.id=m.estudio_id WHERE m.decal=1 AND e.anulado=0"
 SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 
 
@@ -282,7 +290,7 @@ def consultas_estudios(where="1=1", params=(), borradores=False):
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                      LEFT JOIN tacos_organo t ON t.organo=e.sitio AND t.tipo_lote=l.tipo_lote
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id"""
-    return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_TIPOS, ())]
+    return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_TIPOS, ())]
 
 
 def tacos_del_estudio(e):
@@ -345,6 +353,7 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
         fechas.setdefault(r["estudio_id"], {})[r["etapa"]] = r["fecha_hora"]
     con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
+    con_decal_ = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
     flujos = flujos_de() if filas else {}
     for f in filas:
@@ -352,13 +361,15 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         d["flujos"] = flujos.get(f["protocolo_id"], "")
         tipo = REGISTRO[f["tipo"]]
         d["solicita_ihq"] = (f["protocolo_id"], f["tipo"]) in con_ihq
-        d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), d["solicita_ihq"], bool(f["anulado"]))
+        decal = (f["protocolo_id"], f["tipo"]) in con_decal_
+        d["decal"] = decal
+        d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), Variante(d["solicita_ihq"], decal), bool(f["anulado"]))
         if f["borrador"]:
             d["estado"] = "A completar"
         d["proxima"] = prox
-        d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer) if prox else None
+        d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer, decal) if prox else None
         d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["id"], {})},
-                                                         d["vence"], ahora_, fer) if d["vence"] and not f["borrador"] else "")
+                                                         d["vence"], ahora_, fer, decal) if d["vence"] and not f["borrador"] else "")
         d["etiqueta"] = etiqueta(f)
         d["tacos"] = tacos_del_estudio(f)
         out.append(d)
@@ -391,8 +402,9 @@ def miembros_flujo(e):
     return db.q("SELECT * FROM estudios WHERE protocolo_id=? AND tipo=? AND anulado=0 ORDER BY id", (e["protocolo_id"], e["tipo"]))
 
 
-def pide_ihq(protocolo_id, tipo):
-    return bool(db.uno(SQL_PIDE_IHQ, (protocolo_id, tipo)))
+def variante_de(protocolo_id, tipo):
+    r = db.uno(SQL_VARIANTE, (protocolo_id, tipo, protocolo_id, tipo))
+    return Variante(r["ihq"], r["decal"])
 
 
 def flujo_avanzado(protocolo_id, tipo):
@@ -547,7 +559,7 @@ def asignar_lote(protocolo_id, lote, usuario_id):
 CAMPOS_PROTOCOLO = ["fecha_recoleccion", "dni", "cobertura", "n_afiliado", "nombre", "apellido", "sexo", "exento",
                     "fecha_nacimiento", "email", "telefono", "medico", "lugar_recoleccion", "lugar_entrega", "observaciones"]
 CAMPOS_ESTUDIO = ["categoria", "subcategoria", "sitio", "tipo_muestra", "cantidad", "citologia_hormonal", "observaciones",
-                  "responsable_id"]
+                  "responsable_id", "tecnicas_especiales"]
 
 
 CAMPOS_PACIENTE = ["apellido", "nombre", "fecha_nacimiento", "sexo", "cobertura", "n_afiliado", "exento", "email", "telefono"]
@@ -569,6 +581,29 @@ def leer_protocolo():
     return d
 
 
+def limpiar_valor(texto):
+    return " ".join((texto or "").replace(",", " ").replace(";", " ").split())[:80]
+
+
+def sin_repetidos(valores):
+    vistos = {}
+    for v in valores:
+        if v:
+            vistos.setdefault(v.lower(), v)
+    return list(vistos.values())
+
+
+def recordar_tecnicas(e):
+    pedidas = [x for x in (e.get("tecnicas_especiales") or "").split("; ") if x]
+    if not pedidas:
+        return
+    actuales = listas().get("tecnicas_especiales", [])
+    conocidas = {x.lower() for x in actuales}
+    nuevas = list(dict.fromkeys(x for x in pedidas if x.lower() not in conocidas))
+    if nuevas:
+        db.lote_ex([("INSERT INTO listas (nombre, orden, valor) VALUES (?,?,?)", ("tecnicas_especiales", len(actuales) + i, v)) for i, v in enumerate(nuevas)])
+
+
 def leer_estudio(prefijo, tipo):
     t = REGISTRO[tipo]
     campo = lambda k: request.form.get(prefijo + k, "").strip()
@@ -580,6 +615,8 @@ def leer_estudio(prefijo, tipo):
             "citologia_hormonal": campo("citologia_hormonal") if t.citologia_hormonal else None,
             "observaciones": campo("observaciones"),
             "responsable_id": int(campo("responsable_id")) if campo("responsable_id").isdigit() else None,
+            "tecnicas_especiales": ("; ".join(sin_repetidos(limpiar_valor(x) for x in request.form.getlist(prefijo + "tecnicas_especiales"))) or None)
+            if t.pide_tecnicas else None,
             "lote_sel": campo("lote_id"),
             "id": int(campo("id")) if campo("id").isdigit() else None}
 
@@ -604,6 +641,7 @@ def crear_estudio(protocolo_id, e, lote, usuario_id):
     eid = db.ex(f"INSERT INTO estudios (protocolo_id, tipo, creado_por, creado_en, {', '.join(CAMPOS_ESTUDIO)}) "
                 f"VALUES (?,?,?,?,{','.join('?' * len(CAMPOS_ESTUDIO))})",
                 [protocolo_id, e["tipo"], usuario_id, db.ahora()] + [e[k] for k in CAMPOS_ESTUDIO])
+    recordar_tecnicas(e)
     db.auditar(usuario_id, protocolo_id, "nuevo_estudio", etiqueta(e), eid)
     asignar_lote(protocolo_id, lote, usuario_id)
     return eid
@@ -714,6 +752,7 @@ def protocolo_editar(pid):
                 if e["id"]:
                     db.ex(f"UPDATE estudios SET {', '.join(k + '=?' for k in CAMPOS_ESTUDIO)} WHERE id=?",
                           [e[k] for k in CAMPOS_ESTUDIO] + [e["id"]])
+                    recordar_tecnicas(e)
                 else:
                     crear_estudio(pid, e, lote, yo["id"])
             asignar_lote(pid, lote, yo["id"])
@@ -822,6 +861,118 @@ SQL_COMENTARIOS = """SELECT c.*, u.iniciales, u.nombre AS autor FROM comentarios
                      WHERE c.protocolo_id=? ORDER BY c.id DESC"""
 
 
+SQL_IMAGENES = """SELECT i.id, i.protocolo_id, i.nombre, i.descripcion, i.creado_en, u.iniciales FROM imagenes i
+                  LEFT JOIN usuarios u ON u.id=i.usuario_id WHERE i.protocolo_id=? ORDER BY i.id"""
+MAX_IMAGENES = 30
+PERMISOS_IMAGENES = ("protocolo_editar", "macro", "micro")
+
+
+def procesar_imagen(contenido):
+    from PIL import Image, ImageOps
+    if len(contenido) > 15 * 1024 * 1024:
+        raise ValueError("pesa más de 15 MB")
+    try:
+        img = Image.open(io.BytesIO(contenido))
+        if img.format not in ("JPEG", "PNG", "WEBP"):
+            raise ValueError
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            fondo = Image.new("RGB", img.size, (255, 255, 255))
+            fondo.paste(img, mask=img.split()[-1])
+            img = fondo
+        else:
+            img = img.convert("RGB")
+    except Exception:
+        raise ValueError("no es una imagen JPG, PNG o WEBP válida")
+
+    def jpeg(lado, calidad):
+        chica = img.copy()
+        chica.thumbnail((lado, lado))
+        salida = io.BytesIO()
+        chica.save(salida, "JPEG", quality=calidad, optimize=True)
+        return salida.getvalue()
+
+    for lado, calidad in ((2000, 85), (1800, 80), (1600, 72), (1400, 65), (1200, 55), (1000, 45), (800, 40)):
+        grande = jpeg(lado, calidad)
+        if len(grande) <= 1_200_000:
+            break
+    return grande, jpeg(360, 78)
+
+
+def imagenes_de(pid):
+    return db.q(SQL_IMAGENES, (pid,))
+
+
+def volver_a_imagenes(pid):
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolo", pid=pid)
+    return redirect(destino.split("#")[0] + "#imagenes")
+
+
+@app.route("/protocolo/<int:pid>/imagenes", methods=["POST"])
+@requiere_permiso(*PERMISOS_IMAGENES)
+def imagenes_subir(pid):
+    protocolo_o_404(pid)
+    archivos = [f for f in request.files.getlist("imagenes") if f and f.filename]
+    if not archivos:
+        flash("Elegí al menos una imagen.", "error")
+        return volver_a_imagenes(pid)
+    cupo = MAX_IMAGENES - db.uno("SELECT COUNT(*) AS n FROM imagenes WHERE protocolo_id=?", (pid,))["n"]
+    descripcion = request.form.get("descripcion", "").strip()[:200]
+    yo = usuario_actual()
+    subidas, fallas = 0, []
+    for f in archivos:
+        if subidas >= cupo:
+            fallas.append(f"{f.filename}: el protocolo ya tiene el máximo de {MAX_IMAGENES} imágenes")
+            continue
+        try:
+            grande, mini = procesar_imagen(f.read())
+        except ValueError as error:
+            fallas.append(f"{f.filename}: {error}")
+            continue
+        except ImportError:
+            flash("Falta instalar Pillow para subir imágenes (python -m pip install -r requirements.txt) y reiniciar el sistema.", "error")
+            return volver_a_imagenes(pid)
+        db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, imagen, miniatura) VALUES (?,?,?,?,?,?,?)",
+              (pid, yo["id"], db.ahora(), (f.filename or "")[:120], descripcion, grande, mini))
+        subidas += 1
+    if subidas:
+        db.auditar(yo["id"], pid, "imagenes", f"{subidas} imagen(es)")
+        flash(f"{subidas} imagen(es) subida(s).", "ok")
+    for falla in fallas:
+        flash(falla, "error")
+    return volver_a_imagenes(pid)
+
+
+def enviar_imagen(iid, columna):
+    r = db.uno(f"SELECT {columna} AS datos FROM imagenes WHERE id=?", (iid,)) or abort(404)
+    respuesta = send_file(io.BytesIO(bytes(r["datos"])), mimetype="image/jpeg", conditional=False)
+    respuesta.headers["Cache-Control"] = "private, max-age=86400"
+    return respuesta
+
+
+@app.route("/imagen/<int:iid>")
+@requiere_login
+def imagen_ver(iid):
+    return enviar_imagen(iid, "imagen")
+
+
+@app.route("/imagen/<int:iid>/mini")
+@requiere_login
+def imagen_mini(iid):
+    return enviar_imagen(iid, "miniatura")
+
+
+@app.route("/imagen/<int:iid>/borrar", methods=["POST"])
+@requiere_permiso(*PERMISOS_IMAGENES)
+def imagen_borrar(iid):
+    r = db.uno("SELECT id, protocolo_id, nombre FROM imagenes WHERE id=?", (iid,)) or abort(404)
+    db.ex("DELETE FROM imagenes WHERE id=?", (iid,))
+    db.auditar(usuario_actual()["id"], r["protocolo_id"], "imagen_borrada", r["nombre"] or "")
+    flash("Imagen borrada.", "ok")
+    return volver_a_imagenes(r["protocolo_id"])
+
+
 def comentarios_de(pid):
     return db.q(SQL_COMENTARIOS, (pid,))
 
@@ -835,7 +986,7 @@ def volver_a_comentarios(pid):
 @requiere_login
 def protocolo(pid):
     db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)),
-                   (SQL_COMENTARIOS, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
+                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
     p = protocolo_o_404(pid)
     historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
@@ -845,7 +996,7 @@ def protocolo(pid):
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
     lugares = list(dict.fromkeys(l for l in (p["lugar_recoleccion"], p["lugar_entrega"]) if l))
     ubicaciones = {u["abreviatura"]: u for u in db.q(f"SELECT id, abreviatura, nombre, contactos, emails FROM ubicaciones WHERE abreviatura IN ({','.join('?' * len(lugares))})", tuple(lugares))} if lugares else {}
-    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), ubicaciones=ubicaciones,
+    return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), ubicaciones=ubicaciones,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
@@ -933,6 +1084,7 @@ def estudio_editar(eid):
         else:
             db.ex(f"UPDATE estudios SET {', '.join(k + '=?' for k in CAMPOS_ESTUDIO)} WHERE id=?",
                   [e[k] for k in CAMPOS_ESTUDIO] + [eid])
+            recordar_tecnicas(e)
             db.auditar(yo["id"], p["id"], "editar_estudio", etiqueta(e), eid)
             if es_primero:
                 asignar_lote(p["id"], concretar_lote(lote_valor, yo["id"]), yo["id"])
@@ -967,8 +1119,10 @@ SQL_MICRO = "SELECT * FROM micro WHERE estudio_id=" + DUENO
 SQL_IHQ = "SELECT * FROM ihq WHERE estudio_id=" + DUENO
 SQL_TEMPLATES = "SELECT id, titulo FROM templates WHERE clase=? ORDER BY titulo"
 SQL_LISTAS = "SELECT nombre, valor FROM listas ORDER BY nombre, orden"
-SQL_PIDE_IHQ = ("SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
-                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1")
+SQL_VARIANTE = ("SELECT (SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
+                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1) AS ihq, "
+                "(SELECT 1 FROM macro m JOIN estudios e ON e.id=m.estudio_id "
+                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.decal=1) AS decal")
 
 
 def consultas_ficha(eid):
@@ -984,7 +1138,8 @@ def ficha(eid):
     micro = db.uno(SQL_MICRO, (eid,))
     ihq = db.uno(SQL_IHQ, (eid,))
     etapas = {x["etapa"]: x for x in db.q(SQL_ETAPAS_FICHA, (eid,))}
-    solicita = bool(micro and micro["solicita_ihq"]) if e["anulado"] else pide_ihq(e["protocolo_id"], e["tipo"])
+    solicita = (Variante(micro and micro["solicita_ihq"], macro and macro["decal"]) if e["anulado"]
+                else variante_de(e["protocolo_id"], e["tipo"]))
     return e, macro, micro, ihq, etapas, solicita
 
 
@@ -1006,6 +1161,35 @@ def habilitada(e, etapas, solicita, etapa):
                    + (f" (ahora está en {prox[1]})." if prox else "."))
 
 
+def macro_editable(e, etapas, solicita):
+    en_macro = habilitada(e, etapas, solicita, "macroscopia")
+    if en_macro[0]:
+        return con_permiso("macro", en_macro)
+    en_micro = habilitada(e, etapas, solicita, "microscopia")
+    if en_micro[0] and "macro" in REGISTRO[e["tipo"]].secciones:
+        return (True, "") if puede("macro") or puede("micro") else (False, "No tenés permiso para cargar esta sección.")
+    return en_macro
+
+
+SQL_TECNICAS = """SELECT t.id, t.estudio_id, t.numero, t.fragmentos, t.inclusion, t.tacos, t.cassettes, t.comentarios, t.creado_en, u.iniciales
+                  FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id LEFT JOIN usuarios u ON u.id=t.usuario_id
+                  WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 ORDER BY t.id"""
+INCLUSIONES = ("Reserva", "Inclusión total")
+
+
+def estudios_sin_tecnicas(miembros):
+    if not miembros:
+        return []
+    con = {r["estudio_id"] for r in db.q(f"SELECT DISTINCT estudio_id FROM tecnicas WHERE estudio_id IN ({','.join('?' * len(miembros))})", [m["id"] for m in miembros])}
+    return [m for m in miembros if m["id"] not in con]
+
+
+def sumar_cassettes(e):
+    total = db.uno("""SELECT SUM(t.cassettes) AS n FROM tecnicas t JOIN estudios x ON x.id=t.estudio_id
+                      WHERE x.protocolo_id=? AND x.tipo=? AND x.anulado=0""", (e["protocolo_id"], e["tipo"]))["n"]
+    guardar_seccion("macro", e["dueno"], {"cassettes": total})
+
+
 @app.route("/estudio/<int:eid>")
 @requiere_login
 def estudio(eid):
@@ -1013,7 +1197,7 @@ def estudio(eid):
                                          (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
     primero = db.uno(SQL_FICHA, (eid,))
     if primero:
-        db.precargar([(SQL_PIDE_IHQ, (primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
+        db.precargar([(SQL_VARIANTE, (primero["protocolo_id"], primero["tipo"], primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],)), (SQL_IMAGENES, (primero["protocolo_id"],)), (SQL_TECNICAS, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
     tipo = REGISTRO[e["tipo"]]
     est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
@@ -1021,7 +1205,8 @@ def estudio(eid):
     historial = db.q(SQL_HISTORIAL_ESTUDIO, (eid,))
     tpl = lambda clase: db.q(SQL_TEMPLATES, (clase,))
     pasos = tipo.flujo(solicita)
-    traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados())
+    decal = con_decal(solicita)
+    traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados(), decal=decal)
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
     activos = [h for h in hermanos if not h["anulado"]]
     miembros = [h for h in hermanos if h["id"] == e["id"]] if e["anulado"] else [h for h in activos if h["tipo"] == e["tipo"]]
@@ -1034,19 +1219,23 @@ def estudio(eid):
             n = sum(1 for x in activos if x["tipo"] == h["tipo"])
             pestanas.append({"id": h["id"], "texto": h["etiqueta"] if n == 1 else f"{REGISTRO[h['tipo']].nombre} ({n} estudios)",
                              "activa": not e["anulado"] and h["tipo"] == e["tipo"], "anulado": False})
-    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados()) if prox and not e["anulado"] and not e["borrador"] else None
+    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados(), decal) if prox and not e["anulado"] and not e["borrador"] else None
     semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
-                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados())
+                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal)
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
-    return render_template("estudio.html", e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
+    return render_template("estudio.html", tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
+                           tecnicas_pedidas=sin_repetidos(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";")),
+                           lista_ihq=listas().get("ihq_marcadores", []),
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
-                           edita_macro=con_permiso("macro", habilitada(e, etapas, solicita, "macroscopia")),
+                           edita_macro=macro_editable(e, etapas, solicita),
+                           decal_cambiable=macro_editable(e, etapas, solicita)[0] and "procesamiento" not in etapas and "decal" not in etapas,
                            edita_micro=con_permiso("micro", habilitada(e, etapas, solicita, "microscopia")))
 
 
@@ -1059,22 +1248,80 @@ def guardar_seccion(tabla, eid, valores):
 
 
 @app.route("/estudio/<int:eid>/macro", methods=["POST"])
-@requiere_permiso("macro")
+@requiere_permiso("macro", "micro")
 def guardar_macro(eid):
-    e, _, _, _, etapas, solicita = ficha(eid)
-    ok, motivo = habilitada(e, etapas, solicita, "macroscopia")
+    e, macro, _, _, etapas, solicita = ficha(eid)
+    ok, motivo = macro_editable(e, etapas, solicita)
     if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
         flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
         return redirect(url_for("estudio", eid=eid) + "#macro")
-    cas = request.form.get("cassettes", "")
-    guardar_seccion("macro", e["dueno"], {"template": request.form.get("template", "").strip(),
-                                   "descripcion": request.form.get("descripcion", "").strip(),
-                                   "cassettes": int(cas) if cas.isdigit() else None})
-    db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", "", eid)
+    valores = {"template": request.form.get("template", "").strip(),
+               "descripcion": request.form.get("descripcion", "").strip()}
+    detalle = ""
+    if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
+        decal = 1 if request.form.get("decal") == "1" else 0
+        valores["decal"] = decal
+        if decal != (1 if macro and macro["decal"] else 0):
+            detalle = "agrega Macro > Decal" if decal else "quita Macro > Decal"
+    guardar_seccion("macro", e["dueno"], valores)
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", detalle, eid)
     flash("Macroscopía guardada.", "ok")
     if request.form.get("y_listo"):
         return marcar_listo(eid, "macroscopia")
     return redirect(url_for("estudio", eid=eid) + "#macro")
+
+
+def entero_positivo(valor, maximo=999):
+    valor = (valor or "").strip()
+    return int(valor) if valor.isdigit() and 1 <= int(valor) <= maximo else None
+
+
+@app.route("/estudio/<int:eid>/tecnicas", methods=["POST"])
+@requiere_permiso("macro", "micro")
+def tecnica_nueva(eid):
+    e, _, _, _, etapas, solicita = ficha(eid)
+    ok, motivo = macro_editable(e, etapas, solicita)
+    destino = url_for("estudio", eid=eid) + "#tecnicas"
+    if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
+        flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
+        return redirect(destino)
+    miembro = db.uno("SELECT id FROM estudios WHERE id=? AND protocolo_id=? AND tipo=? AND anulado=0",
+                     (request.form.get("estudio_id", "") if request.form.get("estudio_id", "").isdigit() else 0, e["protocolo_id"], e["tipo"]))
+    inclusion = request.form.get("inclusion", "")
+    fragmentos, cassettes = entero_positivo(request.form.get("fragmentos")), entero_positivo(request.form.get("cassettes"))
+    numero = request.form.get("numero", "").strip()[:10]
+    if not miembro:
+        flash("Elegí el estudio de la técnica.", "error")
+    elif inclusion not in INCLUSIONES:
+        flash("Elegí el tipo de inclusión.", "error")
+    elif not numero or not fragmentos or not cassettes:
+        flash("Completá el número, los fragmentos y los cassettes de la técnica.", "error")
+    else:
+        tacos = cargar_estudios("e.id=?", (miembro["id"],))[0]["tacos"]
+        db.ex("""INSERT INTO tecnicas (estudio_id, numero, fragmentos, inclusion, tacos, cassettes, comentarios, usuario_id, creado_en)
+                 VALUES (?,?,?,?,?,?,?,?,?)""", (miembro["id"], numero, fragmentos, inclusion, tacos, cassettes,
+                                                  request.form.get("comentarios", "").strip()[:300], usuario_actual()["id"], db.ahora()))
+        sumar_cassettes(e)
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica", f"{numero}: {inclusion}, {fragmentos} fragm., {cassettes} cassette(s)", miembro["id"])
+        flash("Técnica agregada.", "ok")
+    return redirect(destino)
+
+
+@app.route("/tecnica/<int:tid>/borrar", methods=["POST"])
+@requiere_permiso("macro", "micro")
+def tecnica_borrar(tid):
+    t = db.uno("SELECT id, estudio_id, numero FROM tecnicas WHERE id=?", (tid,)) or abort(404)
+    e, _, _, _, etapas, solicita = ficha(t["estudio_id"])
+    ok, motivo = macro_editable(e, etapas, solicita)
+    destino = url_for("estudio", eid=t["estudio_id"]) + "#tecnicas"
+    if not ok:
+        flash(f"No se borró: {motivo}", "error")
+        return redirect(destino)
+    db.ex("DELETE FROM tecnicas WHERE id=?", (tid,))
+    sumar_cassettes(e)
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica_borrada", t["numero"] or "", t["estudio_id"])
+    flash("Técnica borrada.", "ok")
+    return redirect(destino)
 
 
 @app.route("/estudio/<int:eid>/micro", methods=["POST"])
@@ -1091,7 +1338,6 @@ def guardar_micro(eid):
                                    "descripcion": request.form.get("descripcion", "").strip(),
                                    "conclusion": request.form.get("conclusion", "").strip(),
                                    "bethesda": request.form.get("bethesda", "").strip(),
-                                   "tecnicas_especiales": request.form.get("tecnicas_especiales", "").strip(),
                                    "solicita_ihq": pide_ihq})
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_micro", "solicita IHQ" if pide_ihq else "", eid)
     flash("Microscopía guardada.", "ok")
@@ -1125,6 +1371,10 @@ def marcar_listo(eid, etapa):
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     miembros = miembros_flujo(e)
     falta = None if etapa in PASOS_IHQ and not solicita else tipo.requisito(etapa, macro, micro, ihq)
+    if not falta and etapa == "macroscopia" and "macro" in tipo.secciones:
+        sin = estudios_sin_tecnicas(miembros)
+        if sin:
+            falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin) + "."
     if not prox or prox[0] != etapa:
         flash("Esa etapa no es la próxima pendiente de este estudio.", "error")
     elif not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
@@ -1788,6 +2038,31 @@ def feriados():
     return render_template("feriados.html", feriados=db.q("SELECT * FROM feriados ORDER BY fecha"))
 
 
+LISTADOS = {"tecnicas_especiales": ("Técnicas especiales", "Se tildan al agregar un estudio (biopsias y citologías) y se pueden elegir al informar la microscopía."),
+            "ihq_marcadores": ("Marcadores de IHQ", "Se eligen al cargar la IHQ de una biopsia, cuando el diagnóstico la solicita.")}
+
+
+def limpiar_listado(texto):
+    return sin_repetidos(limpiar_valor(linea) for linea in (texto or "").splitlines())
+
+
+@app.route("/listados", methods=["GET", "POST"])
+@requiere_admin
+def listados():
+    yo = usuario_actual()
+    if request.method == "POST":
+        clave = request.form.get("lista", "")
+        if clave in LISTADOS:
+            items = limpiar_listado(request.form.get("valores", ""))
+            db.lote_ex([("DELETE FROM listas WHERE nombre=?", (clave,))]
+                       + [("INSERT INTO listas (nombre, orden, valor) VALUES (?,?,?)", (clave, i, v)) for i, v in enumerate(items)])
+            db.auditar(yo["id"], None, "listado", f"{LISTADOS[clave][0]}: {len(items)} valores")
+            flash(f"{LISTADOS[clave][0]}: {len(items)} valores guardados.", "ok")
+        return redirect(url_for("listados") + f"#{clave}")
+    actuales = listas()
+    return render_template("listados.html", listados=[(k, t, d, actuales.get(k, [])) for k, (t, d) in LISTADOS.items()])
+
+
 TIPOS_ETIQUETA = {"bp": "Recepción", "pap": "PAP-Laboratorio", "lab": "BP-Laboratorio"}
 GRUPO_NUMERACION = ("bp", "pap")
 ESTUDIO_LAB = {"lab": "BP", "pap": "PAP"}
@@ -2072,7 +2347,7 @@ def exportar():
                 e["cantidad"], e["citologia_hormonal"], e["observaciones"],
                 g(ma, "template"), g(ma, "descripcion"), g(ma, "cassettes"),
                 g(mi, "template"), g(mi, "descripcion"), g(mi, "conclusion"), g(mi, "bethesda"),
-                g(mi, "tecnicas_especiales"), "Si" if mi and mi["solicita_ihq"] else "", g(ih, "marcadores"), g(ih, "resultado")]
+                e["tecnicas_especiales"] or g(mi, "tecnicas_especiales"), "Si" if mi and mi["solicita_ihq"] else "", g(ih, "marcadores"), g(ih, "resultado")]
         for k in orden_etapas:
             x = et.get(k)
             fila += [x["iniciales"] if x else "", fecha_hora(x["fecha_hora"]) if x else ""]

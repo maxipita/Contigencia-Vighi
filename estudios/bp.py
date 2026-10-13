@@ -16,6 +16,7 @@ class Biopsia(Estudio):
     etiqueta_cantidad = "frascos"
     lotes = ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "HPM"]
     tacos_por_lote = 120
+    pide_tecnicas = True
 
 
 ESTUDIO = Biopsia()

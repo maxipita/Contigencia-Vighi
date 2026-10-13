@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Listados{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Administración</div>
+<h1>Listados</h1>
+<p class="muted">Un valor por línea. Al guardar, la lista reemplaza a la anterior (lo ya cargado en los estudios no cambia). Las comas y los punto y coma se reemplazan por espacios.</p>
+<div class="cols">
+{% for clave, titulo, ayuda, valores in listados %}
+<div class="tarjeta" id="{{ clave }}">
+  <h2>{{ titulo }}</h2>
+  <p class="muted" style="margin-top:0">{{ ayuda }}</p>
+  <form method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="lista" value="{{ clave }}">
+    <textarea name="valores" rows="14" spellcheck="false" placeholder="Un valor por línea">{{ valores | join("\n") }}</textarea>
+    <div class="acciones"><button class="btn">Guardar</button><span class="muted">{{ valores | length }} valores cargados</span></div>
+  </form>
+</div>
+{% endfor %}
+</div>
+{% endblock %}

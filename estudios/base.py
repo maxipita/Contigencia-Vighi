@@ -10,6 +10,7 @@ SECTORES = {
 ETAPAS = {
     "ingreso": ("Ingreso", "ingreso", "INGRESO", "Cargar protocolo", "Protocolo > Cargar"),
     "macroscopia": ("Macroscopía", "macroscopia", "DIAGNÓSTICOS", "Macroscopía", "Macro > Informar"),
+    "decal": ("Decalcificación", "laboratorio", "LABORATORIO", "Decalcificación", "Macro > Decal"),
     "procesamiento": ("Procesamiento", "laboratorio", "LABORATORIO", "Procesamiento", "Histo > Procesar"),
     "inclusion": ("Inclusión", "laboratorio", "LABORATORIO", "Inclusión", "Cassette > Incluir"),
     "corte": ("Corte PH", "laboratorio", "LABORATORIO", "Corte PH", "Taco > Cortar"),
@@ -23,6 +24,18 @@ ETAPAS = {
 }
 NOMBRE_ETAPA = {k: v[0] for k, v in ETAPAS.items()}
 GINECOLOGICA = "Ginecológica"
+DIAS_DECAL = 1
+
+
+class Variante(int):
+    def __new__(cls, ihq=False, decal=False):
+        o = super().__new__(cls, 1 if ihq else 0)
+        o.decal = bool(decal)
+        return o
+
+
+def con_decal(variante):
+    return bool(getattr(variante, "decal", False))
 
 
 def _texto(fila, campo):
@@ -48,10 +61,22 @@ class Estudio:
     lotes = []
     lote_por_citotecnico = False
     tacos_por_lote = None
+    pide_tecnicas = False
 
     def flujo(self, solicita_ihq=False):
-        claves = self.pasos + (self.pasos_ihq if solicita_ihq else [])
+        claves = list(self.pasos)
+        if con_decal(solicita_ihq) and "macroscopia" in claves:
+            claves.insert(claves.index("macroscopia") + 1, "decal")
+        claves += self.pasos_ihq if solicita_ihq else []
         return [(k, ETAPAS[k][0], ETAPAS[k][1]) for k in claves]
+
+    def plazo(self, etapa, decal=False):
+        if etapa == "decal":
+            dias, hora = self.plazos.get("macroscopia", (0, 20))
+            return dias + DIAS_DECAL, hora
+        dias, hora = self.plazos.get(etapa, (0, 20))
+        despues = ("macroscopia" in self.pasos and etapa in self.pasos and self.pasos.index(etapa) > self.pasos.index("macroscopia")) or etapa in self.pasos_ihq
+        return (dias + DIAS_DECAL if decal and despues else dias), hora
 
     def estado(self, hechas, solicita_ihq=False, anulado=False):
         if anulado:

@@ -57,8 +57,7 @@
       <div class="ver">{{ p.cobertura or 'Sin cobertura' }} {{ lapiz() }}</div>
       {% endcall %}
       {% if not p.fecha_recoleccion %}<div class="lt">Falta la fecha de recolección</div>{% endif %}
-      <div>{% if p.borrador %}<a class="lapiz" href="{{ url_for('protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>completar datos</a>
-        {% elif puede('protocolo_editar') %}<a class="lapiz" href="{{ url_for('protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>más datos</a>{% endif %}</div></div>
+      {% if p.borrador %}<div><a class="lapiz" href="{{ url_for('protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>completar datos</a></div>{% endif %}</div>
     <div class="dato"><h2>Médico</h2>
       {% call edicion(campos_medico) %}
       <div class="ver">{{ p.medico or 'Sin médico' }} {{ lapiz() }}</div>
@@ -110,6 +109,8 @@
     </div>
     {% endif %}
   </div>
+
+  {% with pid=p.id %}{% include "_imagenes.html" %}{% endwith %}
 
   <div class="tarjeta">
     <h2>Historial</h2>

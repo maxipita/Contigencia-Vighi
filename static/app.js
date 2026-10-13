@@ -215,3 +215,110 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     form.classList.remove("editando");
   }));
 });
+
+(function () {
+  const enlaces = [...document.querySelectorAll("a[data-visor]")];
+  if (!enlaces.length) return;
+  const visor = document.createElement("div");
+  visor.className = "visor";
+  visor.hidden = true;
+  visor.innerHTML = '<button type="button" class="visor-x" aria-label="Cerrar">×</button><button type="button" class="visor-ant" aria-label="Anterior">‹</button>' +
+    '<img alt=""><button type="button" class="visor-sig" aria-label="Siguiente">›</button><div class="visor-pie"></div>';
+  document.body.append(visor);
+  const img = visor.querySelector("img"), pie = visor.querySelector(".visor-pie");
+  let actual = 0;
+  const mostrar = i => {
+    actual = (i + enlaces.length) % enlaces.length;
+    img.src = enlaces[actual].href;
+    pie.textContent = (enlaces[actual].title || "") + (enlaces.length > 1 ? "  (" + (actual + 1) + "/" + enlaces.length + ")" : "");
+    visor.hidden = false;
+  };
+  const cerrar = () => { visor.hidden = true; img.removeAttribute("src"); };
+  enlaces.forEach((a, i) => a.addEventListener("click", e => { e.preventDefault(); mostrar(i); }));
+  visor.querySelector(".visor-x").addEventListener("click", cerrar);
+  visor.querySelector(".visor-ant").addEventListener("click", () => mostrar(actual - 1));
+  visor.querySelector(".visor-sig").addEventListener("click", () => mostrar(actual + 1));
+  visor.addEventListener("click", e => { if (e.target === visor) cerrar(); });
+  document.addEventListener("keydown", e => {
+    if (visor.hidden) return;
+    if (e.key === "Escape") cerrar();
+    else if (e.key === "ArrowLeft") mostrar(actual - 1);
+    else if (e.key === "ArrowRight") mostrar(actual + 1);
+  });
+})();
+
+(function () {
+  const estudio = document.querySelector("[data-tecnica-estudio]");
+  if (!estudio) return;
+  const form = estudio.closest("form");
+  const tacos = form.querySelector("[data-tecnica-tacos]");
+  const nro = form.querySelector("[data-tecnica-nro]");
+  function aplicar() {
+    const op = estudio.selectedOptions[0];
+    if (!op) return;
+    tacos.value = op.dataset.tacos || "";
+    nro.value = op.dataset.nro || "";
+  }
+  estudio.addEventListener("change", aplicar);
+  aplicar();
+})();
+
+(function () {
+  const grupos = document.querySelectorAll("[data-chips]");
+  grupos.forEach((grupo) => {
+    const destino = document.getElementById(grupo.dataset.chips);
+    if (!destino) return;
+    const leer = () => destino.value.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+    const pintar = () => {
+      const marcados = leer().map((x) => x.toLowerCase());
+      grupo.querySelectorAll(".chip-sel").forEach((b) => b.classList.toggle("on", marcados.includes(b.dataset.valor.toLowerCase())));
+    };
+    grupo.addEventListener("click", (ev) => {
+      const b = ev.target.closest(".chip-sel");
+      if (!b) return;
+      const valor = b.dataset.valor;
+      const actuales = leer();
+      const i = actuales.findIndex((x) => x.toLowerCase() === valor.toLowerCase());
+      if (i >= 0) actuales.splice(i, 1);
+      else actuales.push(valor);
+      destino.value = actuales.join(", ");
+      pintar();
+    });
+    destino.addEventListener("input", pintar);
+    pintar();
+  });
+})();
+
+(function () {
+  function agregar(entrada) {
+    const campo = entrada.closest(".ancho");
+    const lista = campo.querySelector(".checks");
+    const valor = entrada.value.replace(/[,;]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!valor) return;
+    const existente = [...lista.querySelectorAll("input[type=checkbox]")].find((c) => c.value.toLowerCase() === valor.toLowerCase());
+    if (existente) existente.checked = true;
+    else {
+      const rotulo = document.createElement("label");
+      rotulo.className = "check";
+      const caja = document.createElement("input");
+      caja.type = "checkbox";
+      caja.name = lista.dataset.nombre;
+      caja.value = valor;
+      caja.checked = true;
+      rotulo.append(caja, " " + valor);
+      lista.append(rotulo);
+    }
+    entrada.value = "";
+    entrada.focus();
+  }
+  document.addEventListener("click", (ev) => {
+    const boton = ev.target.closest("[data-agregar-tecnica]");
+    if (boton) agregar(boton.parentElement.querySelector("[data-otra-tecnica]"));
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.matches("[data-otra-tecnica]")) {
+      ev.preventDefault();
+      agregar(ev.target);
+    }
+  });
+})();
