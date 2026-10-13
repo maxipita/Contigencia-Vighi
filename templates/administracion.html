@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block titulo %}Administración{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Finanzas</div>
+<h1><svg class="ic ic-titulo"><use href="#i-dolar"/></svg> Administración</h1>
+
+<div class="cols cols-admin">
+<div class="admin-menu">
+  <div class="tarjeta admin-seccion">
+    <div class="admin-rotulo">Ingresos</div>
+    <a href="{{ url_for('facturar') }}"><svg class="ic"><use href="#i-mas"/></svg> Nueva factura</a>
+    <a href="{{ url_for('facturacion_lista') }}"><svg class="ic"><use href="#i-lista"/></svg> Facturas emitidas</a>
+    <a href="{{ url_for('tarifario') }}"><svg class="ic"><use href="#i-dolar"/></svg> Tarifario</a>
+    <a href="{{ url_for('nomencladores') }}"><svg class="ic"><use href="#i-completar"/></svg> Nomencladores</a>
+  </div>
+  <div class="tarjeta admin-seccion">
+    <div class="admin-rotulo">Reclamos</div>
+    <span class="proximamente"><svg class="ic"><use href="#i-campana"/></svg> Reclamo de pagos <em>próximamente</em></span>
+  </div>
+  <div class="tarjeta admin-seccion">
+    <div class="admin-rotulo">Presupuestos</div>
+    <span class="proximamente"><svg class="ic"><use href="#i-factura-dolar"/></svg> Presupuestos <em>próximamente</em></span>
+  </div>
+  <div class="tarjeta admin-seccion">
+    <div class="admin-rotulo">Autorizaciones API</div>
+    <span class="proximamente"><svg class="ic"><use href="#i-wifi"/></svg> Dashboard autorizaciones <em>próximamente</em></span>
+  </div>
+</div>
+
+<div class="tarjeta panel-cobros">
+  <h2>Cobros previstos</h2>
+  {% if cantidad %}
+  <div class="cobros-grid">
+    {% for m in meses %}
+    <div class="cobros-mes">
+      <div class="cobros-mes-cab"><span>{{ m.nombre }}</span><b>{{ m.total | peso0 }}</b></div>
+      {% for r in m.filas %}
+      <div class="cobro-fila">
+        <span class="cobro-fecha">{{ r.fecha }}</span>
+        <svg class="ic estado-cobro {{ r.color }}" role="img" aria-label="{{ r.titulo }}"><title>{{ r.titulo }}</title><use href="#i-cobro-{{ r.simbolo }}"/></svg>
+        <a class="cobro-empresa" href="{{ url_for('factura', fid=r.id) }}" title="Factura {{ r.numero }}">{{ r.cobertura }}</a>
+        <span class="cobro-monto">{{ r.total | peso0 }}</span>
+      </div>
+      {% else %}
+      <div class="muted cobros-vacio">Sin cobros previstos.</div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="cobros-sin"><svg class="ic cobros-icono"><use href="#i-calendario-check"/></svg><p>Sin cobros cargados.</p></div>
+  {% endif %}
+  {% if sin_fecha %}<p class="muted" style="margin:0 16px 12px">Hay {{ sin_fecha }} factura(s) emitida(s) sin fecha estimada de cobro: <a href="{{ url_for('facturacion_lista', estado='sincobrar') }}">verlas</a>.</p>{% endif %}
+  <div class="leyenda-cobros">
+    <span><svg class="ic estado-cobro ok"><use href="#i-cobro-conf"/></svg> En fecha</span>
+    <span><svg class="ic estado-cobro atr"><use href="#i-cobro-conf"/></svg> Cobro atrasado</span>
+    <span><svg class="ic estado-cobro atr5"><use href="#i-cobro-conf"/></svg> Cobro atrasado +5d</span>
+    <span><svg class="ic estado-cobro ok"><use href="#i-cobro-tent"/></svg> Fecha tentativa</span>
+    <span><svg class="ic estado-cobro ok"><use href="#i-cobro-conf"/></svg> Fecha confirmada o de cobro cargada</span>
+    <span class="muted">Al registrar el cobro, la factura sale de esta lista.</span>
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -156,6 +156,51 @@ CREATE TABLE IF NOT EXISTS tecnicas (
     usuario_id INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_tecnicas_estudio ON tecnicas(estudio_id);
+CREATE TABLE IF NOT EXISTS nomencladores (
+    codigo VARCHAR(20) PRIMARY KEY, descripcion VARCHAR(300) NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS tarifarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre VARCHAR(80) NOT NULL UNIQUE, iva VARCHAR(10) NOT NULL DEFAULT 'exento'
+);
+CREATE TABLE IF NOT EXISTS tarifario_coberturas (
+    cobertura VARCHAR(80) PRIMARY KEY, tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id)
+);
+CREATE TABLE IF NOT EXISTS tarifario_valores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id), codigo VARCHAR(20) NOT NULL,
+    importe REAL NOT NULL DEFAULT 0, vigente_desde VARCHAR(10) NOT NULL,
+    UNIQUE (tarifario_id, codigo, vigente_desde)
+);
+CREATE INDEX IF NOT EXISTS ix_tarifario_valores ON tarifario_valores(tarifario_id, codigo);
+CREATE TABLE IF NOT EXISTS nomenclador_muestras (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo VARCHAR(3) NOT NULL, sitio VARCHAR(80) NOT NULL DEFAULT '', tipo_muestra VARCHAR(80) NOT NULL DEFAULT '',
+    codigo VARCHAR(20) NOT NULL,
+    UNIQUE (tipo, sitio, tipo_muestra)
+);
+CREATE TABLE IF NOT EXISTS facturas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    numero VARCHAR(40), estado VARCHAR(10) NOT NULL DEFAULT 'borrador', cobertura VARCHAR(80) NOT NULL,
+    fecha_factura VARCHAR(10), fecha_estimada_cobro VARCHAR(10), fec_tipo VARCHAR(10) NOT NULL DEFAULT 'tentativa', fecha_cobro VARCHAR(10),
+    exento REAL NOT NULL DEFAULT 0, gravado REAL NOT NULL DEFAULT 0, iva REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0,
+    alicuota REAL NOT NULL DEFAULT 0.21, observaciones TEXT,
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19),
+    emitida_por INTEGER REFERENCES usuarios(id), emitida_en VARCHAR(19),
+    cobrada_por INTEGER REFERENCES usuarios(id), cobrada_en VARCHAR(19),
+    anulada_por INTEGER REFERENCES usuarios(id), anulada_en VARCHAR(19), anulada_motivo VARCHAR(200)
+);
+CREATE INDEX IF NOT EXISTS ix_facturas_estado ON facturas(estado, cobertura);
+CREATE TABLE IF NOT EXISTS factura_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factura_id INTEGER NOT NULL REFERENCES facturas(id),
+    estudio_id INTEGER NOT NULL REFERENCES estudios(id), protocolo_id INTEGER REFERENCES protocolos(id),
+    numero_protocolo VARCHAR(20), paciente VARCHAR(160), afiliado VARCHAR(40), fecha VARCHAR(10), estudio VARCHAR(120),
+    codigo VARCHAR(20), descripcion VARCHAR(200),
+    cantidad INTEGER NOT NULL DEFAULT 1, unitario REAL NOT NULL DEFAULT 0, iva VARCHAR(10) NOT NULL DEFAULT 'exento', importe REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_factura_items_factura ON factura_items(factura_id);
+CREATE INDEX IF NOT EXISTS ix_factura_items_estudio ON factura_items(estudio_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,
@@ -336,7 +381,9 @@ def preparar_esquema(c):
                                    ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
                                    ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
                                    ("templates", "organo", "VARCHAR(80)"),
-                                   ("templates", "tipo_muestra", "VARCHAR(80)")):
+                                   ("templates", "tipo_muestra", "VARCHAR(80)"),
+                                   ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
+                                   ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
@@ -448,6 +495,13 @@ def inicializar():
         for uid, sectores in c.execute("SELECT id, sectores FROM usuarios WHERE perfil_id IS NULL").fetchall():
             pid, extra = permisos.perfil_por_sectores(sectores, perfiles)
             c.execute("UPDATE usuarios SET perfil_id=?, permisos_mas=? WHERE id=?", (pid, permisos.texto(extra), uid))
+    if c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='tarifas'").fetchone() \
+            and not c.execute("SELECT 1 FROM tarifas LIMIT 1").fetchone():
+        c.execute("DROP TABLE tarifas")
+    if not c.execute("SELECT 1 FROM tarifarios LIMIT 1").fetchone():
+        c.execute("INSERT INTO tarifarios (nombre, iva) VALUES ('TARIFA GENERAL', 'exento')")
+    if not c.execute("SELECT 1 FROM perfiles WHERE nombre='Facturación' OR (',' || permisos || ',') LIKE '%,facturacion,%'").fetchone():
+        c.execute("INSERT INTO perfiles (nombre, permisos) VALUES ('Facturación', 'facturacion,exportar')")
     c.commit()
     if flujos_por_consolidar(c):
         consolidar_diagnosticos(c)

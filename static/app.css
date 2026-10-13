@@ -380,3 +380,80 @@ fieldset[disabled] .chip-sel { cursor: default; opacity: .6; }
 .templates-usados .lapiz { margin-left: 6px; }
 .filtro-templates { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 6px; }
 .filtro-templates select { width: auto; min-width: 150px; max-width: 230px; }
+th.num, td.num { text-align: right; white-space: nowrap; }
+input.num { text-align: right; }
+.totales-fact { display: flex; flex-wrap: wrap; gap: 0; margin-top: 12px; border: 1px solid var(--borde); border-radius: 10px; background: #fff; overflow: hidden; width: fit-content; }
+.totales-fact > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 18px; border-right: 1px solid var(--borde); }
+.totales-fact > div:last-child { border-right: 0; }
+.totales-fact span { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--pizarra); }
+.totales-fact b { font-size: 16px; }
+.cols-factura { grid-template-columns: 3fr 1fr; }
+.filtros-facturar .fila-filtros { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-bottom: 10px; }
+.filtros-facturar .fila-filtros:last-child { margin-bottom: 0; }
+.filtros-facturar .campo { display: flex; flex-direction: column; gap: 4px; min-width: 120px; }
+.filtros-facturar .campo.ancho-campo { min-width: 170px; flex: 1 1 170px; }
+.filtros-facturar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--pizarra); margin: 0; }
+.tabla-facturar td, .tabla-facturar th { padding-top: 8px; padding-bottom: 8px; }
+.barra-tarifa { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+.segmentado { display: inline-flex; border: 1px solid var(--borde); border-radius: 8px; overflow: hidden; background: #fff; }
+.segmentado a { padding: 6px 14px; font-size: 13px; text-decoration: none; color: var(--texto); }
+.segmentado a.activo { background: var(--superficie); font-weight: 600; box-shadow: inset 0 -2px 0 var(--acento); }
+details.tarjeta > summary { cursor: pointer; list-style: none; }
+details.tarjeta > summary::-webkit-details-marker { display: none; }
+details.modificar > summary { cursor: pointer; display: inline-block; list-style: none; }
+details.modificar[open] { min-width: 330px; }
+details.modificar .acciones { margin-top: 6px; }
+.coberturas-tarifa { max-height: 260px; overflow-y: auto; border: 1px solid var(--borde); border-radius: 8px; padding: 6px 10px; background: #fff; }
+.coberturas-tarifa .check { display: flex; gap: 6px; align-items: center; margin: 3px 0; font-weight: 400; cursor: pointer; }
+.coberturas-tarifa .check input { width: auto; margin: 0; }
+.cols-admin { grid-template-columns: 230px 1fr; }
+@media (max-width: 900px) { .cols-admin { grid-template-columns: 1fr; } }
+.admin-menu { display: flex; flex-direction: column; gap: 12px; }
+.admin-seccion { padding: 12px 14px; }
+.admin-rotulo { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--pizarra); margin-bottom: 6px; }
+.admin-seccion a, .admin-seccion .proximamente { display: block; padding: 7px 8px; border-radius: 6px; font-size: 13px; font-weight: 500; text-decoration: none; color: var(--texto); }
+.admin-seccion a:hover { background: var(--superficie); color: var(--acento-fuerte); }
+.admin-seccion .proximamente { color: var(--pizarra); opacity: .7; }
+.admin-seccion .proximamente em { font-size: 11px; font-style: normal; margin-left: 4px; }
+.panel-cobros { padding-bottom: 0; }
+.cobros-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; padding: 4px 0 12px; }
+.cobros-mes-cab { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 8px; border-bottom: 2px solid var(--borde); font-weight: 700; }
+.cobro-fila { display: grid; grid-template-columns: 52px 18px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--borde); font-size: 13px; }
+.cobro-fecha { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--pizarra); }
+.cobro-monto { font-family: ui-monospace, Consolas, monospace; font-size: 12px; text-align: right; }
+.cobros-vacio { padding: 10px 8px; }
+.cobros-sin { text-align: center; padding: 48px 0; color: var(--pizarra); }
+.cobros-icono { font-size: 28px; opacity: .25; }
+.punto-cobro { display: inline-flex; align-items: center; justify-content: center; width: 12px; height: 12px; border-radius: 50%; font-size: 9px; font-style: normal; font-weight: 700; line-height: 1; }
+.punto-cobro.fc { background: var(--acento); }
+.punto-cobro.atr { background: #f59e0b; }
+.punto-cobro.atr5 { background: #ef4444; }
+.punto-cobro.tent { background: #94a3b8; color: #fff; }
+.punto-cobro.conf { background: transparent; color: #10b981; font-size: 14px; }
+.leyenda-cobros { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 16px; margin: 0 -16px; border-top: 1px solid var(--borde); background: var(--superficie); font-size: 11px; color: var(--pizarra); }
+.leyenda-cobros span { display: inline-flex; align-items: center; gap: 6px; }
+.ic-titulo { width: 24px; height: 24px; color: var(--acento); vertical-align: -3px; margin-right: 4px; }
+.admin-seccion a .ic, .admin-seccion .proximamente .ic { width: 15px; height: 15px; color: var(--acento); margin-right: 6px; vertical-align: -3px; }
+.admin-seccion .proximamente .ic { opacity: .6; }
+.cobros-icono { width: 30px; height: 30px; color: var(--acento); opacity: .35; font-size: inherit; }
+.punto-conf { width: 14px; height: 14px; color: #10b981; stroke-width: 3; }
+.grilla.grilla-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+@media (max-width: 560px) { .grilla.grilla-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.banner-vista { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 8px 16px; background: #fff4d6; border-bottom: 2px solid #f59e0b; color: #5c3b00; font-size: 13px; }
+.banner-vista > div { flex: 1 1 320px; }
+.banner-vista span { opacity: .85; }
+.banner-vista form { margin: 0; }
+.banner-vista select { width: auto; min-width: 160px; }
+.ver-como-tarjeta { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 12px 16px; }
+.ver-como-tarjeta > div { flex: 1 1 380px; }
+.ver-como-tarjeta .muted { margin-top: 2px; }
+.condiciones-usuario { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; align-self: end; min-height: 40px; }
+.estado-cobro { width: 17px; height: 17px; vertical-align: middle; }
+.estado-cobro.ok { color: #2e9e84; }
+.estado-cobro.atr { color: #f5a342; }
+.estado-cobro.atr5 { color: #e5484d; }
+.cobro-fila { grid-template-columns: 56px 20px 1fr auto; }
+.cobro-empresa { color: #1c6fb5; text-decoration: none; text-transform: uppercase; font-size: 12.5px; }
+.cobro-empresa:hover { text-decoration: underline; }
+.cobros-mes-cab { font-size: 18px; font-weight: 500; color: var(--pizarra); }
+.cobros-mes-cab b { font-weight: 500; }

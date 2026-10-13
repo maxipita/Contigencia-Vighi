@@ -21,7 +21,7 @@
   </select>
   <select name="sector">
     <option value="">Pendiente en cualquier sector</option>
-    {% for k, n in SECTORES.items() if k != 'ingreso' %}<option value="{{ k }}" {{ 'selected' if f.sector == k }}>Pendiente en {{ n }}</option>{% endfor %}
+    {% for k, n in SECTORES.items() if k not in ('ingreso', 'facturacion') %}<option value="{{ k }}" {{ 'selected' if f.sector == k }}>Pendiente en {{ n }}</option>{% endfor %}
   </select>
   <select name="etapa">
     <option value="">Pendiente en cualquier etapa</option>
