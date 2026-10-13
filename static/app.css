@@ -316,6 +316,11 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .semaforo-total a.activo { background: var(--superficie); box-shadow: 0 0 0 2px var(--acento); }
 .filtros.auto button { display: none; }
 .marca small.base-modo { margin-top: 2px; font-weight: 700; color: #7ee2a8; }
+.miembro { padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--borde); }
+.miembro:last-of-type { border-bottom: 0; }
+.miembro .acciones { align-items: center; }
+form.en-linea { display: flex; gap: 6px; flex: 1; min-width: 200px; margin: 0; }
+form.en-linea input { flex: 1; }
 .edicion .editar { display: none; }
 .edicion.editando .editar { display: block; }
 .edicion.editando .ver { display: none; }
@@ -344,3 +349,11 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .visor-ant { left: 16px; top: 50%; }
 .visor-sig { right: 16px; top: 50%; }
 .visor-pie { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; }
+.lote-cabecera { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin: 14px 0 16px; }
+.lote-cabecera .acciones { margin-top: 0; }
+.lote-cabecera form { margin: 0; }
+table.tecnicas { margin-bottom: 4px; }
+table.tecnicas form { margin: 0; }
+.tecnica-form { margin-top: 14px; }
+.tecnica-form fieldset { border: 0; padding: 0; margin: 0; }
+.tecnica-form h3 { font-size: 15px; margin: 0 0 8px; }

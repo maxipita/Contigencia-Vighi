@@ -27,19 +27,18 @@
 <div class="eyebrow">Estudio</div>
 <p><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
-<h1>{{ e.numero }} · {{ etiqueta }}
+<h1>{{ e.numero }} · {{ etiqueta }}{% if miembros | length > 1 %} <span class="chip flujos">{{ miembros | length }} estudios</span>{% endif %}
   <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span> {{ pill(semaforo) }}</h1>
-{% if comparte %}
-<div class="aviso">Este flujo lo comparten {{ comparte | length + 1 }} estudios de {{ tipo.nombre | lower }} de este protocolo
-  ({% for h in comparte %}<a href="{{ url_for('estudio', eid=h.id) }}">{{ h.etiqueta }}</a>{{ ', ' if not loop.last }}{% endfor %}): al completar o deshacer una etapa se marca en todos a la vez.
-  Cada uno carga su propia macroscopía y diagnóstico.</div>
+{% if miembros | length > 1 %}
+<div class="aviso">Los {{ miembros | length }} estudios de {{ tipo.nombre | lower }} de este protocolo tienen <b>un solo flujo</b>: la macroscopía, la microscopía y las etapas se cargan una vez y valen para todos
+  ({% for h in miembros %}{{ h.etiqueta }}{{ ', ' if not loop.last }}{% endfor %}).</div>
 {% endif %}
 {% if puede('informe') and not e.borrador %}
 <p style="margin:-4px 0 12px"><a href="{{ url_for('protocolo', pid=e.protocolo_id) }}#informe">El informe en PDF es del protocolo completo →</a></p>
 {% endif %}
-{% if hermanos | length > 1 %}
+{% if pestanas | length > 1 %}
 <div class="tabs">
-  {% for h in hermanos %}<a href="{{ url_for('estudio', eid=h.id) }}" class="{{ 'activo' if h.id == e.id }}{{ ' bloqueado' if h.anulado }}">{{ h.etiqueta }}</a>{% endfor %}
+  {% for t in pestanas %}<a href="{{ url_for('estudio', eid=t.id) }}" class="{{ 'activo' if t.activa }}{{ ' bloqueado' if t.anulado }}">{{ t.texto }}</a>{% endfor %}
 </div>
 {% endif %}
 {% if e.borrador %}<div class="aviso">Protocolo a completar: faltan los datos del paciente y la cantidad.
@@ -91,6 +90,55 @@
 <div class="cols">
 <div>
   {% if 'macro' in tipo.secciones %}
+  <div class="tarjeta" id="tecnicas">
+    <h2>Técnicas</h2>
+    {% if tecnicas %}
+    <div style="overflow-x:auto">
+    <table class="tecnicas">
+      <tr><th>Estudio</th><th>Nro</th><th>Fragmentos</th><th>Inclusión</th><th>Tacos</th><th>Cassettes</th><th>Comentarios</th><th>Cargó</th><th></th></tr>
+      {% for x in tecnicas %}
+      <tr>
+        <td>{% for m in miembros %}{% if m.id == x.estudio_id %}{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}) {{ m.etiqueta }}{% endif %}{% endfor %}</td>
+        <td>{{ x.numero }}</td><td>{{ x.fragmentos }}</td>
+        <td><span class="chip {{ 'informado' if x.inclusion == 'Inclusión total' else 'flujos' }}">{{ x.inclusion }}</span></td>
+        <td>{{ x.tacos if x.tacos is not none else '—' }}</td><td>{{ x.cassettes }}</td>
+        <td>{{ x.comentarios or '' }}</td><td class="muted">{{ x.iniciales or '?' }} · {{ x.creado_en | fh }}</td>
+        <td>{% if edita_macro[0] %}
+          <form method="post" action="{{ url_for('tecnica_borrar', tid=x.id) }}" data-confirmar="¿Borrar la técnica {{ x.numero }}?">
+            <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="lapiz" title="Borrar técnica">Borrar</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    {% else %}<p class="muted" style="margin:0">No hay técnicas cargadas.</p>{% endif %}
+    {% set tacos_pred = miembros | map(attribute='tacos') | reject('none') | sum %}
+    {% if tacos_pred %}<p class="muted" style="margin:6px 0 0">Tacos predeterminados: {{ tacos_pred }}</p>{% endif %}
+    {% if sin_tecnicas and edita_macro[0] %}<div class="aviso" style="margin-top:12px">Para completar la macroscopía es necesario cargar las técnicas de todos los estudios:
+      faltan {% for m in miembros if m.id in sin_tecnicas %}{{ m.etiqueta }}{{ ', ' if not loop.last }}{% endfor %}.</div>{% endif %}
+    {% if not edita_macro[0] %}<div class="aviso" style="margin-top:12px">🔒 {{ edita_macro[1] }}</div>{% endif %}
+    <form method="post" action="{{ url_for('tecnica_nueva', eid=e.id) }}" class="tecnica-form">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <fieldset class="seccion" {{ 'disabled' if not edita_macro[0] }}>
+      <h3>Agregar una técnica</h3>
+      <div class="grilla">
+        <div class="ancho"><label>Estudio</label>
+          <select name="estudio_id" data-tecnica-estudio>
+            {% for m in miembros %}<option value="{{ m.id }}" data-nro="{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}" data-tacos="{{ m.tacos if m.tacos is not none else '' }}"
+              {{ 'selected' if m.id == e.id }}>{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}) {{ m.etiqueta }}</option>{% endfor %}
+          </select></div>
+        <div><label>Tacos</label><input data-tecnica-tacos readonly tabindex="-1" value=""></div>
+        <div><label>Nro</label><input name="numero" maxlength="10" data-tecnica-nro autocomplete="off"></div>
+        <div><label>Fragmentos</label><input name="fragmentos" type="number" min="1" max="999" value="1"></div>
+        <div><label>Inclusión</label>
+          <select name="inclusion">{% for i in ['Reserva', 'Inclusión total'] %}<option>{{ i }}</option>{% endfor %}</select></div>
+        <div><label>Cassettes</label><input name="cassettes" type="number" min="1" max="999" value="1"></div>
+        <div class="ancho"><label>Comentarios</label><input name="comentarios" maxlength="300" autocomplete="off" placeholder="Comentarios…"></div>
+      </div>
+      <div class="acciones"><button class="btn">Agregar</button></div>
+      </fieldset>
+    </form>
+  </div>
+
   <div class="tarjeta" id="macro">
     <h2>Macroscopía</h2>
     <form method="post" action="{{ url_for('guardar_macro', eid=e.id) }}">
@@ -101,7 +149,7 @@
         <div class="ancho"><label>Template</label>{{ select_template(tpl_macro, macro.template if macro else '', 'desc_macro') }}</div>
         <div class="ancho"><label>Descripción macroscópica</label>
           <textarea name="descripcion" id="desc_macro" rows="6">{{ macro.descripcion if macro else '' }}</textarea></div>
-        <div><label>N° cassettes</label><input name="cassettes" type="number" min="0" value="{{ macro.cassettes if macro and macro.cassettes is not none else '' }}"></div>
+        {% if macro and macro.cassettes %}<div><label>N° cassettes (suma de las técnicas)</label><input value="{{ macro.cassettes }}" readonly tabindex="-1"></div>{% endif %}
       </div>
       <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('macroscopia') }}</div>
       </fieldset>
@@ -159,34 +207,41 @@
 
 <div>
   <div class="tarjeta">
-    <h2>Estudio</h2>
-    <div class="dato"><b>Lote</b> {% if e.lote_id %}<a href="{{ url_for('lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}</div>
-    {% for rotulo, valor in [("Categoría", e.categoria), ("Muestra", (e.subcategoria or '') ~ ' / ' ~ (e.sitio or '')),
-        ("Tipo de muestra", e.tipo_muestra), ("Cantidad", e.cantidad), ("Citología hormonal", e.citologia_hormonal),
-        (tipo.etiqueta_responsable, e.responsable), ("Médico solicitante", e.medico), ("Cobertura", e.cobertura),
-        ("Observaciones", e.observaciones), ("Anulado por", e.motivo_anulacion)] %}
+    <h2>{{ 'Estudios del flujo' if miembros | length > 1 else 'Estudio' }}</h2>
+    {% for m in miembros %}
+    <div class="miembro{{ ' bloqueado' if m.anulado }}">
+      {% if miembros | length > 1 %}<div class="dato"><b><u>{{ m.etiqueta }}</u></b></div>{% endif %}
+      <div class="dato"><b>Lote</b> {% if m.lote_id %}<a href="{{ url_for('lote', lote_id=m.lote_id) }}">{{ m.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}</div>
+      {% for rotulo, valor in [("Categoría", m.categoria), ("Muestra", (m.subcategoria or '') ~ ' / ' ~ (m.sitio or '')),
+          ("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad), ("Citología hormonal", m.citologia_hormonal),
+          (tipo.etiqueta_responsable, m.responsable), ("Observaciones", m.observaciones), ("Anulado por", m.motivo_anulacion)] %}
+        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
+      {% endfor %}
+      <div class="acciones">
+        {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudio_editar', eid=m.id) }}">Editar estudio</a>{% endif %}
+        {% if puede('estudio_anular') %}
+        <form method="post" action="{{ url_for('anular', eid=m.id) }}" class="en-linea" data-confirmar="{{ '¿Reactivar este estudio?' if m.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
+          <input type="hidden" name="_csrf" value="{{ csrf }}">
+          {% if not m.anulado %}<input name="motivo" placeholder="Motivo de anulación">{% endif %}
+          <button class="btn peligro">{{ 'Reactivar estudio' if m.anulado else 'Anular' }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% for rotulo, valor in [("Médico solicitante", e.medico), ("Cobertura", e.cobertura)] %}
       {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
     {% endfor %}
-    <div class="acciones">
-      {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudio_editar', eid=e.id) }}">Editar estudio</a>{% endif %}
-      <a class="btn sec" href="{{ url_for('protocolo', pid=e.protocolo_id) }}">Ver protocolo</a>
-    </div>
+    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolo', pid=e.protocolo_id) }}">Ver protocolo</a></div>
   </div>
 
   {% with pid=e.protocolo_id %}{% include "_imagenes.html" %}{% include "_comentarios.html" %}{% endwith %}
 
   <div class="tarjeta">
-    <h2>Historial del estudio</h2>
+    <h2>{{ 'Historial del flujo' if miembros | length > 1 else 'Historial del estudio' }}</h2>
     <div class="historial">
       {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
     </div>
-    {% if puede('estudio_anular') %}
-    <form method="post" action="{{ url_for('anular', eid=e.id) }}" class="acciones" data-confirmar="{{ '¿Reactivar este estudio?' if e.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
-      <input type="hidden" name="_csrf" value="{{ csrf }}">
-      {% if not e.anulado %}<input name="motivo" placeholder="Motivo de anulación" style="flex:1">{% endif %}
-      <button class="btn peligro">{{ 'Reactivar estudio' if e.anulado else 'Anular estudio' }}</button>
-    </form>
-    {% endif %}
   </div>
 </div>
 </div>

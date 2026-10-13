@@ -31,7 +31,7 @@
   <div class="tarjeta">
     <h2>{{ s.etiqueta }}</h2>
     <table class="datos-informe">
-      <tr><th>Material</th><td>{{ s.material or '—' }}</td></tr>
+      <tr><th>Material</th><td style="white-space:pre-line">{{ s.material or '—' }}</td></tr>
       <tr><th>Diagnóstico final</th><td>{% if s.diagnostico %}<b>{{ s.diagnostico }}</b>{% if s.detalle %}<div class="texto-largo">{{ s.detalle }}</div>{% endif %}{% else %}<span class="lt">sin diagnóstico cargado</span>{% endif %}</td></tr>
       {% if s.macroscopia %}<tr><th>Macroscopía</th><td><div class="texto-largo">{{ s.macroscopia }}</div></td></tr>{% endif %}
       {% if s.microscopia %}<tr><th>{{ 'Microscopía' if s.tipo == 'BP' else 'Descripción' }}</th><td><div class="texto-largo">{{ s.microscopia }}</div></td></tr>{% endif %}

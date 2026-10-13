@@ -46,9 +46,13 @@ py app.py                                 # servidor real en :8000 (equivale a "
 - `trazabilidad.py` — fecha límite de cada etapa en días hábiles desde la recolección (plazos de cada estudio, `FERIADOS_2026`),
   para mostrar OT/LT como southernbits. Horario hábil 8–20.
 - `templates/` (Jinja) y `static/` — interfaz. `seed/` — datos iniciales en JSON.
+- **Macro / micro / IHQ por flujo:** también son del flujo (protocolo + tipo), no de cada estudio. Se guardan en el estudio **cabecera** (el activo de menor `id` del tipo; `DUENO` en `app.py` lo
+  resuelve en SQL y `ficha` lo devuelve como `e["dueno"]`) y todas las rutas leen y escriben ahí, así que `/estudio/<id>` de cualquiera de los estudios del tipo muestra y guarda lo mismo. Un estudio
+  anulado conserva sus propios datos. `db.consolidar_diagnosticos` (en el arranque, si `flujos_por_consolidar`, y en `anular` / reactivar) junta en la cabecera lo que haya quedado en otros estudios
+  (concatena textos y suma cassettes). El informe tiene una sección por flujo (`eids` con todos sus estudios) y la exportación a Excel repite en cada estudio lo del flujo.
 - **Flujo compartido:** las etapas (`etapas`) siguen guardadas por `estudio_id`, pero el flujo es de cada **tipo dentro del protocolo**: los
-  estudios activos del mismo tipo (`miembros_flujo`) tienen siempre las mismas etapas. `marcar_listo` las inserta en todos (y exige los requisitos de
-  cada uno: macro / micro / IHQ), `deshacer` las borra en todos, `pide_ihq(protocolo, tipo)` decide si el flujo incluye IHQ (basta con que un estudio
+  estudios activos del mismo tipo (`miembros_flujo`) tienen siempre las mismas etapas. `marcar_listo` las inserta en todos (y exige los requisitos del flujo:
+  macro / micro / IHQ, que son uno solo), `deshacer` las borra en todos, `pide_ihq(protocolo, tipo)` decide si el flujo incluye IHQ (basta con que un estudio
   la pida; `ficha` y `cargar_estudios` lo usan) y `estudio_nuevo` / reactivar rechazan sumar un estudio a un tipo con `flujo_avanzado`. Al arrancar,
   Un tipo distinto en el mismo protocolo es otro flujo, con su propio tracking.
   `protocolo_cerrado(pid)` = todos los estudios activos informados.
@@ -159,6 +163,10 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   El umbral de 1 día hábil y los nombres (`SEMAFOROS`) están en `trazabilidad.py` / `app.py`; la pastilla es el macro `templates/_semaforo.html`.
   En el tablero, `por_semaforo` (el semáforo total) se cuenta sobre los estudios que pasan todos los filtros **menos** el de semáforo; el filtro por etapa compara con `proxima[0]`.
 - **Comentarios:** son del **protocolo** (tabla `comentarios`), no del estudio: la tarjeta es el parcial `templates/_comentarios.html`, incluido en la ficha del protocolo y en la de cada estudio, y muestra los mismos. Cualquier usuario con sesión comenta; borra el autor o un admin (no hay permiso propio). `comentario_nuevo` / `comentario_borrar` vuelven a la página de origen (`volver_a_comentarios`) y auditan (`comentario`, `comentario_borrado`). El tablero muestra `n_comentarios` como insignia.
+- **Técnicas:** tabla `tecnicas` (por estudio: `numero`, `fragmentos`, `inclusion` = `INCLUSIONES` ("Reserva" / "Inclusión total"), `tacos` = los del estudio al cargarla, `cassettes`, `comentarios`, quién y cuándo). Tarjeta
+  `#tecnicas` de `estudio.html` (solo tipos con sección `macro`, hoy BP) sobre la macro, que lista las de todos los estudios activos del flujo (`SQL_TECNICAS`) y permite agregar (`tecnica_nueva`) o borrar (`tecnica_borrar`) con
+  las mismas reglas y permisos que la macro (`macro_editable`; permiso `macro` o `micro`). `marcar_listo` no deja completar la macroscopía si algún estudio del flujo no tiene técnicas (`estudios_sin_tecnicas`).
+  `macro.cassettes` ya no se carga a mano: `sumar_cassettes` lo recalcula como suma de las técnicas del flujo. Las auditorías son `tecnica` y `tecnica_borrada`.
 - **Carga de macro y micro:** solo se puede editar mientras el estudio está en esa etapa (`habilitada`); `con_permiso` suma el permiso del usuario. La macro además se puede corregir cuando el estudio llega a la etapa de microscopía (`macro_editable`), con permiso `macro` o `micro`.
 - **Excel de exportación:** una fila por estudio con los datos de su protocolo y sus etapas, para volver a cargarlos en southernbits.
 - **Permisos:** el orden de `PERMISOS` es el orden en la pantalla de perfiles. Los usuarios que ya existían arrancan con el perfil de su sector.

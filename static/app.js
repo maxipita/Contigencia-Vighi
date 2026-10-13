@@ -235,3 +235,19 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     else if (e.key === "ArrowRight") mostrar(actual + 1);
   });
 })();
+
+(function () {
+  const estudio = document.querySelector("[data-tecnica-estudio]");
+  if (!estudio) return;
+  const form = estudio.closest("form");
+  const tacos = form.querySelector("[data-tecnica-tacos]");
+  const nro = form.querySelector("[data-tecnica-nro]");
+  function aplicar() {
+    const op = estudio.selectedOptions[0];
+    if (!op) return;
+    tacos.value = op.dataset.tacos || "";
+    nro.value = op.dataset.nro || "";
+  }
+  estudio.addEventListener("change", aplicar);
+  aplicar();
+})();

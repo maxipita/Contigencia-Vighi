@@ -140,7 +140,11 @@ def armar(pid, comentario=""):
     nombre_medico = medico["nombre"] or medico["iniciales"]
 
     secciones, avisos = [], []
+    flujos = {}
     for e in estudios:
+        flujos.setdefault(e["tipo"], []).append(e)
+    for miembros in flujos.values():
+        e = miembros[0]
         tipo = REGISTRO[e["tipo"]]
         macro = db.uno("SELECT * FROM macro WHERE estudio_id=?", (e["id"],))
         micro = db.uno("SELECT * FROM micro WHERE estudio_id=?", (e["id"],))
@@ -155,16 +159,22 @@ def armar(pid, comentario=""):
             diag, detalle = "Ver descripción microscópica.", ""
         else:
             diag, detalle = "", ""
-        cant = (e["cantidad"] or "").strip()
-        material = " · ".join(x for x in (e["sitio"], e["tipo_muestra"]) if x)
-        if cant:
-            material += f" ({cant} {tipo.etiqueta_cantidad})" if material else f"{cant} {tipo.etiqueta_cantidad}"
+        materiales = []
+        for m in miembros:
+            cant = (m["cantidad"] or "").strip()
+            material = " · ".join(x for x in (m["sitio"], m["tipo_muestra"]) if x)
+            if cant:
+                material += f" ({cant} {tipo.etiqueta_cantidad})" if material else f"{cant} {tipo.etiqueta_cantidad}"
+            if material:
+                materiales.append(material)
         ihq_txt = ""
         if "ihq" in tipo.secciones and ihq and (_t(ihq, "marcadores") or _t(ihq, "resultado")):
             ihq_txt = "\n".join(x for x in (("Marcadores: " + _t(ihq, "marcadores")) if _t(ihq, "marcadores") else "", _t(ihq, "resultado")) if x)
+        etiqueta = _etiqueta(e) if len(miembros) == 1 else f"{tipo.nombre} · " + ", ".join(dict.fromkeys(m["sitio"] for m in miembros if m["sitio"]))
         if not diag:
-            avisos.append(f"{_etiqueta(e)}: no hay diagnóstico cargado, el informe saldría sin diagnóstico final.")
-        secciones.append({"eid": e["id"], "tipo": e["tipo"], "etiqueta": _etiqueta(e), "material": material, "diagnostico": diag, "detalle": detalle,
+            avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico final.")
+        secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "material": "\n".join(materiales),
+                          "diagnostico": diag, "detalle": detalle,
                           "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": _t(micro, "descripcion"),
                           "tecnicas": _t(micro, "tecnicas_especiales"), "ihq": ihq_txt})
     if not tiene_firma:
