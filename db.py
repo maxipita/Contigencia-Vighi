@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS estudios (
     responsable_id INTEGER REFERENCES usuarios(id),
     lote_id INTEGER REFERENCES lotes(id),
     anulado INTEGER NOT NULL DEFAULT 0, motivo_anulacion VARCHAR(200),
-    lab_etiquetado_en VARCHAR(19), tecnicas_especiales VARCHAR(500),
+    lab_etiquetado_en VARCHAR(19), tecnicas_especiales VARCHAR(500), malignidad VARCHAR(12),
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS etapas (
@@ -179,8 +179,24 @@ CREATE TABLE IF NOT EXISTS ubicacion_medicos (
     PRIMARY KEY (ubicacion_id, medico_id)
 );
 CREATE INDEX IF NOT EXISTS ix_ubicacion_medicos_medico ON ubicacion_medicos(medico_id);
+CREATE TABLE IF NOT EXISTS ubicacion_destinos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+    canal VARCHAR(10) NOT NULL, destino VARCHAR(120) NOT NULL,
+    informes INTEGER NOT NULL DEFAULT 1, alcance VARCHAR(160) NOT NULL DEFAULT '',
+    UNIQUE (ubicacion_id, canal, destino)
+);
 CREATE INDEX IF NOT EXISTS ix_protocolos_recoleccion ON protocolos(lugar_recoleccion);
 CREATE INDEX IF NOT EXISTS ix_protocolos_entrega ON protocolos(lugar_entrega);
+CREATE TABLE IF NOT EXISTS envios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    informe_id INTEGER, version INTEGER,
+    canal VARCHAR(10) NOT NULL, rol VARCHAR(12) NOT NULL, destino VARCHAR(120) NOT NULL,
+    estado VARCHAR(10) NOT NULL, detalle VARCHAR(250),
+    usuario_id INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_envios_protocolo ON envios(protocolo_id);
 """
 
 
@@ -330,11 +346,10 @@ def ubicaciones_importar(filas):
     c = con()
     existentes = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
     nuevas = [f for f in filas if f["abreviatura"] not in existentes]
-    c.executemany("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos, emails) VALUES (?,?,?,?,?)",
-                  [(f["abreviatura"], f["nombre"], f["direccion"], f["contactos"], f["emails"]) for f in nuevas])
-    _en_trozos(c, [("UPDATE ubicaciones SET nombre=COALESCE(NULLIF(?,''), nombre), direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos), "
-                    "emails=CASE WHEN COALESCE(emails,'')='' THEN ? ELSE emails END WHERE id=?",
-                    (f["nombre"], f["direccion"], f["contactos"], f["emails"], existentes[f["abreviatura"]])) for f in filas if f["abreviatura"] in existentes])
+    c.executemany("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos) VALUES (?,?,?,?)",
+                  [(f["abreviatura"], f["nombre"], f["direccion"], f["contactos"]) for f in nuevas])
+    _en_trozos(c, [("UPDATE ubicaciones SET nombre=COALESCE(NULLIF(?,''), nombre), direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos) WHERE id=?",
+                    (f["nombre"], f["direccion"], f["contactos"], existentes[f["abreviatura"]])) for f in filas if f["abreviatura"] in existentes])
     ids = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
     medicos = {}
     for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
@@ -351,9 +366,12 @@ def ubicaciones_importar(filas):
     ya = {(r["ubicacion_id"], r["medico_id"]) for r in c.execute("SELECT ubicacion_id, medico_id FROM ubicacion_medicos").fetchall()}
     vinculos = {(ids[f["abreviatura"]], medicos[clave_nombre(m)]) for f in filas for m in f["medicos"]} - ya
     c.executemany("INSERT INTO ubicacion_medicos (ubicacion_id, medico_id) VALUES (?,?)", sorted(vinculos))
+    ya_destinos = {(r["ubicacion_id"], r["destino"]) for r in c.execute("SELECT ubicacion_id, destino FROM ubicacion_destinos WHERE canal='email'").fetchall()}
+    destinos = sorted({(ids[f["abreviatura"]], "email", e) for f in filas for e in re.split(r"[\s,;]+", f["emails"]) if "@" in e} - {(u, "email", d) for u, d in ya_destinos})
+    c.executemany("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino) VALUES (?,?,?)", destinos)
     c.commit()
     olvidar_cache()
-    return {"nuevas": len(nuevas), "actualizadas": len(filas) - len(nuevas), "medicos_nuevos": len(faltan), "vinculos": len(vinculos)}
+    return {"nuevas": len(nuevas), "actualizadas": len(filas) - len(nuevas), "medicos_nuevos": len(faltan), "vinculos": len(vinculos), "destinos": len(destinos)}
 
 
 def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
@@ -391,6 +409,7 @@ def preparar_esquema(c):
                                    ("protocolos", "firmante_id", "INTEGER"),
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
                                    ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
+                                   ("estudios", "malignidad", "VARCHAR(12)"),
                                    ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
                                    ("templates", "organo", "VARCHAR(80)"),
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),
@@ -460,7 +479,14 @@ def flujos_por_consolidar(c):
 def inicializar():
     c = _conectar()
     sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
+    sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     antes_de_informes = preparar_esquema(c)
+    if sin_destinos:
+        pasar = []
+        for r in c.execute("SELECT id, emails FROM ubicaciones WHERE COALESCE(emails,'')<>''").fetchall():
+            for correo in dict.fromkeys(x.lower() for x in re.split(r"[\s,;]+", r["emails"]) if "@" in x):
+                pasar.append((r["id"], "email", correo[:120]))
+        c.executemany("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino) VALUES (?,?,?)", pasar)
     if sin_ubicaciones:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'ubicaciones' ELSE permisos || ',ubicaciones' END "
                   "WHERE nombre = 'Ingreso' AND (',' || permisos || ',') NOT LIKE '%,ubicaciones,%'")

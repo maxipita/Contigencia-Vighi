@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block titulo %}Enviar informe {{ p.numero }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Entrega de informes</div>
+<p><a href="{{ url_for('protocolo', pid=p.id) }}">← Protocolo {{ p.numero }}</a></p>
+<h1>Enviar informe · {{ p.numero }}</h1>
+
+<div class="panel-informe">
+  <svg class="ic ic-grande"><use href="#i-informe"/></svg>
+  <div class="texto">
+    {% if emitido and vigente %}
+    <b>Informe listo para enviar</b>
+    <div class="muted">Emisión {{ emitido.version }} · generado el {{ emitido.creado_en | fh }}{% if emitido.iniciales %} por {{ emitido.iniciales }}{% endif %}{% if emitido.firmante %} · firma {{ emitido.firmante }}{% endif %}</div>
+    {% elif emitido %}
+    <b>El informe guardado está desactualizado</b>
+    <div class="muted">Cambió el protocolo desde que se generó: hay que generarlo de nuevo antes de enviarlo.</div>
+    {% else %}
+    <b>Todavía no hay informe</b>
+    <div class="muted">Hay que generar el informe en PDF antes de enviarlo.</div>
+    {% endif %}
+  </div>
+  <div class="acciones">
+    {% if emitido and vigente %}<a class="btn sec" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Ver PDF</a>{% endif %}
+    {% if informes_ok and not vigente %}<a class="btn" href="{{ url_for('informe', pid=p.id) }}">{{ 'Generar de nuevo' if emitido else 'Generar informe' }}</a>{% endif %}
+  </div>
+</div>
+
+{% if flujos_malignidad %}
+<div class="malig-resumen">
+  <span class="muted">Malignidad:</span>
+  {% for f in flujos_malignidad %}<span class="malig-chip {{ (f.valor or 'sin') | lower }}">{{ f.nombre }} · {{ malignidades.get(f.valor, 'sin asignar') }}</span>{% endfor %}
+  {% if flujos_malignidad | rejectattr('valor') | list %}<a href="{{ url_for('protocolo', pid=p.id) }}#malignidad">Asignarla</a>
+  <span class="muted">(define a qué destinos de la ubicación corresponde)</span>{% endif %}
+</div>
+{% endif %}
+
+{% if not email_ok %}
+<div class="aviso error">El envío por e-mail todavía no está configurado en este servidor (falta {{ faltante | join(', ') }} en <code>data/cloudflare.env</code>). Mientras tanto se puede enviar por WhatsApp.</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('envio_enviar', pid=p.id) }}" id="form-envio" class="{{ '' if vigente else 'apagado' }}">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="envio-cols">
+
+    <div class="tarjeta">
+      <h2><svg class="ic"><use href="#i-usuarios"/></svg> Paciente</h2>
+      <div class="muted dest-nombre">{{ ((p.apellido or '') ~ ', ' ~ (p.nombre or '')) | trim(' ,') }}{% if p.dni %} · DNI {{ p.dni }}{% endif %}</div>
+      <label>E-mail</label>
+      <div class="dest-fila">
+        <input type="checkbox" name="usar_paciente" value="1" id="usar_paciente" data-cuenta aria-label="Enviar al paciente">
+        <input type="email" name="paciente_email" value="{{ p.email or '' }}" placeholder="paciente@correo.com" autocomplete="off" data-marca="usar_paciente">
+      </div>
+      {% if p.email and p.email in mandados %}<div class="hecho">✔ Enviado el {{ mandados[p.email] | fh }}</div>{% endif %}
+      {% if puede('protocolo_editar') %}<label class="check"><input type="checkbox" name="guardar_paciente" value="1"> Si lo cambié, guardarlo en la ficha del paciente</label>{% endif %}
+      <label>WhatsApp</label>
+      <div class="dest-fila wa">
+        <input type="tel" value="{{ telefono_paciente }}" placeholder="11 5015 1099" autocomplete="off" data-wa-numero>
+        <button type="button" class="btn wa-btn" data-wa data-rol="paciente"><svg class="ic"><use href="#i-whatsapp"/></svg>Abrir</button>
+      </div>
+    </div>
+
+    <div class="tarjeta">
+      <h2><svg class="ic"><use href="#i-ubicacion"/></svg> Ubicación</h2>
+      {% for l in lugares %}
+      <div class="lugar-envio">
+        <div class="dest-nombre"><a href="{{ url_for('ubicaciones_lista', q=l.abreviatura) }}"><b>{{ l.abreviatura }}</b></a>
+          <span class="chip">{{ 'Entrega' if l.es_entrega else 'Recolección' }}</span>
+          {% if l.nombre %}<div class="muted">{{ l.nombre }}</div>{% endif %}</div>
+        {% for e in l.emails %}
+        <label class="check"><input type="checkbox" name="ubic_email" value="{{ e.destino }}" data-cuenta {{ 'checked' if l.es_entrega and e.estado == 'si' and e.destino not in mandados and email_ok and vigente }}> {{ e.destino }}</label>
+        {% if e.destino in mandados %}<div class="hecho">✔ Enviado el {{ mandados[e.destino] | fh }}</div>{% endif %}
+        {% if e.estado == 'no' %}<div class="no-aplica">No corresponde: recibe solo {{ e.texto }}</div>{% elif e.estado == 'falta' %}<div class="no-aplica">Falta cargar la malignidad del estudio ({{ e.texto }})</div>{% elif e.alcance %}<div class="muted alcance-nota">{{ e.texto }}</div>{% endif %}
+        {% endfor %}
+        {% for t in l.telefonos %}
+        <div class="dest-fila wa tel-ubic">
+          <input type="tel" value="{{ t.visible }}" readonly data-wa-numero>
+          <button type="button" class="btn wa-btn" data-wa data-rol="ubicacion"><svg class="ic"><use href="#i-whatsapp"/></svg>Abrir</button>
+        </div>
+        {% if t.estado == 'no' %}<div class="no-aplica">No corresponde: recibe solo {{ t.texto }}</div>{% elif t.estado == 'falta' %}<div class="no-aplica">Falta cargar la malignidad del estudio ({{ t.texto }})</div>{% elif t.alcance %}<div class="muted alcance-nota">{{ t.texto }}</div>{% endif %}
+        {% endfor %}
+        {% if not l.emails and not l.telefonos %}
+        <div class="muted">Sin destinos de envío cargados.{% if l.id and puede('ubicaciones') %} <a href="{{ url_for('ubicacion', uid=l.id) }}#envio">Cargarlos</a>{% endif %}</div>
+        {% endif %}
+        {% if l.ocultos %}<div class="muted alcance-nota">{{ l.ocultos }} destino(s) sin «Informes» no se ofrecen.</div>{% endif %}
+        {% if l.contactos %}<div class="muted contactos">{{ l.contactos }}</div>{% endif %}
+      </div>
+      {% else %}
+      <div class="muted">El protocolo no tiene ubicación de entrega ni de recolección.</div>
+      {% endfor %}
+      {% if p.medico %}<div class="muted dest-nombre">Médico solicitante: {{ p.medico }}</div>{% endif %}
+    </div>
+
+    <div class="tarjeta">
+      <h2><svg class="ic"><use href="#i-mas-sin-circulo"/></svg> Otro destinatario</h2>
+      <label>E-mail (uno o varios, separados por coma)</label>
+      <input type="text" name="otro_email" placeholder="otro@correo.com" autocomplete="off" data-cuenta-texto>
+      <label>WhatsApp</label>
+      <div class="dest-fila wa">
+        <input type="tel" placeholder="11 NNNN NNNN" autocomplete="off" data-wa-numero>
+        <button type="button" class="btn wa-btn" data-wa data-rol="otro"><svg class="ic"><use href="#i-whatsapp"/></svg>Abrir</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Mensaje</h2>
+    <div class="cols">
+      <div>
+        <label for="asunto">Asunto del e-mail</label>
+        <input id="asunto" name="asunto" maxlength="150" value="{{ textos.asunto }}">
+        <label for="cuerpo">Texto del e-mail <span class="muted">· el PDF va adjunto</span></label>
+        <textarea id="cuerpo" name="cuerpo" rows="8" maxlength="3000">{{ textos.cuerpo }}</textarea>
+      </div>
+      <div>
+        <label for="texto_wa">Texto de WhatsApp</label>
+        <textarea id="texto_wa" rows="5" maxlength="700">{{ textos.whatsapp }}</textarea>
+        <p class="muted">WhatsApp no permite adjuntar desde acá: se abre la conversación con el texto y hay que agregar el PDF a mano.
+          {% if emitido and vigente %}<a href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank" download>Descargar el PDF</a>.{% endif %}</p>
+      </div>
+    </div>
+    <div class="acciones">
+      <button class="btn" id="btn-enviar" {{ 'disabled' if not (email_ok and vigente) }}><svg class="ic"><use href="#i-mail"/></svg><span>Enviar por e-mail</span></button>
+      <span class="muted" id="cuenta-envio">Cada destinatario recibe su propio e-mail: no ven las direcciones de los demás.</span>
+    </div>
+  </div>
+</form>
+
+<div class="tarjeta" id="registro">
+  <h2>Registro de envíos</h2>
+  {% if historial %}
+  <table>
+    <thead><tr><th>Fecha</th><th>Canal</th><th>Destinatario</th><th>Para</th><th>Estado</th><th>Emisión</th><th>Quién</th></tr></thead>
+    <tbody>
+    {% for v in historial %}
+    <tr>
+      <td>{{ v.creado_en | fh }}</td>
+      <td><svg class="ic"><use href="#{{ 'i-mail' if v.canal == 'email' else 'i-whatsapp' }}"/></svg> {{ 'E-mail' if v.canal == 'email' else 'WhatsApp' }}</td>
+      <td>{{ v.destino }}</td>
+      <td>{{ roles.get(v.rol, v.rol) }}</td>
+      <td>{% if v.estado == 'enviado' %}<span class="ot">Enviado</span>{% elif v.estado == 'abierto' %}<span class="chip" title="{{ v.detalle }}">Abierto en WhatsApp</span>{% else %}<span class="lt" title="{{ v.detalle }}">Error</span>{% if v.detalle %}<div class="muted">{{ v.detalle }}</div>{% endif %}{% endif %}</td>
+      <td>{{ v.version or '—' }}{% if emitido and v.version != emitido.version %} <span class="muted">(anterior)</span>{% endif %}</td>
+      <td>{{ v.iniciales or '—' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Todavía no se envió este informe.</p>
+  {% endif %}
+</div>
+{% endblock %}

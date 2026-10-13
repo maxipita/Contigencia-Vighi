@@ -412,3 +412,52 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     }
   });
 })();
+
+(function () {
+  const formulario = document.getElementById("form-envio");
+  if (!formulario) return;
+  const boton = document.getElementById("btn-enviar");
+  const cuenta = document.getElementById("cuenta-envio");
+  const aviso = cuenta.textContent;
+  function actualizar() {
+    let n = formulario.querySelectorAll("input[name=ubic_email]:checked").length;
+    const paciente = formulario.querySelector("#usar_paciente");
+    if (paciente && paciente.checked) n += 1;
+    const otros = formulario.querySelector("[name=otro_email]").value.split(/[\s,;]+/).filter((x) => x.includes("@"));
+    n += otros.length;
+    boton.querySelector("span").textContent = n ? `Enviar por e-mail (${n})` : "Enviar por e-mail";
+    cuenta.textContent = n ? aviso : "Marcá a quién enviar el informe.";
+  }
+  formulario.addEventListener("input", (ev) => {
+    const marca = ev.target.dataset.marca;
+    if (marca && ev.target.value.trim()) document.getElementById(marca).checked = true;
+    actualizar();
+  });
+  formulario.addEventListener("change", actualizar);
+  formulario.addEventListener("submit", () => { boton.disabled = true; boton.querySelector("span").textContent = "Enviando…"; });
+  actualizar();
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-wa]");
+    if (!b) return;
+    const numero = b.closest(".dest-fila").querySelector("[data-wa-numero]").value.trim();
+    if (!numero) { alert("Escribí el número de WhatsApp."); return; }
+    const ventana = window.open("about:blank", "_blank");
+    const datos = new FormData();
+    datos.append("numero", numero);
+    datos.append("rol", b.dataset.rol);
+    datos.append("texto", document.getElementById("texto_wa").value);
+    b.disabled = true;
+    try {
+      const r = await fetch(location.pathname + "/whatsapp", { method: "POST", body: datos, headers: { "X-CSRF": formulario.querySelector("[name=_csrf]").value } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo abrir WhatsApp.");
+      if (ventana) ventana.location = d.enlace; else location.href = d.enlace;
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      if (ventana) ventana.close();
+      alert(e.message);
+      b.disabled = false;
+    }
+  });
+})();

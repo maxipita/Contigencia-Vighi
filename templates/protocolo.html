@@ -28,6 +28,27 @@
   <div class="acciones">
     {% if emitido and informe_vigente %}<a class="btn" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Ver informe</a>{% endif %}
     {% if informes_ok and informe_listo %}<a class="btn {{ 'sec' if emitido and informe_vigente else '' }}" href="{{ url_for('informe', pid=p.id) }}">{{ 'Generar de nuevo' if emitido else 'Generar informe' }}</a>{% endif %}
+    {% if (emitido and informe_vigente) or informe_listo %}<a class="btn {{ '' if emitido and informe_vigente else 'sec' }}" href="{{ url_for('envio', pid=p.id) }}"><svg class="ic"><use href="#i-mail"/></svg>Enviar informe</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% set malig_visibles = flujos_malignidad | selectattr('informado') | list if not p.borrador else [] %}
+{% if malig_visibles %}
+<div class="panel-malignidad" id="malignidad">
+  <div class="texto"><b>Malignidad</b>
+    <div class="muted">Se asigna con el estudio informado y define a qué destinos corresponde el informe al enviarlo.</div></div>
+  <div class="malig-flujos">
+  {% for f in malig_visibles %}
+  <form method="post" action="{{ url_for('malignidad_asignar', pid=p.id) }}" class="malig-flujo">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tipo" value="{{ f.tipo }}">
+    <span class="malig-tipo">{{ f.nombre }}</span>
+    {% if puede('micro') or puede('informe') %}
+    {% for m, mn in malignidades %}<button name="valor" value="{{ m }}" class="malig-btn {{ m | lower }} {{ 'activo' if f.valor == m }}" {{ 'aria-pressed=true' if f.valor == m }}>{{ mn }}</button>{% endfor %}
+    {% if f.valor %}<button name="valor" value="" class="malig-quitar" title="Quitar la malignidad asignada">Quitar</button>{% endif %}
+    {% elif f.valor %}{% for m, mn in malignidades if m == f.valor %}<span class="malig-btn {{ m | lower }} activo">{{ mn }}</span>{% endfor %}
+    {% else %}<span class="muted">Sin asignar</span>{% endif %}
+  </form>
+  {% endfor %}
   </div>
 </div>
 {% endif %}

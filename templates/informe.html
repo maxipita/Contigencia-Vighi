@@ -58,7 +58,7 @@
 {% if emitido and informe_vigente %}
 <div class="tarjeta">
   <h2>Informe guardado</h2>
-  <div class="acciones"><a class="btn" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Abrir el informe guardado</a></div>
+  <div class="acciones"><a class="btn" href="{{ url_for('informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Abrir el informe guardado</a><a class="btn" href="{{ url_for('envio', pid=d.pid) }}"><svg class="ic"><use href="#i-mail"/></svg>Enviar informe</a></div>
   <p class="muted" style="margin-top:10px">Si lo generás de nuevo, <b>reemplaza</b> a este. Quién lo generó y cuándo queda en el historial del protocolo.</p>
 </div>
 {% endif %}

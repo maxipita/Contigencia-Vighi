@@ -8,6 +8,7 @@ import sys
 import unicodedata
 from datetime import datetime, timedelta
 from functools import wraps
+from urllib.parse import quote
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
@@ -15,6 +16,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import d1
 import db
+import envios
 import permisos
 import trazabilidad
 import ubicaciones as ubicaciones_csv
@@ -1016,6 +1018,16 @@ def volver_a_comentarios(pid):
     return redirect(destino.split("#")[0] + "#comentarios")
 
 
+def malignidad_por_flujo(estudios):
+    salida = []
+    for tipo in dict.fromkeys(x["tipo"] for x in estudios if not x["anulado"]):
+        activos = [x for x in estudios if x["tipo"] == tipo and not x["anulado"]]
+        valores = {x["malignidad"] for x in activos}
+        salida.append({"tipo": tipo, "nombre": TIPOS[tipo], "informado": not any(x["borrador"] or x["proxima"] for x in activos),
+                       "valor": valores.pop() if len(valores) == 1 else None})
+    return salida
+
+
 @app.route("/protocolo/<int:pid>")
 @requiere_login
 def protocolo(pid):
@@ -1029,12 +1041,38 @@ def protocolo(pid):
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
     lugares = list(dict.fromkeys(l for l in (p["lugar_recoleccion"], p["lugar_entrega"]) if l))
-    ubicaciones = {u["abreviatura"]: u for u in db.q(f"SELECT id, abreviatura, nombre, contactos, emails FROM ubicaciones WHERE abreviatura IN ({','.join('?' * len(lugares))})", tuple(lugares))} if lugares else {}
+    ubicaciones = {u["abreviatura"]: dict(u) for u in db.q(f"SELECT id, abreviatura, nombre, contactos FROM ubicaciones WHERE abreviatura IN ({','.join('?' * len(lugares))})", tuple(lugares))} if lugares else {}
+    destinos = destinos_por_ubicacion({u["id"] for u in ubicaciones.values()}) if ubicaciones else {}
+    for u in ubicaciones.values():
+        u["emails"] = ", ".join(emails_de_informes(destinos.get(u["id"], [])))
     return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), ubicaciones=ubicaciones,
+                           flujos_malignidad=malignidad_por_flujo(estudios), malignidades=envios.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
                            pendientes=pendientes, informe_vigente=informe_vigente(pid, informe_emitido(pid)))
+
+
+@app.route("/protocolo/<int:pid>/malignidad", methods=["POST"])
+@requiere_permiso("micro", "informe")
+def malignidad_asignar(pid):
+    yo = usuario_actual()
+    protocolo_o_404(pid)
+    tipo = request.form.get("tipo", "")
+    valor = request.form.get("valor", "")
+    volver = redirect(url_for("protocolo", pid=pid) + "#malignidad")
+    if tipo not in TIPOS or (valor and valor not in envios.NOMBRE_MALIGNIDAD):
+        flash("Elegí una malignidad válida.", "error")
+        return volver
+    activos = [x for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if x["tipo"] == tipo and not x["anulado"]]
+    if not activos or any(x["borrador"] or x["proxima"] for x in activos):
+        flash("La malignidad se asigna cuando los estudios están informados.", "error")
+        return volver
+    db.ex("UPDATE estudios SET malignidad=? WHERE protocolo_id=? AND tipo=? AND anulado=0", (valor or None, pid, tipo))
+    nombre = envios.NOMBRE_MALIGNIDAD.get(valor, "sin malignidad")
+    db.auditar(yo["id"], pid, "malignidad", f"{TIPOS[tipo]}: {nombre}")
+    flash(f"Malignidad de {TIPOS[tipo].lower()}: {nombre.lower()}.", "ok")
+    return volver
 
 
 @app.route("/protocolo/<int:pid>/comentario", methods=["POST"])
@@ -1520,6 +1558,175 @@ def informe_ver(iid):
     return send_file(io.BytesIO(bytes(r["pdf"])), mimetype="application/pdf", download_name=r["archivo"], max_age=0)
 
 
+SQL_ENVIOS = """SELECT v.id, v.canal, v.rol, v.destino, v.estado, v.detalle, v.version, v.creado_en, u.iniciales
+                FROM envios v LEFT JOIN usuarios u ON u.id=v.usuario_id WHERE v.protocolo_id=? ORDER BY v.id DESC"""
+ROLES_ENVIO = {"paciente": "Paciente", "ubicacion": "Ubicación", "otro": "Otro"}
+
+
+def textos_envio(p):
+    centro = informes.CENTRO if informes else {}
+    contacto = " o por ".join(x for x in (f"teléfono al {centro['telefono']}" if centro.get("telefono") else "",
+                                           f"e-mail a {centro['email']}" if centro.get("email") else "") if x)
+    firma = (centro.get("nombre", "CAP Vighi") + (" · " + centro["subtitulo"].title() if centro.get("subtitulo") else "")).strip()
+    cuerpo = (f"Buenos días,\n\nAdjuntamos el informe de anatomía patológica correspondiente al protocolo {p['numero']}."
+              + (f"\n\nAnte cualquier consulta pueden comunicarse con el laboratorio por {contacto}." if contacto else "")
+              + f"\n\nSaludos cordiales,\n{firma}")
+    return {"asunto": f"Informe de anatomía patológica · Protocolo {p['numero']}", "cuerpo": cuerpo,
+            "whatsapp": f"Hola, te enviamos el informe de anatomía patológica del protocolo {p['numero']}. Ante cualquier consulta, escribinos por acá. {centro.get('nombre', 'CAP Vighi')}"}
+
+
+def estudios_para_envio(pid):
+    return [(r["tipo"], r["malignidad"]) for r in db.q("SELECT tipo, malignidad FROM estudios WHERE protocolo_id=? AND anulado=0", (pid,))]
+
+
+def destinos_por_ubicacion(ids=None):
+    filas = db.q("SELECT id, ubicacion_id, canal, destino, informes, alcance FROM ubicacion_destinos ORDER BY canal, destino")
+    salida = {}
+    for f in filas:
+        if ids is None or f["ubicacion_id"] in ids:
+            salida.setdefault(f["ubicacion_id"], []).append(f)
+    return salida
+
+
+def emails_de_informes(destinos):
+    return [d["destino"] for d in destinos if d["canal"] == "email" and d["informes"]]
+
+
+def lugares_de_envio(p):
+    claves = list(dict.fromkeys(l for l in (p["lugar_entrega"], p["lugar_recoleccion"]) if l))
+    if not claves:
+        return []
+    filas = {u["abreviatura"]: u for u in db.q(f"SELECT id, abreviatura, nombre, contactos FROM ubicaciones WHERE abreviatura IN ({','.join('?' * len(claves))})", tuple(claves))}
+    destinos = destinos_por_ubicacion({u["id"] for u in filas.values()})
+    estudios = estudios_para_envio(p["id"])
+    salida = []
+    for clave in claves:
+        u = filas.get(clave)
+        propios = destinos.get(u["id"], []) if u else []
+        salida.append({"abreviatura": clave, "nombre": (u["nombre"] if u else "") or "", "contactos": (u["contactos"] if u else "") or "", "id": u["id"] if u else None,
+                       "emails": [dict(d, estado=envios.evaluar(d["alcance"], estudios), texto=envios.alcance_texto(d["alcance"])) for d in propios if d["canal"] == "email" and d["informes"]],
+                       "telefonos": [dict(d, estado=envios.evaluar(d["alcance"], estudios), texto=envios.alcance_texto(d["alcance"]), visible=envios.whatsapp_visible(d["destino"]))
+                                     for d in propios if d["canal"] == "whatsapp" and d["informes"]],
+                       "ocultos": sum(1 for d in propios if not d["informes"]), "es_entrega": clave == p["lugar_entrega"]})
+    return salida
+
+
+def informe_para_enviar(pid):
+    emitido = informe_emitido(pid)
+    return emitido, bool(emitido) and informe_vigente(pid, emitido)
+
+
+@app.route("/protocolo/<int:pid>/enviar")
+@requiere_permiso("informe")
+def envio(pid):
+    db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)), (SQL_ENVIOS, (pid,))])
+    p = protocolo_o_404(pid)
+    if p["borrador"]:
+        flash("El protocolo todavía está por completar.", "error")
+        return redirect(url_for("protocolo", pid=pid))
+    emitido, vigente = informe_para_enviar(pid)
+    historial = db.q(SQL_ENVIOS, (pid,))
+    mandados = {}
+    for v in historial:
+        if v["estado"] == "enviado" and v["canal"] == "email" and emitido and v["version"] == emitido["version"]:
+            mandados.setdefault(v["destino"], v["creado_en"])
+    return render_template("envio.html", flujos_malignidad=malignidad_por_flujo(cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)), malignidades=envios.NOMBRE_MALIGNIDAD,
+                           p=p, emitido=emitido, vigente=vigente, historial=historial, mandados=mandados, lugares=lugares_de_envio(p),
+                           textos=textos_envio(p), email_ok=envios.configurado(), faltante=envios.faltante(), roles=ROLES_ENVIO,
+                           telefono_paciente=envios.whatsapp_visible(envios.whatsapp_numero(p["telefono"])) or (p["telefono"] or ""))
+
+
+@app.route("/protocolo/<int:pid>/enviar", methods=["POST"])
+@requiere_permiso("informe")
+def envio_enviar(pid):
+    yo = usuario_actual()
+    p = protocolo_o_404(pid)
+    volver = redirect(url_for("envio", pid=pid))
+    emitido, vigente = informe_para_enviar(pid)
+    if not vigente:
+        flash("Primero hay que generar el informe: el guardado no existe o cambió el protocolo.", "error")
+        return volver
+    if not envios.configurado():
+        flash("El envío por e-mail no está configurado en este servidor.", "error")
+        return volver
+    pedidos = []
+    if request.form.get("usar_paciente") == "1":
+        correo = request.form.get("paciente_email", "").strip().lower()
+        if not envios.email_valido(correo):
+            flash("El e-mail del paciente no es válido.", "error")
+            return volver
+        pedidos.append(("paciente", correo))
+    for correo in request.form.getlist("ubic_email"):
+        if not envios.email_valido(correo):
+            flash(f"El e-mail {correo[:60]} no es válido.", "error")
+            return volver
+        pedidos.append(("ubicacion", correo.strip().lower()))
+    otros = request.form.get("otro_email", "").strip()
+    if otros:
+        sueltos = [x for x in re.split(r"[\s,;]+", otros) if x]
+        malos = [x for x in sueltos if not envios.email_valido(x)]
+        if malos:
+            flash(f"El e-mail {malos[0][:60]} no es válido.", "error")
+            return volver
+        pedidos += [("otro", x.lower()) for x in sueltos]
+    vistos = {}
+    for rol, correo in pedidos:
+        vistos.setdefault(correo, rol)
+    if not vistos:
+        flash("Elegí a quién enviar el informe.", "error")
+        return volver
+    if len(vistos) > envios.MAX_DESTINOS:
+        flash(f"Se pueden enviar hasta {envios.MAX_DESTINOS} e-mails por vez.", "error")
+        return volver
+    asunto = " ".join(request.form.get("asunto", "").split())[:150] or textos_envio(p)["asunto"]
+    cuerpo = request.form.get("cuerpo", "").replace("\r\n", "\n").strip()[:3000] or textos_envio(p)["cuerpo"]
+    guardar_correo = (request.form.get("guardar_paciente") == "1" and request.form.get("usar_paciente") == "1" and puede("protocolo_editar")
+                      and request.form.get("paciente_email", "").strip().lower() != (p["email"] or "").lower())
+    pdf = db.uno("SELECT pdf, archivo FROM informes_emitidos WHERE id=?", (emitido["id"],))
+    resultados = envios.enviar_emails(list(vistos), asunto, cuerpo, bytes(pdf["pdf"]), pdf["archivo"] or "informe.pdf")
+    ahora_ = db.ahora()
+    sentencias = [("INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (pid, emitido["id"], emitido["version"], "email", vistos[destino], destino, "enviado" if ok else "error", detalle or None, yo["id"], ahora_))
+                  for destino, ok, detalle in resultados]
+    bien = [r[0] for r in resultados if r[1]]
+    mal = [r for r in resultados if not r[1]]
+    sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
+                       (ahora_, yo["id"], pid, None, "informe_envio",
+                        f"Informe enviado por e-mail a {', '.join(bien)}" + (f" · falló: {', '.join(r[0] for r in mal)}" if mal else "") if bien
+                        else f"No se pudo enviar el informe por e-mail a {', '.join(r[0] for r in mal)}")))
+    db.lote_ex(sentencias)
+    if guardar_correo:
+        nuevo = request.form.get("paciente_email", "").strip().lower()
+        db.ex("UPDATE protocolos SET email=? WHERE id=?", (nuevo, pid))
+        sincronizar_paciente(pid, p["dni"], ["email"])
+        db.auditar(yo["id"], pid, "editar_paciente", f"E-mail del paciente: {nuevo}")
+    if bien:
+        flash(f"✔ Informe enviado a {len(bien)} destinatario{'s' if len(bien) != 1 else ''}: {', '.join(bien)}.", "ok")
+    for destino, _, detalle in mal:
+        flash(f"No se pudo enviar a {destino}: {detalle}", "error")
+    return volver
+
+
+@app.route("/protocolo/<int:pid>/enviar/whatsapp", methods=["POST"])
+@requiere_permiso("informe")
+def envio_whatsapp(pid):
+    yo = usuario_actual()
+    protocolo_o_404(pid)
+    emitido, vigente = informe_para_enviar(pid)
+    if not vigente:
+        return jsonify(error="Primero hay que generar el informe: el guardado no existe o cambió el protocolo."), 400
+    numero = envios.whatsapp_numero(request.form.get("numero", ""))
+    if not numero:
+        return jsonify(error="El número no es válido. Escribilo con el código de área, por ejemplo 11 5015 1099."), 400
+    rol = request.form.get("rol") if request.form.get("rol") in ROLES_ENVIO else "otro"
+    texto = " ".join(request.form.get("texto", "").split())[:700]
+    db.lote_ex([("INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                 (pid, emitido["id"], emitido["version"], "whatsapp", rol, "+" + numero, "abierto", "Se abrió WhatsApp: el PDF lo adjunta quien envía", yo["id"], db.ahora())),
+                ("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
+                 (db.ahora(), yo["id"], pid, None, "informe_envio", f"Se abrió WhatsApp para enviar el informe a +{numero}"))])
+    return jsonify(enlace=f"https://wa.me/{numero}" + (f"?text={quote(texto)}" if texto else ""))
+
+
 @app.route("/usuarios/<int:uid>/firma")
 @requiere_admin
 def usuario_firma(uid):
@@ -1953,15 +2160,15 @@ def ubicaciones_lista():
             + " AND ".join(["d.nombre LIKE ?"] * len(palabras)), tuple(f"%{p}%" for p in palabras))} if palabras else set()
         filas = [u for u in filas if u["id"] in por_medico or all(p in db.clave_nombre(f"{u['abreviatura']} {u['nombre'] or ''} {u['direccion'] or ''} {u['contactos'] or ''}")
                                                                   for p in palabras)]
+    destinos = destinos_por_ubicacion()
+    filas = [dict(u, emails=", ".join(emails_de_informes(destinos.get(u["id"], [])))) for u in filas]
     return render_template("ubicaciones.html", ubicaciones=filas, q=q,
                            recoleccion={r["lugar"]: r["n"] for r in db.q(sql_protocolos_por_lugar("lugar_recoleccion"))},
                            entrega={r["lugar"]: r["n"] for r in db.q(sql_protocolos_por_lugar("lugar_entrega"))})
 
 
 def leer_ubicacion():
-    d = {k: request.form.get(k, "").strip() for k in ("abreviatura", "nombre", "direccion", "contactos", "emails")}
-    d["emails"] = ", ".join(ubicaciones_csv.emails_de(d["emails"]))
-    return d
+    return {k: request.form.get(k, "").strip() for k in ("abreviatura", "nombre", "direccion", "contactos")}
 
 
 def error_ubicacion(d, uid=None):
@@ -1982,12 +2189,12 @@ def ubicacion_nueva():
         if error:
             flash(error, "error")
         else:
-            uid = db.ex("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos, emails) VALUES (?,?,?,?,?)",
-                        (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"], d["emails"]))
+            uid = db.ex("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos) VALUES (?,?,?,?)",
+                        (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"]))
             db.auditar(usuario_actual()["id"], None, "ubicacion", f"Alta: {d['abreviatura']}")
-            flash("Ubicación creada. Ahora podés asociarle médicos.", "ok")
+            flash("Ubicación creada. Ahora podés cargar a quién se envían los informes y asociarle médicos.", "ok")
             return redirect(url_for("ubicacion", uid=uid))
-    return render_template("ubicacion.html", u=d, nueva=True, medicos=[], recoleccion=0, entrega=0)
+    return render_template("ubicacion.html", u=d, nueva=True, medicos=[], destinos=[], tipos=envios.TIPOS_ESTUDIO, malignidades=envios.MALIGNIDADES, whatsapp_visible=envios.whatsapp_visible, alcance_texto=envios.alcance_texto, recoleccion=0, entrega=0)
 
 
 @app.route("/ubicaciones/<int:uid>")
@@ -1996,7 +2203,9 @@ def ubicacion(uid):
     u = ubicacion_o_404(uid)
     medicos = db.q("SELECT d.id, d.nombre FROM ubicacion_medicos m JOIN medicos d ON d.id=m.medico_id WHERE m.ubicacion_id=? ORDER BY d.nombre", (uid,))
     cuenta = lambda campo: db.uno(f"SELECT COUNT(*) AS n FROM protocolos WHERE borrador=0 AND {campo}=?", (u["abreviatura"],))["n"]
-    return render_template("ubicacion.html", u=u, nueva=False, medicos=medicos, recoleccion=cuenta("lugar_recoleccion"), entrega=cuenta("lugar_entrega"))
+    destinos = db.q("SELECT id, canal, destino, informes, alcance FROM ubicacion_destinos WHERE ubicacion_id=? ORDER BY canal, destino", (uid,))
+    return render_template("ubicacion.html", u=u, nueva=False, medicos=medicos, destinos=destinos, tipos=envios.TIPOS_ESTUDIO, malignidades=envios.MALIGNIDADES, whatsapp_visible=envios.whatsapp_visible, alcance_texto=envios.alcance_texto,
+                           recoleccion=cuenta("lugar_recoleccion"), entrega=cuenta("lugar_entrega"))
 
 
 @app.route("/ubicaciones/<int:uid>/editar", methods=["POST"])
@@ -2008,7 +2217,7 @@ def ubicacion_editar(uid):
     if error:
         flash(error, "error")
         return redirect(url_for("ubicacion", uid=uid))
-    sentencias = [("UPDATE ubicaciones SET abreviatura=?, nombre=?, direccion=?, contactos=?, emails=? WHERE id=?", (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"], d["emails"], uid))]
+    sentencias = [("UPDATE ubicaciones SET abreviatura=?, nombre=?, direccion=?, contactos=? WHERE id=?", (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"], uid))]
     if d["abreviatura"] != u["abreviatura"]:
         sentencias += [(f"UPDATE protocolos SET {campo}=? WHERE {campo}=?", (d["abreviatura"], u["abreviatura"])) for campo, _ in CAMPOS_LUGAR]
     db.lote_ex(sentencias)
@@ -2025,10 +2234,60 @@ def ubicacion_eliminar(uid):
     if db.uno("SELECT 1 FROM protocolos WHERE lugar_recoleccion=? OR lugar_entrega=? LIMIT 1", (u["abreviatura"], u["abreviatura"])):
         flash("No se puede eliminar: hay protocolos con esta ubicación.", "error")
         return redirect(url_for("ubicacion", uid=uid))
-    db.lote_ex([("DELETE FROM ubicacion_medicos WHERE ubicacion_id=?", (uid,)), ("DELETE FROM ubicaciones WHERE id=?", (uid,))])
+    db.lote_ex([("DELETE FROM ubicacion_medicos WHERE ubicacion_id=?", (uid,)), ("DELETE FROM ubicacion_destinos WHERE ubicacion_id=?", (uid,)), ("DELETE FROM ubicaciones WHERE id=?", (uid,))])
     db.auditar(usuario_actual()["id"], None, "ubicacion", f"Baja: {u['abreviatura']}")
     flash(f"Ubicación «{u['abreviatura']}» eliminada.", "ok")
     return redirect(url_for("ubicaciones_lista"))
+
+
+def alcance_del_formulario():
+    return envios.alcance_valido(request.form.getlist("alcance"))
+
+
+@app.route("/ubicaciones/<int:uid>/destino", methods=["POST"])
+@requiere_permiso("ubicaciones")
+def ubicacion_destino_agregar(uid):
+    u = ubicacion_o_404(uid)
+    volver = redirect(url_for("ubicacion", uid=uid) + "#envio")
+    canal = "whatsapp" if request.form.get("canal") == "whatsapp" else "email"
+    bruto = request.form.get("destino", "").strip()
+    if canal == "email":
+        destino = bruto.lower()
+        if not envios.email_valido(destino):
+            flash("El e-mail no es válido.", "error")
+            return volver
+    else:
+        destino = envios.whatsapp_numero(bruto)
+        if not destino:
+            flash("El número no es válido: escribilo con el código de área, por ejemplo 11 5015 1099.", "error")
+            return volver
+    if db.uno("SELECT 1 FROM ubicacion_destinos WHERE ubicacion_id=? AND canal=? AND destino=?", (uid, canal, destino)):
+        flash("Ese destino ya está cargado en la ubicación.", "error")
+        return volver
+    informes = 1 if request.form.get("informes") == "1" else 0
+    db.ex("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino, informes, alcance) VALUES (?,?,?,?,?)", (uid, canal, destino, informes, alcance_del_formulario()))
+    db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['abreviatura']}: se agregó {destino} ({'WhatsApp' if canal == 'whatsapp' else 'e-mail'})")
+    flash("Destino agregado.", "ok")
+    return volver
+
+
+@app.route("/ubicaciones/<int:uid>/destino/<int:did>", methods=["POST"])
+@requiere_permiso("ubicaciones")
+def ubicacion_destino_editar(uid, did):
+    u = ubicacion_o_404(uid)
+    d = db.uno("SELECT * FROM ubicacion_destinos WHERE id=? AND ubicacion_id=?", (did, uid)) or abort(404)
+    if request.form.get("accion") == "borrar":
+        db.ex("DELETE FROM ubicacion_destinos WHERE id=?", (did,))
+        db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['abreviatura']}: se quitó {d['destino']}")
+        flash("Destino quitado.", "ok")
+    else:
+        informes = 1 if request.form.get("informes") == "1" else 0
+        alcance = alcance_del_formulario()
+        db.ex("UPDATE ubicacion_destinos SET informes=?, alcance=? WHERE id=?", (informes, alcance, did))
+        db.auditar(usuario_actual()["id"], None, "ubicacion",
+                   f"{u['abreviatura']}: {d['destino']} → {'recibe informes' if informes else 'no recibe informes'} · {envios.alcance_texto(alcance)}")
+        flash("Destino actualizado.", "ok")
+    return redirect(url_for("ubicacion", uid=uid) + "#envio")
 
 
 @app.route("/ubicaciones/<int:uid>/medico", methods=["POST"])
