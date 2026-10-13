@@ -16,6 +16,9 @@
     {{ casilla_firma() }}
   {% endif %}
 {% endmacro %}
+{% macro chips(lista, destino) %}
+  {% if lista %}<div class="chips" data-chips="{{ destino }}">{% for x in lista %}<button type="button" class="chip-sel" data-valor="{{ x }}">{{ x }}</button>{% endfor %}</div>{% endif %}
+{% endmacro %}
 {% macro select_template(lista, actual, destino, conclusion='') %}
   <select name="template" data-templates data-destino="{{ destino }}"{% if conclusion %} data-conclusion="{{ conclusion }}"{% endif %}>
     <option value="">— Sin template —</option>
@@ -149,6 +152,11 @@
         <div class="ancho"><label>Template</label>{{ select_template(tpl_macro, macro.template if macro else '', 'desc_macro') }}</div>
         <div class="ancho"><label>Descripción macroscópica</label>
           <textarea name="descripcion" id="desc_macro" rows="6">{{ macro.descripcion if macro else '' }}</textarea></div>
+        <div class="ancho"><label style="display:inline-flex;gap:8px;align-items:center;font-weight:400;margin:0">
+          <input type="checkbox" name="decal" value="1" {{ 'checked' if macro and macro.decal }} {{ 'disabled' if not decal_cambiable }}>
+          <b>Macro &gt; Decal</b> · requiere decalcificación (suma esa etapa entre la macroscopía y el procesamiento)</label>
+          {% if decal_cambiable %}<input type="hidden" name="decal_presente" value="1">
+          {% elif macro and macro.decal %}<div class="muted">Ya no se puede cambiar: el estudio pasó por esas etapas (deshacelas para modificarlo).</div>{% endif %}</div>
         {% if macro and macro.cassettes %}<div><label>N° cassettes (suma de las técnicas)</label><input value="{{ macro.cassettes }}" readonly tabindex="-1"></div>{% endif %}
       </div>
       <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('macroscopia') }}</div>
@@ -174,7 +182,10 @@
           <textarea name="descripcion" id="desc_micro" rows="7">{{ micro.descripcion if micro else '' }}</textarea></div>
         <div class="ancho"><label>Conclusión / diagnóstico</label>
           <textarea name="conclusion" id="concl_micro" rows="3" style="min-height:70px">{{ micro.conclusion if micro else '' }}</textarea></div>
-        <div><label>Técnicas especiales</label><input name="tecnicas_especiales" value="{{ micro.tecnicas_especiales if micro else '' }}"></div>
+        <div class="ancho"><label>Técnicas especiales <span class="muted">(se piden al agregar el estudio)</span></label>
+          {% if tecnicas_pedidas %}<div class="chips">{% for x in tecnicas_pedidas %}<span class="chip-sel on">{{ x }}</span>{% endfor %}</div>
+          {% elif micro and micro.tecnicas_especiales %}<div>{{ micro.tecnicas_especiales }}</div>
+          {% else %}<div class="muted">Ninguna.</div>{% endif %}</div>
         {% if 'ihq' in tipo.secciones %}
         <div><label>¿Solicita IHQ?</label>
           <select name="solicita_ihq">
@@ -195,7 +206,8 @@
       {% if not puede('micro') %}<div class="aviso">🔒 No tenés permiso para cargar esta sección.</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not puede('micro') }}>
       <div class="grilla">
-        <div class="ancho"><label>Marcadores / anticuerpos</label><textarea name="marcadores" style="min-height:60px">{{ ihq.marcadores if ihq else '' }}</textarea></div>
+        <div class="ancho"><label>Marcadores / anticuerpos</label><textarea name="marcadores" id="ihq_marc" style="min-height:60px">{{ ihq.marcadores if ihq else '' }}</textarea>
+          {{ chips(lista_ihq, 'ihq_marc') }}</div>
         <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq else '' }}</textarea></div>
       </div>
       <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('interp_ihq') }}</div>
@@ -213,7 +225,7 @@
       {% if miembros | length > 1 %}<div class="dato"><b><u>{{ m.etiqueta }}</u></b></div>{% endif %}
       <div class="dato"><b>Lote</b> {% if m.lote_id %}<a href="{{ url_for('lote', lote_id=m.lote_id) }}">{{ m.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}</div>
       {% for rotulo, valor in [("Categoría", m.categoria), ("Muestra", (m.subcategoria or '') ~ ' / ' ~ (m.sitio or '')),
-          ("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad), ("Citología hormonal", m.citologia_hormonal),
+          ("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad), ("Técnicas especiales", m.tecnicas_especiales), ("Citología hormonal", m.citologia_hormonal),
           (tipo.etiqueta_responsable, m.responsable), ("Observaciones", m.observaciones), ("Anulado por", m.motivo_anulacion)] %}
         {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
       {% endfor %}

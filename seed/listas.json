@@ -106,5 +106,22 @@
   "AIS",
   "Adenocarcinoma",
   "Insatisfactoria"
+ ],
+ "tecnicas_especiales": [
+  "Alcian Blue",
+  "Giemsa",
+  "Gomori",
+  "Gram",
+  "Grocott",
+  "Helicobacter Pylori",
+  "Metenamina Plata",
+  "Orceina",
+  "Pas",
+  "Pas-D",
+  "Perls",
+  "Reticulina",
+  "Rojo Congo",
+  "Tricrómico de Masson",
+  "Ziehl Neelsen"
  ]
 }

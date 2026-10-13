@@ -30,6 +30,10 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 - **Ficha del estudio:** **trazabilidad** (fecha límite de cada etapa en días hábiles desde la recolección, OT/LT,
   demora) con el botón **✔ Completar**; macroscopía / microscopía con **templates** (solo editables mientras el
   estudio está en esa etapa), IHQ, y "Anular estudio" (anula solo ese estudio).
+- **Listados (administrador, menú Más → Listados):** se cargan, uno por línea, las **técnicas especiales** y los **marcadores de IHQ**. Las técnicas especiales se tildan al agregar o editar un estudio de
+  biopsia o citología (y se ven en la ficha del estudio); ahí mismo, **"Otra técnica…"** suma una que no esté: queda en el estudio y se agrega sola al listado para los siguientes y llegan ya cargadas a la microscopía (ahí solo se ven, no se eligen de nuevo); los marcadores se eligen al cargar la IHQ de la biopsia cuando el diagnóstico la solicita.
+- **Macro > Decal (biopsias):** en la tarjeta de Macroscopía hay un condicional **"Macro > Decal"**. Si se tilda, el tracking suma la etapa **Decalcificación** (sector Laboratorio) entre la macroscopía y el procesamiento, y las
+  fechas límite de las etapas siguientes se corren un día hábil. Se puede tildar o destildar mientras el estudio no haya pasado por la decalcificación ni el procesamiento (si ya pasó, hay que deshacer esas etapas).
 - **Técnicas (biopsias):** antes de la macroscopía, la ficha del estudio tiene la tarjeta **Técnicas**: por cada estudio del flujo se registra el número (Nro), los fragmentos, si la inclusión
   fue **Reserva** (parcial) o **Inclusión total**, los tacos (los predeterminados del órgano, solo lectura) y los cassettes, con comentarios opcionales. Hace falta **al menos una técnica por estudio** para
   completar la macroscopía; se pueden agregar y borrar mientras la macro es editable. El N° de cassettes de la macro es la suma de las técnicas.

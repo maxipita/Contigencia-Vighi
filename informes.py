@@ -14,7 +14,7 @@ from reportlab.platypus import (BaseDocTemplate, Frame, HRFlowable, Image, KeepT
                                 Spacer, Table, TableStyle)
 
 import db
-from estudios import REGISTRO
+from estudios import REGISTRO, Variante
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 LOGO = os.path.join(BASE, "static", "img", "logo.png")
@@ -125,9 +125,10 @@ def armar(pid, comentario=""):
     for x in db.q("SELECT x.* FROM etapas x JOIN estudios e ON e.id=x.estudio_id WHERE e.protocolo_id=?", (pid,)):
         etapas.setdefault(x["estudio_id"], {})[x["etapa"]] = x
     ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (e["id"],))}
+    decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE estudio_id=? AND decal=1", (e["id"],))}
     pendientes = []
     for e in estudios:
-        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["id"], {})), e["tipo"] in ihq_pide)
+        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
         if proxima and (_etiqueta(e), proxima[1]) not in pendientes:
             pendientes.append((_etiqueta(e), proxima[1]))
     if pendientes:
@@ -176,7 +177,8 @@ def armar(pid, comentario=""):
         secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "material": "\n".join(materiales),
                           "diagnostico": diag, "detalle": detalle,
                           "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": _t(micro, "descripcion"),
-                          "tecnicas": _t(micro, "tecnicas_especiales"), "ihq": ihq_txt})
+                          "tecnicas": "; ".join(dict.fromkeys(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";") if x.strip()))
+                          or _t(micro, "tecnicas_especiales"), "ihq": ihq_txt})
     if not tiene_firma:
         avisos.append(f"{nombre_medico} no tiene la firma cargada: el informe saldría sin firma (se carga en Usuarios).")
     if not (medico["mn"] or medico["mp"]):

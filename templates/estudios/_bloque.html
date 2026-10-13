@@ -38,6 +38,15 @@
           {% for tl in tipos_lote_de[tipo] %}<option value="nuevo:{{ tl }}" {{ 'selected' if val('lote_sel') == 'nuevo:' ~ tl }}>+ Nuevo lote {{ tl }}</option>{% endfor %}
         </optgroup>
       </select></div>
+    {% if t.pide_tecnicas %}
+      {% set marcadas = (val('tecnicas_especiales') | trim).split('; ') if val('tecnicas_especiales') | trim else [] %}
+      <div class="ancho"><label>Técnicas especiales</label>
+        <div class="checks" data-nombre="{{ p }}tecnicas_especiales">
+          {% for x in listas.tecnicas_especiales %}<label class="check"><input type="checkbox" name="{{ p }}tecnicas_especiales" value="{{ x }}" {{ 'checked' if x in marcadas }}> {{ x }}</label>{% endfor %}
+          {% for x in marcadas if x not in listas.tecnicas_especiales %}<label class="check"><input type="checkbox" name="{{ p }}tecnicas_especiales" value="{{ x }}" checked> {{ x }}</label>{% endfor %}
+        </div>
+        <div class="otra-tecnica"><input data-otra-tecnica maxlength="80" placeholder="Otra técnica…" autocomplete="off"><button type="button" class="btn sec" data-agregar-tecnica>+ Agregar</button></div></div>
+    {% endif %}
     <div class="ancho"><label>Observaciones del estudio</label><textarea name="{{ p }}observaciones" style="min-height:50px">{{ val('observaciones') }}</textarea></div>
   </div>
 </div>

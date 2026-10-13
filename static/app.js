@@ -251,3 +251,63 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
   estudio.addEventListener("change", aplicar);
   aplicar();
 })();
+
+(function () {
+  const grupos = document.querySelectorAll("[data-chips]");
+  grupos.forEach((grupo) => {
+    const destino = document.getElementById(grupo.dataset.chips);
+    if (!destino) return;
+    const leer = () => destino.value.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+    const pintar = () => {
+      const marcados = leer().map((x) => x.toLowerCase());
+      grupo.querySelectorAll(".chip-sel").forEach((b) => b.classList.toggle("on", marcados.includes(b.dataset.valor.toLowerCase())));
+    };
+    grupo.addEventListener("click", (ev) => {
+      const b = ev.target.closest(".chip-sel");
+      if (!b) return;
+      const valor = b.dataset.valor;
+      const actuales = leer();
+      const i = actuales.findIndex((x) => x.toLowerCase() === valor.toLowerCase());
+      if (i >= 0) actuales.splice(i, 1);
+      else actuales.push(valor);
+      destino.value = actuales.join(", ");
+      pintar();
+    });
+    destino.addEventListener("input", pintar);
+    pintar();
+  });
+})();
+
+(function () {
+  function agregar(entrada) {
+    const campo = entrada.closest(".ancho");
+    const lista = campo.querySelector(".checks");
+    const valor = entrada.value.replace(/[,;]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!valor) return;
+    const existente = [...lista.querySelectorAll("input[type=checkbox]")].find((c) => c.value.toLowerCase() === valor.toLowerCase());
+    if (existente) existente.checked = true;
+    else {
+      const rotulo = document.createElement("label");
+      rotulo.className = "check";
+      const caja = document.createElement("input");
+      caja.type = "checkbox";
+      caja.name = lista.dataset.nombre;
+      caja.value = valor;
+      caja.checked = true;
+      rotulo.append(caja, " " + valor);
+      lista.append(rotulo);
+    }
+    entrada.value = "";
+    entrada.focus();
+  }
+  document.addEventListener("click", (ev) => {
+    const boton = ev.target.closest("[data-agregar-tecnica]");
+    if (boton) agregar(boton.parentElement.querySelector("[data-otra-tecnica]"));
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.matches("[data-otra-tecnica]")) {
+      ev.preventDefault();
+      agregar(ev.target);
+    }
+  });
+})();

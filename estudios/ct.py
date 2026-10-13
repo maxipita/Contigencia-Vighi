@@ -8,6 +8,7 @@ class Citologia(Estudio):
     pasos = ["coloreado", "microscopia"]
     plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "microscopia": (3, 20)}
     lotes = ["CT"]
+    pide_tecnicas = True
     sector_responsable = "firmante"
     etiqueta_responsable = "Médico firmante"
 

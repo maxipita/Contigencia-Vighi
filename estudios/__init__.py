@@ -1,5 +1,5 @@
 from . import bp, ct, pap
-from .base import ETAPAS, GINECOLOGICA, NOMBRE_ETAPA, SECTORES
+from .base import ETAPAS, GINECOLOGICA, NOMBRE_ETAPA, SECTORES, Variante, con_decal
 
 REGISTRO = {m.ESTUDIO.clave: m.ESTUDIO for m in (pap, bp, ct)}
 TIPOS = {k: e.nombre for k, e in REGISTRO.items()}
@@ -16,4 +16,4 @@ def validar_combinacion(lista):
     return None
 
 
-__all__ = ["ETAPAS", "GINECOLOGICA", "NOMBRE_ETAPA", "PASOS_IHQ", "REGISTRO", "SECTORES", "TIPOS", "validar_combinacion"]
+__all__ = ["ETAPAS", "GINECOLOGICA", "NOMBRE_ETAPA", "PASOS_IHQ", "REGISTRO", "SECTORES", "TIPOS", "Variante", "con_decal", "validar_combinacion"]
