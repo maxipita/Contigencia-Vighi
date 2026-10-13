@@ -17,6 +17,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import d1
 import db
 import envios
+import facturacion
 import permisos
 import trazabilidad
 import ubicaciones as ubicaciones_csv
@@ -100,7 +101,7 @@ def requiere_login(f):
         u = usuario_actual()
         if not u:
             return redirect(url_for("login", next=request.path))
-        if u["debe_cambiar_clave"] and request.endpoint not in ("cambiar_clave", "logout"):
+        if u["debe_cambiar_clave"] and not session.get("real_uid") and request.endpoint not in ("cambiar_clave", "logout"):
             return redirect(url_for("cambiar_clave"))
         return f(*a, **k)
     return envuelta
@@ -140,11 +141,27 @@ def verificar_csrf():
             abort(400, "Formulario vencido: recargá la página e intentá de nuevo.")
 
 
+@app.before_request
+def modo_vista():
+    if session.get("real_uid") and request.method == "POST" and request.endpoint not in ("ver_como", "dejar_de_ver_como", "logout"):
+        mensaje = "Estás viendo el sistema como otro usuario: es solo para mirar, no se registran cambios. Volvé a tu usuario para trabajar."
+        if request.path.startswith("/api/"):
+            return jsonify({"error": mensaje}), 403
+        flash(mensaje, "error")
+        destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else None
+        return redirect(destino or url_for("tablero"))
+
+
 @app.context_processor
 def globales():
     u = usuario_actual()
     pendientes = db.uno(SQL_BORRADORES)["n"] if u else 0
-    return {"yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
+    vista = None
+    if u and session.get("real_uid"):
+        real = db.uno("SELECT id, iniciales, nombre FROM usuarios WHERE id=? AND activo=1 AND admin=1", (session["real_uid"],))
+        if real:
+            vista = {"admin": real, "otros": db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 AND id<>? ORDER BY iniciales", (real["id"],))}
+    return {"vista_como": vista, "yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
             "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS, "nombre_base": db.nombre_base(),
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
@@ -238,6 +255,38 @@ def login():
             return redirect(destino if destino.startswith("/") and not destino.startswith("//") else url_for("tablero"))
         flash("Iniciales o clave incorrectas (o el usuario todavía no tiene clave: pedísela al administrador).", "error")
     return render_template("login.html")
+
+
+@app.route("/usuarios/<int:uid>/ver-como", methods=["POST"])
+@requiere_login
+def ver_como(uid):
+    real_id = session.get("real_uid") or session.get("uid")
+    real = db.uno("SELECT id, iniciales FROM usuarios WHERE id=? AND activo=1 AND admin=1", (real_id,))
+    if not real:
+        abort(403)
+    objetivo = db.uno("SELECT id, iniciales, nombre FROM usuarios WHERE id=? AND activo=1", (uid,))
+    if not objetivo:
+        flash("El usuario no existe o está inactivo.", "error")
+        return redirect(url_for("usuarios"))
+    if objetivo["id"] == real["id"]:
+        session.pop("real_uid", None)
+        session["uid"] = real["id"]
+        return redirect(url_for("usuarios"))
+    session["real_uid"] = real["id"]
+    session["uid"] = objetivo["id"]
+    db.auditar(real["id"], None, "ver_como", f"{objetivo['iniciales']}")
+    return redirect(url_for("tablero"))
+
+
+@app.route("/dejar-de-ver-como", methods=["POST"])
+@requiere_login
+def dejar_de_ver_como():
+    real_id = session.pop("real_uid", None)
+    if real_id:
+        session["uid"] = real_id
+        flash("Volviste a tu usuario.", "ok")
+        return redirect(url_for("usuarios"))
+    return redirect(url_for("tablero"))
 
 
 @app.route("/logout")
@@ -1026,6 +1075,23 @@ def malignidad_por_flujo(estudios):
         salida.append({"tipo": tipo, "nombre": TIPOS[tipo], "informado": not any(x["borrador"] or x["proxima"] for x in activos),
                        "valor": valores.pop() if len(valores) == 1 else None})
     return salida
+
+
+@app.route("/buscar")
+@requiere_login
+def buscar_protocolo():
+    texto = request.args.get("q", "").strip()
+    if not texto:
+        return redirect(url_for("tablero"))
+    m = re.fullmatch(r"[cC]?\s*0*(\d{1,6})", texto)
+    numero = numero_protocolo(int(m.group(1))) if m and int(m.group(1)) > 0 else texto
+    p = db.uno("SELECT id FROM protocolos WHERE numero=?", (numero,)) or db.uno("SELECT id FROM protocolos WHERE LOWER(numero)=?", (texto.lower(),))
+    if p:
+        return redirect(url_for("protocolo", pid=p["id"]))
+    if m:
+        flash(f"No existe el protocolo {numero}.", "error")
+        return redirect(url_for("tablero"))
+    return redirect(url_for("tablero", ver="todos", q=texto))
 
 
 @app.route("/protocolo/<int:pid>")
@@ -2488,6 +2554,560 @@ def feriados():
             flash("Feriado guardado.", "ok")
         return redirect(url_for("feriados"))
     return render_template("feriados.html", feriados=db.q("SELECT * FROM feriados ORDER BY fecha"))
+
+
+@app.template_filter("peso")
+def peso(v):
+    try:
+        n = float(v or 0)
+    except (TypeError, ValueError):
+        return ""
+    texto = f"{abs(n):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return ("-" if n < 0 else "") + "$ " + texto
+
+
+@app.template_filter("peso0")
+def peso_entero(v):
+    try:
+        n = round(float(v or 0))
+    except (TypeError, ValueError):
+        return ""
+    return ("-" if n < 0 else "") + "$ " + f"{abs(n):,}".replace(",", ".")
+
+
+def coberturas_lista():
+    return listas().get("cobertura", [])
+
+
+def factura_o_404(fid):
+    return db.uno("""SELECT f.*, uc.iniciales AS creador, ue.iniciales AS emisor, ub.iniciales AS cobrador, ua.iniciales AS anulador
+                     FROM facturas f LEFT JOIN usuarios uc ON uc.id=f.creado_por LEFT JOIN usuarios ue ON ue.id=f.emitida_por
+                     LEFT JOIN usuarios ub ON ub.id=f.cobrada_por LEFT JOIN usuarios ua ON ua.id=f.anulada_por WHERE f.id=?""", (fid,)) or abort(404)
+
+
+def items_de_factura(fid):
+    return db.q("SELECT * FROM factura_items WHERE factura_id=? ORDER BY numero_protocolo, id", (fid,))
+
+
+@app.route("/facturacion")
+@requiere_permiso("facturacion")
+def facturacion_lista():
+    f = {k: request.args.get(k, "") for k in ("cobertura", "anio", "mes", "estado")}
+    todas = db.q("SELECT f.*, u.iniciales AS creador FROM facturas f LEFT JOIN usuarios u ON u.id=f.creado_por ORDER BY f.id DESC")
+    visibles = []
+    for r in todas:
+        referencia = (r["fecha_factura"] or r["creado_en"] or "")[:10]
+        if f["cobertura"] and r["cobertura"] != f["cobertura"]:
+            continue
+        if f["anio"] and referencia[:4] != f["anio"]:
+            continue
+        if f["mes"] and referencia[5:7] != f["mes"].zfill(2):
+            continue
+        if f["estado"] == "sincobrar":
+            if r["estado"] != "emitida":
+                continue
+        elif f["estado"]:
+            if r["estado"] != f["estado"]:
+                continue
+        elif r["estado"] == "anulada":
+            continue
+        visibles.append(r)
+    acumulado = {k: round(sum(r[k] or 0 for r in visibles if r["estado"] != "anulada"), 2) for k in ("exento", "gravado", "iva", "total")}
+    anios = sorted({(r["fecha_factura"] or r["creado_en"] or "")[:4] for r in todas if (r["fecha_factura"] or r["creado_en"])} | {hoy()[:4]}, reverse=True)
+    return render_template("facturacion.html", facturas=visibles, f=f, acumulado=acumulado, anios=anios, coberturas=coberturas_lista(),
+                           estados=facturacion.ESTADOS, clases=facturacion.CLASES_ESTADO)
+
+
+MESES_CORTOS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+
+
+@app.route("/administracion")
+@requiere_permiso("facturacion")
+def administracion():
+    hoy_d = datetime.now().date()
+    actual = (hoy_d.year, hoy_d.month)
+    siguiente = (hoy_d.year + (hoy_d.month == 12), hoy_d.month % 12 + 1)
+    pendientes = db.q("SELECT id, numero, cobertura, total, fecha_estimada_cobro, fec_tipo FROM facturas WHERE estado='emitida' ORDER BY fecha_estimada_cobro, id")
+    columnas = {actual: [], siguiente: []}
+    sin_fecha = 0
+    for r in pendientes:
+        if not r["fecha_estimada_cobro"]:
+            sin_fecha += 1
+            continue
+        d = datetime.strptime(r["fecha_estimada_cobro"], "%Y-%m-%d").date()
+        atraso = (hoy_d - d).days
+        color = "atr5" if atraso > 5 else ("atr" if atraso > 0 else "ok")
+        simbolo = "tent" if r["fec_tipo"] == "tentativa" else "conf"
+        titulo = {"ok": "En fecha", "atr": "Cobro atrasado", "atr5": "Cobro atrasado más de 5 días"}[color] + " · " + \
+                 ("fecha tentativa" if simbolo == "tent" else "fecha confirmada" if r["fec_tipo"] == "confirmada" else "fecha de cobro cargada")
+        clave = max(actual, (d.year, d.month))
+        columnas.setdefault(clave, []).append({"id": r["id"], "numero": r["numero"], "cobertura": r["cobertura"], "total": r["total"], "color": color,
+                                               "simbolo": simbolo, "titulo": titulo, "fecha": f"{d.day:02d} {MESES_CORTOS[d.month - 1]}.", "orden": d})
+    meses = []
+    for clave in sorted(columnas):
+        filas = sorted(columnas[clave], key=lambda x: (x["orden"], x["cobertura"]))
+        nombre = MESES[clave[1] - 1].capitalize() + (f" {clave[0]}" if clave[0] != hoy_d.year else "")
+        meses.append({"nombre": nombre, "total": round(sum(x["total"] or 0 for x in filas), 2), "filas": filas, "actual": clave == actual})
+    return render_template("administracion.html", meses=meses, sin_fecha=sin_fecha, cantidad=sum(len(m["filas"]) for m in meses))
+
+
+def facturacion_buscar(f):
+    proto = {r["id"]: r for r in db.q("SELECT id, cobertura, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
+    facturados = facturacion.ids_facturados()
+    ctx = facturacion.contexto()
+    q = f["q"].strip().lower()
+    cobertura = facturacion.sin_acentos(f["cobertura"])
+    out = []
+    for e in cargar_estudios():
+        p = proto.get(e["protocolo_id"])
+        if e["anulado"] or not p:
+            continue
+        if f["tipo"] and e["tipo"] != f["tipo"]:
+            continue
+        if f["flujo"] and not (e["solicita_ihq"] if f["flujo"] == "IHQ" else e["tipo"] == f["flujo"]):
+            continue
+        if f["clase"] == "biop" and e["tipo"] != "BP":
+            continue
+        if f["clase"] == "cito" and e["tipo"] not in ("CT", "PAP"):
+            continue
+        if f["clase"] == "ihq" and not e["solicita_ihq"]:
+            continue
+        if f["prioridad"] == "ihq" and not e["solicita_ihq"]:
+            continue
+        if f["prioridad"] == "te" and not (e["tecnicas_especiales"] or "").strip():
+            continue
+        if f["zona"] and (e["subcategoria"] or "") != f["zona"]:
+            continue
+        if f["procedencia"] and (p["lugar_recoleccion"] or "").strip() != f["procedencia"]:
+            continue
+        if cobertura and facturacion.sin_acentos(p["cobertura"]) != cobertura:
+            continue
+        fecha_e = facturacion.fecha_de_estudio(e)
+        if f["desde"] and fecha_e < f["desde"]:
+            continue
+        if f["hasta"] and fecha_e > f["hasta"]:
+            continue
+        informado = not e["proxima"]
+        if (f["informados"] == "si" and not informado) or (f["informados"] == "no" and informado):
+            continue
+        ya = facturados.get(e["id"])
+        if (f["facturados"] == "no" and ya) or (f["facturados"] == "si" and not ya):
+            continue
+        if q and q not in " ".join(str(x or "") for x in (e["numero"], e["apellido"], e["nombre"], e["dni"], p["n_afiliado"])).lower():
+            continue
+        tarifa = facturacion.resolver(ctx, p["cobertura"], e["tipo"], e["sitio"], e["tipo_muestra"], fecha_e or hoy())
+        iva = facturacion.iva_de(tarifa, p["exento"])
+        if f["iva"] and iva != f["iva"]:
+            continue
+        cantidad = facturacion.cantidad_de(e["cantidad"])
+        out.append({"id": e["id"], "protocolo_id": e["protocolo_id"], "numero": e["numero"], "fecha": fecha_e, "tipo": e["tipo"],
+                    "paciente": (e["apellido"] or "") + (", " + e["nombre"] if e["nombre"] else ""), "afiliado": p["n_afiliado"] or "",
+                    "cobertura": p["cobertura"] or "", "etiqueta": e["etiqueta"], "informado": informado, "factura_id": ya, "tarifa": tarifa["ok"],
+                    "motivo": tarifa.get("motivo", ""), "codigo": tarifa.get("codigo", ""), "cantidad": cantidad,
+                    "unitario": tarifa.get("importe"), "iva": iva,
+                    "importe": facturacion.importe_linea(cantidad, tarifa["importe"]) if tarifa["ok"] else None})
+    out.sort(key=lambda r: (orden_numero(r["numero"]), r["id"]))
+    return out
+
+
+@app.route("/facturar", methods=["GET", "POST"])
+@requiere_permiso("facturacion")
+def facturar():
+    yo = usuario_actual()
+    if request.method == "POST":
+        ids = [int(x) for x in request.form.getlist("ids") if x.isdigit()]
+        volver = url_for("facturar", **{k: v for k, v in request.form.items() if k in ("desde", "hasta", "cobertura", "procedencia", "iva", "flujo", "zona", "clase", "informados", "facturados", "prioridad", "q")})
+        if not ids:
+            flash("Marcá al menos un estudio para facturar.", "error")
+            return redirect(volver)
+        with db.bloqueo("facturas"):
+            proto = {r["id"]: r for r in db.q("SELECT id, cobertura, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
+            ya = facturacion.ids_facturados()
+            ctx = facturacion.contexto()
+            elegidos = [e for e in cargar_estudios() if e["id"] in set(ids)]
+            problemas, items, coberturas = [], [], set()
+            if len(elegidos) != len(set(ids)):
+                problemas.append("Algún estudio elegido ya no existe.")
+            for e in elegidos:
+                p = proto[e["protocolo_id"]]
+                if e["anulado"]:
+                    problemas.append(f"{e['numero']} · {e['etiqueta']}: el estudio está anulado.")
+                    continue
+                if e["id"] in ya:
+                    problemas.append(f"{e['numero']} · {e['etiqueta']}: ya está en la factura N° {ya[e['id']]}.")
+                    continue
+                if not (p["cobertura"] or "").strip():
+                    problemas.append(f"{e['numero']}: el protocolo no tiene cobertura.")
+                    continue
+                fecha_e = facturacion.fecha_de_estudio(e)
+                tarifa = facturacion.resolver(ctx, p["cobertura"], e["tipo"], e["sitio"], e["tipo_muestra"], fecha_e or hoy())
+                if not tarifa["ok"]:
+                    problemas.append(f"{e['numero']} · {e['etiqueta']}: {tarifa['motivo']}.")
+                    continue
+                coberturas.add(facturacion.sin_acentos(p["cobertura"]))
+                cantidad = facturacion.cantidad_de(e["cantidad"])
+                items.append({"estudio_id": e["id"], "protocolo_id": e["protocolo_id"], "numero_protocolo": e["numero"],
+                              "paciente": ((e["apellido"] or "") + (", " + e["nombre"] if e["nombre"] else ""))[:160], "afiliado": p["n_afiliado"] or "",
+                              "fecha": fecha_e, "estudio": e["etiqueta"], "codigo": tarifa["codigo"], "descripcion": tarifa["descripcion"],
+                              "cantidad": cantidad, "unitario": tarifa["importe"], "iva": facturacion.iva_de(tarifa, p["exento"]),
+                              "importe": facturacion.importe_linea(cantidad, tarifa["importe"]), "cobertura": p["cobertura"]})
+            if len(coberturas) > 1:
+                problemas.append("Los estudios elegidos son de coberturas distintas: una factura es de una sola cobertura.")
+            if problemas or not items:
+                flash("No se generó la factura: " + " · ".join(problemas[:6] or ["no hay estudios válidos."]), "error")
+                return redirect(volver)
+            fid = db.ex("INSERT INTO facturas (estado, cobertura, alicuota, creado_por, creado_en) VALUES ('borrador',?,?,?,?)",
+                        (items[0]["cobertura"], facturacion.ALICUOTA_IVA, yo["id"], db.ahora()))
+            try:
+                db.lote_ex(facturacion.sentencias_items(fid, items))
+            except Exception:
+                db.ex("DELETE FROM facturas WHERE id=?", (fid,))
+                raise
+            facturacion.recalcular(fid)
+        db.auditar(yo["id"], None, "factura_nueva", f"Borrador {fid} · {items[0]['cobertura']} · {len(items)} ítems")
+        flash(f"Se generó el borrador de factura con {len(items)} ítems.", "ok")
+        return redirect(url_for("factura", fid=fid))
+    claves = ("desde", "hasta", "cobertura", "procedencia", "iva", "flujo", "zona", "clase", "prioridad", "q")
+    f = {k: request.args.get(k, "") for k in claves}
+    f["tipo"] = ""
+    buscado = "buscar" in request.args
+    hoy_d = datetime.now()
+    if not buscado:
+        f["desde"] = hoy_d.replace(day=1).strftime("%Y-%m-%d")
+        f["hasta"] = ((hoy_d.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)).strftime("%Y-%m-%d")
+    f["informados"] = request.args.get("informados", "si")
+    f["facturados"] = request.args.get("facturados", "no")
+    filas = facturacion_buscar(f) if buscado else []
+    procedencias = sorted({(r["lugar_recoleccion"] or "").strip() for r in db.q("SELECT DISTINCT lugar_recoleccion FROM protocolos")} - {""})
+    zonas = sorted({r["subcategoria"] for r in db.q("SELECT DISTINCT subcategoria FROM estudios WHERE subcategoria IS NOT NULL AND subcategoria<>''")})
+    return render_template("facturar.html", f=f, filas=filas[:500], total=len(filas), buscado=buscado, coberturas=coberturas_lista(),
+                           tipos_iva=facturacion.TIPOS_IVA, procedencias=procedencias, zonas=zonas)
+
+
+@app.route("/facturacion/<int:fid>")
+@requiere_permiso("facturacion")
+def factura(fid):
+    return render_template("factura.html", f=factura_o_404(fid), items=items_de_factura(fid), estados=facturacion.ESTADOS,
+                           clases=facturacion.CLASES_ESTADO, tipos_iva=facturacion.TIPOS_IVA, hoy=hoy(), tipos_fec=facturacion.TIPOS_FEC)
+
+
+@app.route("/facturacion/<int:fid>/guardar", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_guardar(fid):
+    f = factura_o_404(fid)
+    if f["estado"] != "borrador":
+        flash("Solo se puede editar una factura en borrador.", "error")
+        return redirect(url_for("factura", fid=fid))
+    errores, sentencias = [], []
+    for it in items_de_factura(fid):
+        cantidad = facturacion.numero(request.form.get(f"c_{it['id']}"), None)
+        unitario = facturacion.numero(request.form.get(f"u_{it['id']}"), None)
+        iva = request.form.get(f"i_{it['id']}", it["iva"])
+        if cantidad is None or cantidad < 1 or cantidad != int(cantidad) or unitario is None or unitario < 0 or iva not in facturacion.TIPOS_IVA:
+            errores.append(it["numero_protocolo"])
+            continue
+        sentencias.append(("UPDATE factura_items SET codigo=?, cantidad=?, unitario=?, iva=?, importe=? WHERE id=?",
+                           (request.form.get(f"k_{it['id']}", it["codigo"]).strip()[:20], int(cantidad), unitario, iva,
+                            facturacion.importe_linea(int(cantidad), unitario), it["id"])))
+    if errores:
+        flash("No se guardó: revisá cantidad e importe de " + ", ".join(dict.fromkeys(errores)) + ".", "error")
+        return redirect(url_for("factura", fid=fid))
+    if sentencias:
+        db.lote_ex(sentencias)
+    db.ex("UPDATE facturas SET observaciones=? WHERE id=?", (request.form.get("observaciones", "").strip()[:500] or None, fid))
+    facturacion.recalcular(fid)
+    flash("Factura guardada.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>/quitar/<int:iid>", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_quitar(fid, iid):
+    f = factura_o_404(fid)
+    if f["estado"] != "borrador":
+        flash("Solo se pueden quitar ítems de una factura en borrador.", "error")
+    else:
+        db.ex("DELETE FROM factura_items WHERE id=? AND factura_id=?", (iid, fid))
+        facturacion.recalcular(fid)
+        flash("Ítem quitado de la factura.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>/emitir", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_emitir(fid):
+    yo = usuario_actual()
+    f = factura_o_404(fid)
+    numero_factura = request.form.get("numero", "").strip()[:40]
+    fecha_factura = request.form.get("fecha_factura", "") or hoy()
+    fecha_estimada = request.form.get("fecha_estimada_cobro", "").strip()
+    fec_tipo = request.form.get("fec_tipo", "tentativa")
+    if fec_tipo not in facturacion.TIPOS_FEC:
+        fec_tipo = "tentativa"
+    if f["estado"] != "borrador":
+        flash("La factura ya no está en borrador.", "error")
+    elif not items_de_factura(fid):
+        flash("La factura no tiene ítems.", "error")
+    elif not numero_factura:
+        flash("Indicá el número de factura para emitirla.", "error")
+    elif not facturacion.fecha_valida(fecha_factura) or (fecha_estimada and not facturacion.fecha_valida(fecha_estimada)):
+        flash("La fecha de factura o la fecha estimada de cobro no es válida.", "error")
+    elif db.uno("SELECT 1 FROM facturas WHERE numero=? AND id<>? AND estado<>'anulada'", (numero_factura, fid)):
+        flash(f"Ya existe otra factura con el número {numero_factura}.", "error")
+    else:
+        db.ex("UPDATE facturas SET estado='emitida', numero=?, fecha_factura=?, fecha_estimada_cobro=?, fec_tipo=?, emitida_por=?, emitida_en=? WHERE id=?",
+              (numero_factura, fecha_factura, fecha_estimada or None, fec_tipo, yo["id"], db.ahora(), fid))
+        db.auditar(yo["id"], None, "factura_emitida", f"{numero_factura} · {f['cobertura']} · {fecha_factura}")
+        flash(f"Factura {numero_factura} emitida.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>/fec", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_fec(fid):
+    yo = usuario_actual()
+    f = factura_o_404(fid)
+    fecha_estimada = request.form.get("fecha_estimada_cobro", "").strip()
+    fec_tipo = request.form.get("fec_tipo", "tentativa")
+    if f["estado"] != "emitida":
+        flash("La fecha estimada de cobro se cambia solo en una factura emitida.", "error")
+    elif fecha_estimada and not facturacion.fecha_valida(fecha_estimada):
+        flash("La fecha estimada de cobro no es válida.", "error")
+    elif fec_tipo not in facturacion.TIPOS_FEC:
+        flash("Elegí el tipo de fecha.", "error")
+    else:
+        db.ex("UPDATE facturas SET fecha_estimada_cobro=?, fec_tipo=? WHERE id=?", (fecha_estimada or None, fec_tipo, fid))
+        db.auditar(yo["id"], None, "factura_fec", f"{f['numero']} · {fecha_estimada or 'sin fecha'} · {fec_tipo}")
+        flash("Fecha estimada de cobro actualizada.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>/cobrar", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_cobrar(fid):
+    yo = usuario_actual()
+    f = factura_o_404(fid)
+    fecha_cobro = request.form.get("fecha_cobro", "") or hoy()
+    if f["estado"] != "emitida":
+        flash("Solo se puede registrar el cobro de una factura emitida.", "error")
+    elif not facturacion.fecha_valida(fecha_cobro):
+        flash("La fecha de cobro no es válida.", "error")
+    else:
+        db.ex("UPDATE facturas SET estado='cobrada', fecha_cobro=?, cobrada_por=?, cobrada_en=? WHERE id=?", (fecha_cobro, yo["id"], db.ahora(), fid))
+        db.auditar(yo["id"], None, "factura_cobrada", f"{f['numero']} · {fecha_cobro}")
+        flash("Cobro registrado.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>/anular", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_anular(fid):
+    yo = usuario_actual()
+    f = factura_o_404(fid)
+    motivo = request.form.get("motivo", "").strip()[:200]
+    if f["estado"] not in ("borrador", "emitida"):
+        flash("Solo se puede anular una factura en borrador o emitida.", "error")
+    elif not motivo:
+        flash("Indicá el motivo de la anulación.", "error")
+    else:
+        db.ex("UPDATE facturas SET estado='anulada', anulada_por=?, anulada_en=?, anulada_motivo=? WHERE id=?", (yo["id"], db.ahora(), motivo, fid))
+        db.auditar(yo["id"], None, "factura_anulada", f"{f['numero'] or 'borrador ' + str(fid)} · {motivo}")
+        flash("Factura anulada: sus estudios vuelven a estar disponibles para facturar.", "ok")
+    return redirect(url_for("factura", fid=fid))
+
+
+@app.route("/facturacion/<int:fid>.csv")
+@requiere_permiso("facturacion")
+def factura_csv(fid):
+    f = factura_o_404(fid)
+    datos = facturacion.csv_de_factura(f, items_de_factura(fid)).encode("utf-8")
+    nombre = re.sub(r"[^A-Za-z0-9_-]+", "_", f["numero"] or f"borrador_{fid}")
+    return send_file(io.BytesIO(datos), mimetype="text/csv", as_attachment=True, download_name=f"factura_{nombre}.csv")
+
+
+def dos_decimales(v):
+    return f"{v:.2f}".replace(".", ",")
+
+
+@app.route("/tarifario", methods=["GET", "POST"])
+@requiere_permiso("facturacion")
+def tarifario():
+    yo = usuario_actual()
+    tarifarios = db.q("SELECT * FROM tarifarios ORDER BY nombre")
+    general = next((t for t in tarifarios if t["nombre"] == facturacion.GENERAL), tarifarios[0] if tarifarios else None)
+    elegido = request.values.get("tarifario", "")
+    actual = next((t for t in tarifarios if str(t["id"]) == elegido), general)
+    ver = request.values.get("ver", "vigentes")
+    destino = url_for("tarifario", tarifario=actual["id"], ver=ver)
+    hoy_ = hoy()
+    if request.method == "POST":
+        accion = request.form.get("accion", "")
+        if accion == "crear_tarifario":
+            nombre = " ".join(request.form.get("nombre", "").split())[:80].upper()
+            iva = request.form.get("iva", "exento")
+            if not nombre or iva not in facturacion.TIPOS_IVA:
+                flash("Indicá el nombre y el IVA de la tarifa.", "error")
+            elif db.uno("SELECT 1 FROM tarifarios WHERE nombre=?", (nombre,)):
+                flash("Ya existe una tarifa con ese nombre.", "error")
+            else:
+                nuevo_id = db.ex("INSERT INTO tarifarios (nombre, iva) VALUES (?,?)", (nombre, iva))
+                db.auditar(yo["id"], None, "tarifario_nuevo", nombre)
+                flash(f"Tarifa {nombre} creada: cargale los importes y asignale las coberturas.", "ok")
+                destino = url_for("tarifario", tarifario=nuevo_id)
+        elif accion == "guardar_tarifario":
+            iva = request.form.get("iva", actual["iva"])
+            if iva in facturacion.TIPOS_IVA:
+                db.ex("UPDATE tarifarios SET iva=? WHERE id=?", (iva, actual["id"]))
+            if actual["id"] != general["id"]:
+                marcadas = set(request.form.getlist("coberturas")) & set(coberturas_lista())
+                sentencias = [("DELETE FROM tarifario_coberturas WHERE tarifario_id=?", (actual["id"],))]
+                sentencias += [("DELETE FROM tarifario_coberturas WHERE cobertura=?", (c,)) for c in marcadas]
+                sentencias += [("INSERT INTO tarifario_coberturas (cobertura, tarifario_id) VALUES (?,?)", (c, actual["id"])) for c in marcadas]
+                db.lote_ex(sentencias)
+            db.auditar(yo["id"], None, "tarifario", f"{actual['nombre']}: IVA {iva}")
+            flash("Tarifa guardada.", "ok")
+        elif accion == "valor":
+            codigo = request.form.get("codigo", "").strip()[:20]
+            importe = facturacion.numero(request.form.get("importe"), None)
+            desde = facturacion.fecha_flexible(request.form.get("vigente_desde")) or hoy_
+            descripcion = request.form.get("descripcion", "").strip()[:300]
+            if not codigo or importe is None or importe < 0:
+                flash("Indicá el nomenclador y un importe válido.", "error")
+            else:
+                sentencias = []
+                if descripcion:
+                    sentencias += [("DELETE FROM nomencladores WHERE codigo=?", (codigo,)),
+                                   ("INSERT INTO nomencladores (codigo, descripcion) VALUES (?,?)", (codigo, descripcion))]
+                elif not db.uno("SELECT 1 FROM nomencladores WHERE codigo=?", (codigo,)):
+                    sentencias.append(("INSERT INTO nomencladores (codigo, descripcion) VALUES (?,'')", (codigo,)))
+                sentencias += [("DELETE FROM tarifario_valores WHERE tarifario_id=? AND codigo=? AND vigente_desde=?", (actual["id"], codigo, desde)),
+                               ("INSERT INTO tarifario_valores (tarifario_id, codigo, importe, vigente_desde) VALUES (?,?,?,?)", (actual["id"], codigo, importe, desde))]
+                db.lote_ex(sentencias)
+                db.auditar(yo["id"], None, "tarifa_valor", f"{actual['nombre']} · {codigo} · {importe} desde {desde}")
+                flash(f"Importe de {codigo} guardado, vigente desde {desde[8:]}/{desde[5:7]}/{desde[:4]}.", "ok")
+        elif accion == "bloque":
+            porcentaje = facturacion.numero(request.form.get("porcentaje"), None)
+            desde = facturacion.fecha_flexible(request.form.get("vigente_desde")) or hoy_
+            if porcentaje is None or porcentaje <= -100:
+                flash("Indicá un porcentaje válido (por ejemplo 5 o 5,5).", "error")
+            else:
+                vigentes, vistos = [], set()
+                for r in db.q("SELECT codigo, importe, vigente_desde FROM tarifario_valores WHERE tarifario_id=? AND vigente_desde<=? ORDER BY codigo, vigente_desde DESC", (actual["id"], desde)):
+                    if r["codigo"] not in vistos:
+                        vistos.add(r["codigo"])
+                        vigentes.append(r)
+                sentencias = []
+                for r in vigentes:
+                    nuevo_importe = round(r["importe"] * (1 + porcentaje / 100), 2)
+                    sentencias += [("DELETE FROM tarifario_valores WHERE tarifario_id=? AND codigo=? AND vigente_desde=?", (actual["id"], r["codigo"], desde)),
+                                   ("INSERT INTO tarifario_valores (tarifario_id, codigo, importe, vigente_desde) VALUES (?,?,?,?)", (actual["id"], r["codigo"], nuevo_importe, desde))]
+                for i in range(0, len(sentencias), 40):
+                    db.lote_ex(sentencias[i:i + 40])
+                db.auditar(yo["id"], None, "tarifa_bloque", f"{actual['nombre']}: {porcentaje:+}% desde {desde} ({len(vigentes)} importes)")
+                flash(f"Se actualizaron {len(vigentes)} importes ({porcentaje:+g} %), vigentes desde el {desde[8:]}/{desde[5:7]}/{desde[:4]}.", "ok")
+        elif accion == "importar":
+            nuevos, errores = facturacion.leer_valores(request.form.get("texto", ""), hoy_)
+            if errores:
+                flash("No se importó nada: " + " · ".join(errores[:6]) + (f" · y {len(errores) - 6} más" if len(errores) > 6 else ""), "error")
+            elif not nuevos:
+                flash("No hay líneas para importar.", "error")
+            else:
+                sentencias = []
+                for n in nuevos:
+                    if n["descripcion"]:
+                        sentencias += [("DELETE FROM nomencladores WHERE codigo=?", (n["codigo"],)),
+                                       ("INSERT INTO nomencladores (codigo, descripcion) VALUES (?,?)", (n["codigo"], n["descripcion"]))]
+                    sentencias += [("DELETE FROM tarifario_valores WHERE tarifario_id=? AND codigo=? AND vigente_desde=?", (actual["id"], n["codigo"], n["vigente_desde"])),
+                                   ("INSERT INTO tarifario_valores (tarifario_id, codigo, importe, vigente_desde) VALUES (?,?,?,?)", (actual["id"], n["codigo"], n["importe"], n["vigente_desde"]))]
+                for i in range(0, len(sentencias), 40):
+                    db.lote_ex(sentencias[i:i + 40])
+                db.ex("INSERT INTO nomencladores (codigo, descripcion) SELECT DISTINCT codigo, '' FROM tarifario_valores WHERE codigo NOT IN (SELECT codigo FROM nomencladores)")
+                db.auditar(yo["id"], None, "tarifas_importadas", f"{actual['nombre']}: {len(nuevos)} importes")
+                flash(f"Se importaron {len(nuevos)} importes.", "ok")
+        elif accion == "borrar_valor" and request.form.get("id", "").isdigit():
+            db.ex("DELETE FROM tarifario_valores WHERE id=? AND tarifario_id=?", (int(request.form["id"]), actual["id"]))
+            flash("Importe borrado.", "ok")
+        return redirect(destino)
+    filas = db.q("""SELECT v.id, v.codigo, v.importe, v.vigente_desde, n.descripcion FROM tarifario_valores v
+                    LEFT JOIN nomencladores n ON n.codigo=v.codigo WHERE v.tarifario_id=? ORDER BY v.codigo, v.vigente_desde DESC""", (actual["id"],))
+    if ver != "todas":
+        vistos, vigentes = set(), []
+        for r in filas:
+            if r["codigo"] in vistos or r["vigente_desde"] > hoy_:
+                continue
+            vistos.add(r["codigo"])
+            vigentes.append(r)
+        filas = vigentes
+    asignadas = {r["cobertura"]: r["tarifario_id"] for r in db.q("SELECT cobertura, tarifario_id FROM tarifario_coberturas")}
+    nombres = {t["id"]: t["nombre"] for t in tarifarios}
+    return render_template("tarifario.html", tarifarios=tarifarios, actual=actual, general=general, ver="todas" if ver == "todas" else "vigentes", filas=filas, hoy=hoy_,
+                           coberturas=coberturas_lista(), asignadas=asignadas, nombres=nombres, tipos_iva=facturacion.TIPOS_IVA,
+                           nomencladores=db.q("SELECT codigo, descripcion FROM nomencladores ORDER BY codigo"), dos=dos_decimales)
+
+
+@app.route("/nomencladores", methods=["GET", "POST"])
+@requiere_permiso("facturacion")
+def nomencladores():
+    yo = usuario_actual()
+    if request.method == "POST":
+        accion = request.form.get("accion", "")
+        if accion == "guardar_nomenclador":
+            codigo = request.form.get("codigo", "").strip()[:20]
+            descripcion = request.form.get("descripcion", "").strip()[:300]
+            if not codigo:
+                flash("Indicá el código del nomenclador.", "error")
+            else:
+                db.lote_ex([("DELETE FROM nomencladores WHERE codigo=?", (codigo,)), ("INSERT INTO nomencladores (codigo, descripcion) VALUES (?,?)", (codigo, descripcion))])
+                db.auditar(yo["id"], None, "nomenclador", f"{codigo} · {descripcion}")
+                flash("Nomenclador guardado.", "ok")
+        elif accion == "borrar_nomenclador":
+            codigo = request.form.get("codigo", "")
+            if db.uno("SELECT 1 FROM tarifario_valores WHERE codigo=?", (codigo,)) or db.uno("SELECT 1 FROM nomenclador_muestras WHERE codigo=?", (codigo,)):
+                flash("No se puede borrar: tiene importes o tipos de muestra asociados.", "error")
+            else:
+                db.ex("DELETE FROM nomencladores WHERE codigo=?", (codigo,))
+                flash("Nomenclador borrado.", "ok")
+        elif accion == "asignar":
+            tipo = request.form.get("tipo", "")
+            tipo_muestra = " ".join(request.form.get("tipo_muestra", "").split())[:80]
+            sitio = " ".join(request.form.get("sitio", "").split())[:80]
+            codigo = request.form.get("codigo", "").strip()
+            if tipo not in facturacion.TIPOS_ESTUDIO or not db.uno("SELECT 1 FROM nomencladores WHERE codigo=?", (codigo,)):
+                flash("Elegí el tipo de estudio y un nomenclador que exista.", "error")
+            else:
+                db.lote_ex([("DELETE FROM nomenclador_muestras WHERE tipo=? AND sitio=? AND tipo_muestra=?", (tipo, sitio, tipo_muestra)),
+                            ("INSERT INTO nomenclador_muestras (tipo, sitio, tipo_muestra, codigo) VALUES (?,?,?,?)", (tipo, sitio, tipo_muestra, codigo))])
+                db.auditar(yo["id"], None, "nomenclador_muestra", f"{tipo} · {tipo_muestra or 'cualquier muestra'} · {sitio or 'cualquier sitio'} → {codigo}")
+                flash("Asignación guardada.", "ok")
+        elif accion == "borrar_asignacion" and request.form.get("id", "").isdigit():
+            db.ex("DELETE FROM nomenclador_muestras WHERE id=?", (int(request.form["id"]),))
+            flash("Asignación borrada.", "ok")
+        elif accion == "importar":
+            nuevas, errores = facturacion.leer_asignaciones(request.form.get("texto", ""))
+            existentes = {r["codigo"] for r in db.q("SELECT codigo FROM nomencladores")}
+            errores += [f"El nomenclador {n['codigo']} no existe." for n in nuevas if n["codigo"] not in existentes]
+            if errores:
+                flash("No se importó nada: " + " · ".join(dict.fromkeys(errores[:6])), "error")
+            elif not nuevas:
+                flash("No hay líneas para importar.", "error")
+            else:
+                sentencias = []
+                for n in nuevas:
+                    sentencias += [("DELETE FROM nomenclador_muestras WHERE tipo=? AND sitio=? AND tipo_muestra=?", (n["tipo"], n["sitio"], n["tipo_muestra"])),
+                                   ("INSERT INTO nomenclador_muestras (tipo, sitio, tipo_muestra, codigo) VALUES (?,?,?,?)", (n["tipo"], n["sitio"], n["tipo_muestra"], n["codigo"]))]
+                for i in range(0, len(sentencias), 40):
+                    db.lote_ex(sentencias[i:i + 40])
+                flash(f"Se importaron {len(nuevas)} asignaciones.", "ok")
+        return redirect(url_for("nomencladores"))
+    lista = db.q("SELECT codigo, descripcion FROM nomencladores ORDER BY codigo")
+    uso = {r["codigo"]: r["n"] for r in db.q("SELECT codigo, COUNT(*) AS n FROM nomenclador_muestras GROUP BY codigo")}
+    asignaciones = db.q("""SELECT m.id, m.tipo, m.sitio, m.tipo_muestra, m.codigo, n.descripcion FROM nomenclador_muestras m
+                           LEFT JOIN nomencladores n ON n.codigo=m.codigo ORDER BY m.tipo, m.tipo_muestra, m.sitio""")
+    cubiertos = {(r["tipo"], facturacion.sin_acentos(r["tipo_muestra"])) for r in asignaciones if not r["sitio"]}
+    sin_asignar = [t for t in tipos_de_muestra_bp() if ("BP", facturacion.sin_acentos(t)) not in cubiertos]
+    sitios = sorted({r["sitio"] for r in db.q("SELECT DISTINCT sitio FROM catalogo WHERE tipo='BP'")})
+    return render_template("nomencladores.html", nomencladores=lista, uso=uso, asignaciones=asignaciones, tipos=facturacion.TIPOS_ESTUDIO,
+                           sin_asignar=sin_asignar, tipos_muestra=tipos_de_muestra_bp(), sitios=sitios)
 
 
 LISTADOS = {"tecnicas_especiales": ("Técnicas especiales", "Se tildan al agregar un estudio (biopsias y citologías) y se pueden elegir al informar la microscopía."),

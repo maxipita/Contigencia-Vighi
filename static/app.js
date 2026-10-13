@@ -459,5 +459,32 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
       alert(e.message);
       b.disabled = false;
     }
+
+  const form = document.querySelector("form[data-facturar]");
+  if (!form) return;
+  const marcas = () => [...form.querySelectorAll(".fact-marca:not(:disabled)")];
+  const resumen = document.getElementById("fact-resumen");
+  const pesos = n => "$ " + n.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const actualizar = () => {
+    const sel = marcas().filter(c => c.checked);
+    const total = sel.reduce((a, c) => a + parseFloat(c.dataset.importe || 0), 0);
+    if (resumen) resumen.textContent = sel.length ? `${sel.length} estudio(s) marcados · ${pesos(total)} sin IVA` : "Marcá los estudios que querés incluir.";
+  };
+  const todos = form.querySelector("[data-marcar-todos]");
+  if (todos) todos.addEventListener("change", () => { marcas().forEach(c => { c.checked = todos.checked; }); actualizar(); });
+  form.addEventListener("change", ev => { if (ev.target.classList.contains("fact-marca")) actualizar(); });
+  form.addEventListener("submit", ev => {
+    if (!marcas().some(c => c.checked)) { ev.preventDefault(); alert("Marcá al menos un estudio para facturar."); }
+  });
+})();
+
+(function () {
+  const form = document.querySelector("form[data-cambiar-vista]");
+  if (!form) return;
+  const select = form.querySelector("select");
+  select.addEventListener("change", () => {
+    if (!select.value) return;
+    form.action = form.action.replace(/\/usuarios\/\d+\/ver-como$/, "/usuarios/" + select.value + "/ver-como");
+    form.submit();
   });
 })();

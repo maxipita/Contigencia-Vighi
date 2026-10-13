@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Facturación{% endblock %}
+{% block contenido %}
+<p class="no-imprimir"><a href="{{ url_for('administracion') }}">← Administración</a></p>
+<div class="eyebrow">Administración</div>
+<h1><svg class="ic ic-titulo"><use href="#i-factura"/></svg> Facturación</h1>
+<div class="acciones" style="margin:0 0 14px">
+  <a class="btn" href="{{ url_for('facturar') }}"><svg class="ic"><use href="#i-mas"/></svg> Nueva factura</a>
+  <a class="btn sec" href="{{ url_for('tarifario') }}">Tarifario</a>
+  <a class="btn sec" href="{{ url_for('nomencladores') }}">Nomencladores</a>
+</div>
+
+<form class="filtros" method="get">
+  <select name="cobertura">
+    <option value="">Todas las coberturas</option>
+    {% for c in coberturas %}<option {{ 'selected' if f.cobertura == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="anio">
+    <option value="">Todos los años</option>
+    {% for a in anios %}<option {{ 'selected' if f.anio == a }}>{{ a }}</option>{% endfor %}
+  </select>
+  <select name="mes">
+    <option value="">Todos los meses</option>
+    {% for n, m in [("1","Enero"),("2","Febrero"),("3","Marzo"),("4","Abril"),("5","Mayo"),("6","Junio"),("7","Julio"),("8","Agosto"),("9","Septiembre"),("10","Octubre"),("11","Noviembre"),("12","Diciembre")] %}
+    <option value="{{ n }}" {{ 'selected' if f.mes == n }}>{{ m }}</option>{% endfor %}
+  </select>
+  <select name="estado">
+    <option value="">Todos los estados (sin anuladas)</option>
+    <option value="borrador" {{ 'selected' if f.estado == 'borrador' }}>Borrador</option>
+    <option value="emitida" {{ 'selected' if f.estado == 'emitida' }}>Emitida</option>
+    <option value="cobrada" {{ 'selected' if f.estado == 'cobrada' }}>Cobrada</option>
+    <option value="sincobrar" {{ 'selected' if f.estado == 'sincobrar' }}>Sin cobrar</option>
+    <option value="anulada" {{ 'selected' if f.estado == 'anulada' }}>Anulada</option>
+  </select>
+  <button class="btn sec">Filtrar</button>
+</form>
+
+<table>
+  <tr><th>Nro. factura</th><th>Estado</th><th title="Fecha de factura">FF</th><th title="Fecha estimada de cobro">FEC</th><th>Cobertura</th><th class="num">Exento</th><th class="num">Gravado</th><th class="num">IVA</th><th class="num">Total</th></tr>
+  {% for r in facturas %}
+  <tr class="{{ 'bloqueado' if r.estado == 'anulada' }}">
+    <td><a href="{{ url_for('factura', fid=r.id) }}"><b>{{ r.numero or ('Borrador #' ~ r.id) }}</b></a></td>
+    <td><span class="chip {{ clases[r.estado] }}">{{ estados[r.estado] }}</span>{% if r.estado == 'cobrada' and r.fecha_cobro %}<div class="muted">cobrada el {{ r.fecha_cobro | f }}</div>{% endif %}</td>
+    <td class="muted">{{ r.fecha_factura | f }}</td>
+    <td class="muted">{{ r.fecha_estimada_cobro | f }}</td>
+    <td>{{ r.cobertura }}</td>
+    <td class="num">{{ r.exento | peso }}</td>
+    <td class="num">{{ r.gravado | peso }}</td>
+    <td class="num">{{ r.iva | peso }}</td>
+    <td class="num"><b>{{ r.total | peso }}</b></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="9" class="muted">No hay facturas con esos filtros.</td></tr>
+  {% endfor %}
+</table>
+{% if facturas %}
+<div class="totales-fact">
+  {% for k, n in [("exento","Exento"),("gravado","Gravado"),("iva","IVA"),("total","Total")] %}
+  <div><span>{{ n }}</span><b>{{ acumulado[k] | peso }}</b></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

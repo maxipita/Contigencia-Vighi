@@ -15,6 +15,7 @@ PERMISOS = {
     "exportar": ("Consultas", "Exportar a Excel"),
     "ubicaciones": ("Administración", "Ubicaciones (crear, editar, importar y asignar médicos)"),
     "feriados": ("Administración", "Feriados"),
+    "facturacion": ("Administración", "Facturación y tarifario"),
 }
 
 GRUPOS = list(dict.fromkeys(g for g, _ in PERMISOS.values()))
@@ -27,6 +28,7 @@ PERFILES_INICIALES = {
     "Traslados": ("traslados", ["etapas"]),
     "Citotécnico": ("citotecnico", ["etiquetas_lab", "lotes_armar", "etapas"]),
     "Médico firmante": ("firmante", ["micro", "informe", "etapas", "exportar"]),
+    "Facturación": ("facturacion", ["facturacion", "exportar"]),
 }
 
 

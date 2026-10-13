@@ -5,6 +5,7 @@ SECTORES = {
     "traslados": "Traslados",
     "citotecnico": "Citotécnicos",
     "firmante": "Médicos firmantes",
+    "facturacion": "Facturación",
 }
 
 ETAPAS = {
