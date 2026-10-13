@@ -111,6 +111,13 @@ def _firmante(protocolo, estudios, cierre):
     return u, "quien cerró la última etapa (no hay un médico responsable asignado)"
 
 
+def _institucion(abreviatura):
+    if not abreviatura:
+        return ""
+    u = db.uno("SELECT nombre FROM ubicaciones WHERE abreviatura=?", (abreviatura,))
+    return (u["nombre"] if u and u["nombre"] else abreviatura)
+
+
 def armar(pid, comentario=""):
     p = db.uno("SELECT * FROM protocolos WHERE id=?", (pid,))
     if not p:
@@ -187,7 +194,7 @@ def armar(pid, comentario=""):
         "pid": pid, "numero": p["numero"], "estudios": secciones,
         "titulo": "INFORME HISTOPATOLÓGICO" if tipos == {"BP"} else ("INFORME CITOLÓGICO" if "BP" not in tipos else "INFORME DE ANATOMÍA PATOLÓGICA"),
         "paciente": f"{p['apellido'] or ''}, {p['nombre'] or ''}".strip(", ").upper(),
-        "medico_solicitante": p["medico"] or "", "institucion": p["lugar_recoleccion"] or "",
+        "medico_solicitante": p["medico"] or "", "institucion": _institucion(p["lugar_recoleccion"]),
         "cobertura": " ".join(x for x in (p["cobertura"], p["n_afiliado"]) if x),
         "fecha": _fecha(cierre["fecha_hora"]) or datetime.now().strftime("%d/%m/%Y"),
         "comentario": (comentario or "").strip()[:MAX_COMENTARIO],

@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% block titulo %}{{ 'Nueva ubicación' if nueva else u.nombre }}{% endblock %}
+{% block titulo %}{{ 'Nueva ubicación' if nueva else u.abreviatura }}{% endblock %}
 {% block contenido %}
 {% set editable = puede('ubicaciones') %}
 <div class="eyebrow"><a href="{{ url_for('ubicaciones_lista') }}">Ubicaciones</a></div>
-<h1>{{ 'Nueva ubicación' if nueva else u.nombre }}</h1>
+<h1>{{ 'Nueva ubicación' if nueva else u.abreviatura }}</h1>
+{% if not nueva and u.nombre %}<p class="muted">{{ u.nombre }} <span title="Es el nombre que sale en el informe">· nombre del informe</span></p>{% endif %}
 <div class="cols">
 <div>
   {% if not nueva %}
@@ -35,7 +36,8 @@
     {% if editable %}
     <form method="post" action="{{ url_for('ubicacion_nueva') if nueva else url_for('ubicacion_editar', uid=u.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
-      <label>Nombre *</label><input name="nombre" value="{{ u.nombre or '' }}" required {{ 'autofocus' if nueva }}>
+      <label>Abreviatura * (la que se elige en el protocolo)</label><input name="abreviatura" value="{{ u.abreviatura or '' }}" required {{ 'autofocus' if nueva }}>
+      <label style="margin-top:8px">Nombre completo (sale en el informe)</label><input name="nombre" value="{{ u.nombre or '' }}">
       <label style="margin-top:8px">Dirección</label><input name="direccion" value="{{ u.direccion or '' }}">
       <label style="margin-top:8px">Contactos (teléfonos, horarios, referentes)</label><textarea name="contactos" style="min-height:60px">{{ u.contactos or '' }}</textarea>
       <label style="margin-top:8px">E-mails para enviar informes</label><input name="emails" value="{{ u.emails or '' }}" placeholder="uno@ejemplo.com, otro@ejemplo.com">
@@ -53,10 +55,10 @@
     <h2>Estudios</h2>
     <div>Como lugar de recolección: <b>{{ recoleccion }}</b> protocolo(s)</div>
     <div>Como lugar de entrega: <b>{{ entrega }}</b> protocolo(s)</div>
-    <div class="acciones"><a class="btn sec" href="{{ url_for('tablero', ver='todos', ubicacion=u.nombre) }}">Ver en el tablero</a></div>
+    <div class="acciones"><a class="btn sec" href="{{ url_for('tablero', ver='todos', ubicacion=u.abreviatura) }}">Ver en el tablero</a></div>
   </div>
   {% if editable %}
-  <form method="post" action="{{ url_for('ubicacion_eliminar', uid=u.id) }}" data-confirmar="¿Eliminar la ubicación «{{ u.nombre }}»?">
+  <form method="post" action="{{ url_for('ubicacion_eliminar', uid=u.id) }}" data-confirmar="¿Eliminar la ubicación «{{ u.abreviatura }}»?">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <button class="btn peligro" {{ 'disabled title="Hay protocolos con esta ubicación"' if recoleccion or entrega }}>Eliminar ubicación</button>
   </form>

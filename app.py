@@ -844,7 +844,7 @@ def protocolo(pid):
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
     lugares = list(dict.fromkeys(l for l in (p["lugar_recoleccion"], p["lugar_entrega"]) if l))
-    ubicaciones = {u["nombre"]: u for u in db.q(f"SELECT id, nombre, contactos, emails FROM ubicaciones WHERE nombre IN ({','.join('?' * len(lugares))})", tuple(lugares))} if lugares else {}
+    ubicaciones = {u["abreviatura"]: u for u in db.q(f"SELECT id, abreviatura, nombre, contactos, emails FROM ubicaciones WHERE abreviatura IN ({','.join('?' * len(lugares))})", tuple(lugares))} if lugares else {}
     return render_template("protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), ubicaciones=ubicaciones,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
@@ -1469,14 +1469,14 @@ def api_medicos():
 @app.route("/api/ubicaciones")
 @requiere_login
 def api_ubicaciones():
-    r = jsonify([u["nombre"] for u in db.q("SELECT nombre FROM ubicaciones ORDER BY nombre")])
+    r = jsonify([{"v": u["abreviatura"], "n": u["nombre"] or ""} for u in db.q("SELECT abreviatura, nombre FROM ubicaciones ORDER BY abreviatura")])
     r.headers["Cache-Control"] = "private, max-age=60"
     return r
 
 
 CAMPOS_LUGAR = (("lugar_recoleccion", "Lugar recolección"), ("lugar_entrega", "Lugar entrega"))
 SQL_UBICACIONES = """SELECT u.*, (SELECT COUNT(*) FROM ubicacion_medicos m WHERE m.ubicacion_id=u.id) AS n_medicos
-                     FROM ubicaciones u ORDER BY u.nombre"""
+                     FROM ubicaciones u ORDER BY u.abreviatura"""
 
 
 def sql_protocolos_por_lugar(campo):
@@ -1488,7 +1488,7 @@ def error_ubicaciones(d, actual=None):
         v = d.get(campo)
         if not v or (actual is not None and v == (actual[campo] or "")):
             continue
-        if not db.uno("SELECT 1 FROM ubicaciones WHERE nombre=?", (v,)):
+        if not db.uno("SELECT 1 FROM ubicaciones WHERE abreviatura=?", (v,)):
             return f"{rotulo}: elegí una ubicación de la lista. Si falta, se crea en Ubicaciones."
     return None
 
@@ -1508,7 +1508,7 @@ def ubicaciones_lista():
         por_medico = {r["ubicacion_id"] for r in db.q(
             "SELECT DISTINCT m.ubicacion_id FROM ubicacion_medicos m JOIN medicos d ON d.id=m.medico_id WHERE "
             + " AND ".join(["d.nombre LIKE ?"] * len(palabras)), tuple(f"%{p}%" for p in palabras))} if palabras else set()
-        filas = [u for u in filas if u["id"] in por_medico or all(p in db.clave_nombre(f"{u['nombre']} {u['direccion'] or ''} {u['contactos'] or ''}")
+        filas = [u for u in filas if u["id"] in por_medico or all(p in db.clave_nombre(f"{u['abreviatura']} {u['nombre'] or ''} {u['direccion'] or ''} {u['contactos'] or ''}")
                                                                   for p in palabras)]
     return render_template("ubicaciones.html", ubicaciones=filas, q=q,
                            recoleccion={r["lugar"]: r["n"] for r in db.q(sql_protocolos_por_lugar("lugar_recoleccion"))},
@@ -1516,16 +1516,16 @@ def ubicaciones_lista():
 
 
 def leer_ubicacion():
-    d = {k: request.form.get(k, "").strip() for k in ("nombre", "direccion", "contactos", "emails")}
+    d = {k: request.form.get(k, "").strip() for k in ("abreviatura", "nombre", "direccion", "contactos", "emails")}
     d["emails"] = ", ".join(ubicaciones_csv.emails_de(d["emails"]))
     return d
 
 
 def error_ubicacion(d, uid=None):
-    if not d["nombre"]:
-        return "Falta el nombre de la ubicación."
-    if db.uno("SELECT 1 FROM ubicaciones WHERE nombre=? AND id<>?", (d["nombre"], uid or 0)):
-        return f"Ya existe una ubicación llamada «{d['nombre']}»."
+    if not d["abreviatura"]:
+        return "Falta la abreviatura de la ubicación."
+    if db.uno("SELECT 1 FROM ubicaciones WHERE abreviatura=? AND id<>?", (d["abreviatura"], uid or 0)):
+        return f"Ya existe una ubicación llamada «{d['abreviatura']}»."
     return None
 
 
@@ -1539,9 +1539,9 @@ def ubicacion_nueva():
         if error:
             flash(error, "error")
         else:
-            uid = db.ex("INSERT INTO ubicaciones (nombre, direccion, contactos, emails) VALUES (?,?,?,?)",
-                        (d["nombre"], d["direccion"], d["contactos"], d["emails"]))
-            db.auditar(usuario_actual()["id"], None, "ubicacion", f"Alta: {d['nombre']}")
+            uid = db.ex("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos, emails) VALUES (?,?,?,?,?)",
+                        (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"], d["emails"]))
+            db.auditar(usuario_actual()["id"], None, "ubicacion", f"Alta: {d['abreviatura']}")
             flash("Ubicación creada. Ahora podés asociarle médicos.", "ok")
             return redirect(url_for("ubicacion", uid=uid))
     return render_template("ubicacion.html", u=d, nueva=True, medicos=[], recoleccion=0, entrega=0)
@@ -1552,7 +1552,7 @@ def ubicacion_nueva():
 def ubicacion(uid):
     u = ubicacion_o_404(uid)
     medicos = db.q("SELECT d.id, d.nombre FROM ubicacion_medicos m JOIN medicos d ON d.id=m.medico_id WHERE m.ubicacion_id=? ORDER BY d.nombre", (uid,))
-    cuenta = lambda campo: db.uno(f"SELECT COUNT(*) AS n FROM protocolos WHERE borrador=0 AND {campo}=?", (u["nombre"],))["n"]
+    cuenta = lambda campo: db.uno(f"SELECT COUNT(*) AS n FROM protocolos WHERE borrador=0 AND {campo}=?", (u["abreviatura"],))["n"]
     return render_template("ubicacion.html", u=u, nueva=False, medicos=medicos, recoleccion=cuenta("lugar_recoleccion"), entrega=cuenta("lugar_entrega"))
 
 
@@ -1565,13 +1565,13 @@ def ubicacion_editar(uid):
     if error:
         flash(error, "error")
         return redirect(url_for("ubicacion", uid=uid))
-    sentencias = [("UPDATE ubicaciones SET nombre=?, direccion=?, contactos=?, emails=? WHERE id=?", (d["nombre"], d["direccion"], d["contactos"], d["emails"], uid))]
-    if d["nombre"] != u["nombre"]:
-        sentencias += [(f"UPDATE protocolos SET {campo}=? WHERE {campo}=?", (d["nombre"], u["nombre"])) for campo, _ in CAMPOS_LUGAR]
+    sentencias = [("UPDATE ubicaciones SET abreviatura=?, nombre=?, direccion=?, contactos=?, emails=? WHERE id=?", (d["abreviatura"], d["nombre"], d["direccion"], d["contactos"], d["emails"], uid))]
+    if d["abreviatura"] != u["abreviatura"]:
+        sentencias += [(f"UPDATE protocolos SET {campo}=? WHERE {campo}=?", (d["abreviatura"], u["abreviatura"])) for campo, _ in CAMPOS_LUGAR]
     db.lote_ex(sentencias)
-    detalle = f"{u['nombre']} → {d['nombre']}" if d["nombre"] != u["nombre"] else d["nombre"]
+    detalle = f"{u['abreviatura']} → {d['abreviatura']}" if d["abreviatura"] != u["abreviatura"] else d["abreviatura"]
     db.auditar(usuario_actual()["id"], None, "ubicacion", f"Edición: {detalle}")
-    flash("Ubicación actualizada." + (" Se actualizó el nombre en sus protocolos." if d["nombre"] != u["nombre"] else ""), "ok")
+    flash("Ubicación actualizada." + (" Se actualizó la abreviatura en sus protocolos." if d["abreviatura"] != u["abreviatura"] else ""), "ok")
     return redirect(url_for("ubicacion", uid=uid))
 
 
@@ -1579,12 +1579,12 @@ def ubicacion_editar(uid):
 @requiere_permiso("ubicaciones")
 def ubicacion_eliminar(uid):
     u = ubicacion_o_404(uid)
-    if db.uno("SELECT 1 FROM protocolos WHERE lugar_recoleccion=? OR lugar_entrega=? LIMIT 1", (u["nombre"], u["nombre"])):
+    if db.uno("SELECT 1 FROM protocolos WHERE lugar_recoleccion=? OR lugar_entrega=? LIMIT 1", (u["abreviatura"], u["abreviatura"])):
         flash("No se puede eliminar: hay protocolos con esta ubicación.", "error")
         return redirect(url_for("ubicacion", uid=uid))
     db.lote_ex([("DELETE FROM ubicacion_medicos WHERE ubicacion_id=?", (uid,)), ("DELETE FROM ubicaciones WHERE id=?", (uid,))])
-    db.auditar(usuario_actual()["id"], None, "ubicacion", f"Baja: {u['nombre']}")
-    flash(f"Ubicación «{u['nombre']}» eliminada.", "ok")
+    db.auditar(usuario_actual()["id"], None, "ubicacion", f"Baja: {u['abreviatura']}")
+    flash(f"Ubicación «{u['abreviatura']}» eliminada.", "ok")
     return redirect(url_for("ubicaciones_lista"))
 
 
@@ -1603,7 +1603,7 @@ def ubicacion_medico_agregar(uid):
         flash(f"{hallados[0]['nombre']} ya está asociado a esta ubicación.", "error")
     else:
         db.ex("INSERT INTO ubicacion_medicos (ubicacion_id, medico_id) VALUES (?,?)", (uid, hallados[0]["id"]))
-        db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['nombre']}: se asoció a {hallados[0]['nombre']}")
+        db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['abreviatura']}: se asoció a {hallados[0]['nombre']}")
         flash(f"{hallados[0]['nombre']} asociado a la ubicación.", "ok")
     return redirect(url_for("ubicacion", uid=uid) + "#medicos")
 
@@ -1617,7 +1617,7 @@ def ubicacion_medico_quitar(uid):
         flash("Marcá los médicos que querés quitar.", "error")
     else:
         db.lote_ex([("DELETE FROM ubicacion_medicos WHERE ubicacion_id=? AND medico_id=?", (uid, i)) for i in ids])
-        db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['nombre']}: se quitaron {len(ids)} médico(s)")
+        db.auditar(usuario_actual()["id"], None, "ubicacion", f"{u['abreviatura']}: se quitaron {len(ids)} médico(s)")
         flash(f"Se quitaron {len(ids)} médico(s) de la ubicación.", "ok")
     return redirect(url_for("ubicacion", uid=uid) + "#medicos")
 

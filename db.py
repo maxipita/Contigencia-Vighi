@@ -152,7 +152,8 @@ CREATE TABLE IF NOT EXISTS etiquetas_lotes (
 CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
 CREATE TABLE IF NOT EXISTS ubicaciones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nombre VARCHAR(120) NOT NULL UNIQUE,
+    abreviatura VARCHAR(120) NOT NULL UNIQUE,
+    nombre VARCHAR(200),
     direccion VARCHAR(200), contactos TEXT, emails TEXT
 );
 CREATE TABLE IF NOT EXISTS ubicacion_medicos (
@@ -305,14 +306,14 @@ def _en_trozos(c, sentencias):
 
 def ubicaciones_importar(filas):
     c = con()
-    existentes = {r["nombre"]: r["id"] for r in c.execute("SELECT id, nombre FROM ubicaciones").fetchall()}
-    nuevas = [f for f in filas if f["nombre"] not in existentes]
-    c.executemany("INSERT INTO ubicaciones (nombre, direccion, contactos, emails) VALUES (?,?,?,?)",
-                  [(f["nombre"], f["direccion"], f["contactos"], f["emails"]) for f in nuevas])
-    _en_trozos(c, [("UPDATE ubicaciones SET direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos), "
+    existentes = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
+    nuevas = [f for f in filas if f["abreviatura"] not in existentes]
+    c.executemany("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos, emails) VALUES (?,?,?,?,?)",
+                  [(f["abreviatura"], f["nombre"], f["direccion"], f["contactos"], f["emails"]) for f in nuevas])
+    _en_trozos(c, [("UPDATE ubicaciones SET nombre=COALESCE(NULLIF(?,''), nombre), direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos), "
                     "emails=CASE WHEN COALESCE(emails,'')='' THEN ? ELSE emails END WHERE id=?",
-                    (f["direccion"], f["contactos"], f["emails"], existentes[f["nombre"]])) for f in filas if f["nombre"] in existentes])
-    ids = {r["nombre"]: r["id"] for r in c.execute("SELECT id, nombre FROM ubicaciones").fetchall()}
+                    (f["nombre"], f["direccion"], f["contactos"], f["emails"], existentes[f["abreviatura"]])) for f in filas if f["abreviatura"] in existentes])
+    ids = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
     medicos = {}
     for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
         medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
@@ -326,7 +327,7 @@ def ubicaciones_importar(filas):
         for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
             medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
     ya = {(r["ubicacion_id"], r["medico_id"]) for r in c.execute("SELECT ubicacion_id, medico_id FROM ubicacion_medicos").fetchall()}
-    vinculos = {(ids[f["nombre"]], medicos[clave_nombre(m)]) for f in filas for m in f["medicos"]} - ya
+    vinculos = {(ids[f["abreviatura"]], medicos[clave_nombre(m)]) for f in filas for m in f["medicos"]} - ya
     c.executemany("INSERT INTO ubicacion_medicos (ubicacion_id, medico_id) VALUES (?,?)", sorted(vinculos))
     c.commit()
     olvidar_cache()
@@ -351,6 +352,8 @@ def preparar_esquema(c):
                      WHERE i.id IN (SELECT MAX(i2.id) FROM informes_por_estudio i2 JOIN estudios e2 ON e2.id=i2.estudio_id GROUP BY e2.protocolo_id)""")
         c.execute("DROP TABLE informes_por_estudio")
         c.commit()
+    if "abreviatura" not in [r["name"] for r in c.execute("PRAGMA table_info(ubicaciones)")] and c.execute("PRAGMA table_info(ubicaciones)").fetchall():
+        c.execute("ALTER TABLE ubicaciones RENAME COLUMN nombre TO abreviatura")
     c.executescript(SCHEMA)
     cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
     antes_de_informes = "titulo" not in cols("usuarios")
@@ -364,7 +367,8 @@ def preparar_esquema(c):
                                    ("protocolos", "etiqueta_lote_id", "INTEGER"),
                                    ("informes_emitidos", "estudios", "VARCHAR(500)"),
                                    ("protocolos", "firmante_id", "INTEGER"),
-                                   ("estudios", "lab_etiquetado_en", "VARCHAR(19)")):
+                                   ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
+                                   ("ubicaciones", "nombre", "VARCHAR(200)")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")

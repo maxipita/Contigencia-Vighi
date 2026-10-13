@@ -2,7 +2,7 @@ import csv
 import io
 import re
 
-COLUMNAS = ("nombre", "direccion", "medicos", "telefonos")
+COLUMNAS = ("abreviatura", "nombre", "direccion", "medicos", "telefonos")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
 
@@ -28,12 +28,13 @@ def leer_csv(contenido):
         raise ErrorArchivo(f"Al archivo le faltan las columnas: {', '.join(faltan)}. Tiene que tener: {', '.join(COLUMNAS)}.")
     por_nombre = {}
     for r in lector:
-        nombre = (r["nombre"] or "").strip()
-        if not nombre:
+        abreviatura = (r["abreviatura"] or "").strip()
+        if not abreviatura:
             continue
         medicos = [m.strip() for m in (r["medicos"] or "").split(" | ") if m.strip()]
         contactos = (r["telefonos"] or "").strip()
-        u = por_nombre.setdefault(nombre, {"nombre": nombre, "direccion": "", "contactos": "", "medicos": []})
+        u = por_nombre.setdefault(abreviatura, {"abreviatura": abreviatura, "nombre": "", "direccion": "", "contactos": "", "medicos": []})
+        u["nombre"] = u["nombre"] or (r["nombre"] or "").strip()
         u["direccion"] = u["direccion"] or (r["direccion"] or "").strip()
         if contactos and contactos not in u["contactos"]:
             u["contactos"] = f"{u['contactos']} / {contactos}" if u["contactos"] else contactos

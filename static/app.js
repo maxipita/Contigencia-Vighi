@@ -79,7 +79,8 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
 const sinAcentos = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEach(async inp => {
   const deLista = inp.hasAttribute("data-ubicaciones");
-  const nombres = (await (await fetch(deLista ? "/api/ubicaciones" : "/api/medicos")).json()).map(n => [n, sinAcentos(n)]);
+  const nombres = (await (await fetch(deLista ? "/api/ubicaciones" : "/api/medicos")).json())
+    .map(n => typeof n === "string" ? [n, sinAcentos(n), n] : [n.v, sinAcentos(n.v + " " + n.n), n.n ? n.v + " — " + n.n : n.v]);
   const caja = document.createElement("div");
   caja.className = "sugerencias";
   caja.hidden = true;
@@ -101,9 +102,10 @@ document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEac
     const coinciden = nombres.filter(([, s]) => palabras.every(p => s.includes(p)));
     const hallados = [...coinciden.filter(([, s]) => s.startsWith(palabras[0])),
                       ...coinciden.filter(([, s]) => !s.startsWith(palabras[0]))].slice(0, 40);
-    hallados.forEach(([n]) => {
+    hallados.forEach(([n, , texto]) => {
       const el = document.createElement("div");
-      el.textContent = n;
+      el.textContent = texto;
+      el.dataset.valor = n;
       el.addEventListener("mousedown", e => { e.preventDefault(); elegir(n); });
       caja.append(el);
     });
@@ -116,7 +118,7 @@ document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEac
   inp.addEventListener("keydown", e => {
     if (caja.hidden) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); marcar(activo + (e.key === "ArrowDown" ? 1 : -1)); }
-    else if (e.key === "Enter" && activo >= 0 && caja.children[activo].textContent) { e.preventDefault(); elegir(caja.children[activo].textContent); }
+    else if (e.key === "Enter" && activo >= 0 && caja.children[activo].dataset.valor) { e.preventDefault(); elegir(caja.children[activo].dataset.valor); }
     else if (e.key === "Escape") caja.hidden = true;
   });
 });
