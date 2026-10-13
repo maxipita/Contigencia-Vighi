@@ -72,7 +72,7 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 - **Ubicaciones** (menú Más › Ubicaciones): lista de lugares con **abreviatura** (lo principal: es lo que se escribe y elige), **nombre completo** (el que sale en el informe), dirección, **contactos**, **e-mails para enviar informes** y
   **médicos asociados**. «Lugar recolección» y «Lugar entrega» del protocolo se **eligen de esta lista** (escribí parte de la abreviatura o del nombre y elegí; si falta, se crea desde Ubicaciones). El **tablero** se filtra por ubicación
   (recolección o entrega) y la ficha del protocolo muestra la de entrega con sus e-mails. Con el permiso *Ubicaciones* se crean, editan (cambiar la abreviatura actualiza los protocolos), eliminan (solo si ningún protocolo la usa), se asocian o
-  quitan médicos y se **importa un CSV** (`abreviatura, nombre, direccion, medicos, telefonos`, médicos separados con « | »): suma lo que falte y completa nombres, direcciones y contactos vacíos, sin borrar nada. Los e-mails que aparezcan en los contactos se copian al campo de e-mails.
+  quitan médicos y se **importa un CSV** (`abreviatura, nombre, direccion, medicos, telefonos` y opcional `emails_informes`, médicos y e-mails separados con « | »): suma lo que falte y completa nombres, direcciones y contactos vacíos, sin borrar nada. Los e-mails que aparezcan en los contactos se copian al campo de e-mails.
 - **Exportar Excel:** una fila por estudio con los datos del protocolo, para re-cargarlos en southernbits.
 
 ## Datos y respaldos

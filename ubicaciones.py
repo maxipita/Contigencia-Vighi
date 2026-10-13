@@ -33,12 +33,17 @@ def leer_csv(contenido):
             continue
         medicos = [m.strip() for m in (r["medicos"] or "").split(" | ") if m.strip()]
         contactos = (r["telefonos"] or "").strip()
-        u = por_nombre.setdefault(abreviatura, {"abreviatura": abreviatura, "nombre": "", "direccion": "", "contactos": "", "medicos": []})
+        de_informes = (r.get("emails_informes") or "").strip()
+        sueltos = [s for s in re.split(r"\s*\|\s*", de_informes) if re.sub(r"[\s;,()]+", "", EMAIL.sub("", s))]
+        extra = " / ".join(s for s in sueltos if s not in contactos)
+        contactos = f"{contactos} / {extra}" if contactos and extra else (contactos or extra)
+        u = por_nombre.setdefault(abreviatura, {"abreviatura": abreviatura, "nombre": "", "direccion": "", "contactos": "", "emails_informes": "", "medicos": []})
+        u["emails_informes"] = f"{u['emails_informes']} {de_informes}".strip()
         u["nombre"] = u["nombre"] or (r["nombre"] or "").strip()
         u["direccion"] = u["direccion"] or (r["direccion"] or "").strip()
         if contactos and contactos not in u["contactos"]:
             u["contactos"] = f"{u['contactos']} / {contactos}" if u["contactos"] else contactos
         u["medicos"] = list(dict.fromkeys(u["medicos"] + medicos))
     for u in por_nombre.values():
-        u["emails"] = ", ".join(emails_de(u["contactos"]))
+        u["emails"] = ", ".join(emails_de(u["emails_informes"] + " " + u["contactos"]))
     return list(por_nombre.values())
