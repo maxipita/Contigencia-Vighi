@@ -390,11 +390,13 @@ fieldset[disabled] .chip-sel { cursor: default; opacity: .6; }
 .filtro-templates { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 6px; }
 .filtro-templates select { width: auto; min-width: 150px; max-width: 230px; }
 
-.envio-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+.envio-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; align-items: start; margin-bottom: 16px; }
 @media (max-width: 1000px) { .envio-cols { grid-template-columns: 1fr; } }
 .envio-cols .tarjeta { margin: 0; }
 .envio-cols h2 .ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 4px; }
 .dest-nombre { margin: 0 0 8px; font-size: 13px; }
+.envio-botones { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px; }
+.envio-cols input[type=email], .envio-cols input[type=text] { width: 100%; }
 .dest-fila { display: flex; gap: 8px; align-items: center; }
 .dest-fila input[type=checkbox] { width: auto; margin: 0; flex: none; }
 .dest-fila input:not([type=checkbox]) { flex: 1; min-width: 0; }

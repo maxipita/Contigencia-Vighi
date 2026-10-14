@@ -416,35 +416,23 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
 (function () {
   const formulario = document.getElementById("form-envio");
   if (!formulario) return;
-  const boton = document.getElementById("btn-enviar");
-  const cuenta = document.getElementById("cuenta-envio");
-  const aviso = cuenta.textContent;
-  function actualizar() {
-    let n = formulario.querySelectorAll("input[name=ubic_email]:checked").length;
-    const paciente = formulario.querySelector("#usar_paciente");
-    if (paciente && paciente.checked) n += 1;
-    const otros = formulario.querySelector("[name=otro_email]").value.split(/[\s,;]+/).filter((x) => x.includes("@"));
-    n += otros.length;
-    if (boton) boton.querySelector("span").textContent = n ? `Enviar desde el sistema (${n})` : "Enviar desde el sistema";
-    cuenta.textContent = n ? aviso : "Marcá a quién enviar el informe.";
-  }
-  formulario.addEventListener("input", (ev) => {
-    const marca = ev.target.dataset.marca;
-    if (marca && ev.target.value.trim()) document.getElementById(marca).checked = true;
-    actualizar();
+  formulario.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.tagName === "INPUT") ev.preventDefault();
   });
-  formulario.addEventListener("change", actualizar);
   formulario.addEventListener("submit", (ev) => {
-    if (ev.submitter && ev.submitter.hasAttribute("data-borrador")) { setTimeout(() => location.reload(), 1500); return; }
-    if (boton) { boton.disabled = true; boton.querySelector("span").textContent = "Enviando…"; }
+    const s = ev.submitter;
+    if (!s) return;
+    if (s.hasAttribute("data-borrador")) { setTimeout(() => location.reload(), 1500); return; }
+    const texto = s.querySelector("span");
+    setTimeout(() => { s.disabled = true; if (texto) texto.textContent = "Enviando…"; });
   });
-  actualizar();
 
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-correo]");
     if (!b) return;
     const datos = new FormData(formulario);
     datos.set("modo", "mailto");
+    datos.set("solo", b.dataset.solo || "");
     b.disabled = true;
     try {
       const r = await fetch(location.pathname + "/correo", { method: "POST", body: datos, headers: { "X-CSRF": formulario.querySelector("[name=_csrf]").value } });

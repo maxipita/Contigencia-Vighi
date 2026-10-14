@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     accion VARCHAR(40) NOT NULL, detalle TEXT
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
-CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL);
+CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL, email VARCHAR(150));
 CREATE TABLE IF NOT EXISTS bloqueos (nombre VARCHAR(40) PRIMARY KEY, vence REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS firmas (usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id), imagen BLOB NOT NULL, actualizada_en VARCHAR(19));
 CREATE TABLE IF NOT EXISTS informes_emitidos (
@@ -455,6 +455,7 @@ def preparar_esquema(c):
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
                                    ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
                                    ("estudios", "malignidad", "VARCHAR(12)"),
+                                   ("medicos", "email", "VARCHAR(150)"),
                                    ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
                                    ("templates", "organo", "VARCHAR(80)"),
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),

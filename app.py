@@ -1626,7 +1626,7 @@ def informe_ver(iid):
 
 SQL_ENVIOS = """SELECT v.id, v.canal, v.rol, v.destino, v.estado, v.detalle, v.version, v.creado_en, u.iniciales
                 FROM envios v LEFT JOIN usuarios u ON u.id=v.usuario_id WHERE v.protocolo_id=? ORDER BY v.id DESC"""
-ROLES_ENVIO = {"paciente": "Paciente", "ubicacion": "Ubicación", "otro": "Otro"}
+ROLES_ENVIO = {"paciente": "Paciente", "medico": "Médico", "ubicacion": "Ubicación", "otro": "Otro"}
 
 
 def nombre_paciente(p):
@@ -1680,6 +1680,17 @@ def lugares_de_envio(p):
     return salida
 
 
+def medico_de(p):
+    nombre = (p["medico"] or "").strip()
+    if not nombre:
+        return None
+    m = db.uno("SELECT id, nombre, email FROM medicos WHERE nombre=?", (nombre,))
+    if m:
+        return m
+    clave = db.clave_nombre(nombre)
+    return next((x for x in db.q("SELECT id, nombre, email FROM medicos ORDER BY id") if db.clave_nombre(x["nombre"]) == clave), None)
+
+
 def informe_para_enviar(pid):
     emitido = informe_emitido(pid)
     return emitido, bool(emitido) and informe_vigente(pid, emitido)
@@ -1700,29 +1711,42 @@ def envio(pid):
         if v["estado"] == "enviado" and v["canal"] == "email" and emitido and v["version"] == emitido["version"]:
             mandados.setdefault(v["destino"], v["creado_en"])
     return render_template("envio.html", flujos_malignidad=malignidad_por_flujo(cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)), malignidades=envios.NOMBRE_MALIGNIDAD,
-                           p=p, emitido=emitido, vigente=vigente, historial=historial, mandados=mandados, lugares=lugares_de_envio(p),
+                           p=p, emitido=emitido, vigente=vigente, historial=historial, mandados=mandados, lugares=lugares_de_envio(p), medico=medico_de(p),
                            textos=textos_envio(p), email_ok=envios.configurado(), faltante=envios.faltante(), roles=ROLES_ENVIO,
                            telefono_paciente=envios.whatsapp_visible(envios.whatsapp_numero(p["telefono"])) or (p["telefono"] or ""))
 
 
 def destinos_del_formulario():
+    solo = request.form.get("solo", "")
+    if solo and solo not in ROLES_ENVIO:
+        return None, "No se reconoce a quién enviar el informe."
     pedidos = []
-    if request.form.get("usar_paciente") == "1":
+    if solo == "paciente" or (not solo and request.form.get("usar_paciente") == "1"):
         correo = request.form.get("paciente_email", "").strip().lower()
         if not envios.email_valido(correo):
-            return None, "El e-mail del paciente no es válido."
+            return None, "Escribí un e-mail válido para el paciente." if not correo else "El e-mail del paciente no es válido."
         pedidos.append(("paciente", correo))
-    for correo in request.form.getlist("ubic_email"):
+    if solo == "medico":
+        correo = request.form.get("medico_email", "").strip().lower()
         if not envios.email_valido(correo):
-            return None, f"El e-mail {correo[:60]} no es válido."
-        pedidos.append(("ubicacion", correo.strip().lower()))
+            return None, "Escribí un e-mail válido para el médico." if not correo else "El e-mail del médico no es válido."
+        pedidos.append(("medico", correo))
+    if solo in ("", "ubicacion"):
+        for correo in request.form.getlist("ubic_email"):
+            if not envios.email_valido(correo):
+                return None, f"El e-mail {correo[:60]} no es válido."
+            pedidos.append(("ubicacion", correo.strip().lower()))
+        if solo and not pedidos:
+            return None, "Tildá al menos un e-mail de la ubicación."
     otros = request.form.get("otro_email", "").strip()
-    if otros:
+    if otros and solo in ("", "otro"):
         sueltos = [x for x in re.split(r"[\s,;]+", otros) if x]
         malos = [x for x in sueltos if not envios.email_valido(x)]
         if malos:
             return None, f"El e-mail {malos[0][:60]} no es válido."
         pedidos += [("otro", x.lower()) for x in sueltos]
+    elif solo == "otro":
+        return None, "Escribí el e-mail del destinatario."
     vistos = {}
     for rol, correo in pedidos:
         vistos.setdefault(correo, rol)
@@ -1731,6 +1755,24 @@ def destinos_del_formulario():
     if len(vistos) > envios.MAX_DESTINOS:
         return None, f"Se pueden enviar hasta {envios.MAX_DESTINOS} e-mails por vez."
     return vistos, None
+
+
+def guardar_correos_del_formulario(p, yo):
+    if not puede("protocolo_editar"):
+        return
+    solo = request.form.get("solo", "")
+    if request.form.get("guardar_paciente") == "1" and (solo == "paciente" or (not solo and request.form.get("usar_paciente") == "1")):
+        nuevo = request.form.get("paciente_email", "").strip().lower()
+        if envios.email_valido(nuevo) and nuevo != (p["email"] or "").lower():
+            db.ex("UPDATE protocolos SET email=? WHERE id=?", (nuevo, p["id"]))
+            sincronizar_paciente(p["id"], p["dni"], ["email"])
+            db.auditar(yo["id"], p["id"], "editar_paciente", f"E-mail del paciente: {nuevo}")
+    if request.form.get("guardar_medico") == "1" and solo == "medico":
+        nuevo = request.form.get("medico_email", "").strip().lower()
+        m = medico_de(p)
+        if m and envios.email_valido(nuevo) and nuevo != (m["email"] or "").lower():
+            db.ex("UPDATE medicos SET email=? WHERE id=?", (nuevo, m["id"]))
+            db.auditar(yo["id"], p["id"], "editar_medico", f"E-mail de {m['nombre']}: {nuevo}")
 
 
 @app.route("/protocolo/<int:pid>/enviar", methods=["POST"])
@@ -1752,8 +1794,6 @@ def envio_enviar(pid):
         return volver
     asunto = " ".join(request.form.get("asunto", "").split())[:150] or textos_envio(p)["asunto"]
     cuerpo = request.form.get("cuerpo", "").replace("\r\n", "\n").strip()[:3000] or textos_envio(p)["cuerpo"]
-    guardar_correo = (request.form.get("guardar_paciente") == "1" and request.form.get("usar_paciente") == "1" and puede("protocolo_editar")
-                      and request.form.get("paciente_email", "").strip().lower() != (p["email"] or "").lower())
     pdf = db.uno("SELECT pdf, archivo FROM informes_emitidos WHERE id=?", (emitido["id"],))
     texto, html = envios.armar_mensaje(cuerpo, datos_del_mensaje(p), informes.CENTRO if informes else {})
     resultados = envios.enviar_emails(list(vistos), asunto, texto, bytes(pdf["pdf"]), pdf["archivo"] or "informe.pdf", html=html)
@@ -1768,12 +1808,8 @@ def envio_enviar(pid):
                         f"Informe enviado por e-mail a {', '.join(bien)}" + (f" · falló: {', '.join(r[0] for r in mal)}" if mal else "") if bien
                         else f"No se pudo enviar el informe por e-mail a {', '.join(r[0] for r in mal)}")))
     db.lote_ex(sentencias)
-    if guardar_correo:
-        nuevo = request.form.get("paciente_email", "").strip().lower()
-        db.ex("UPDATE protocolos SET email=? WHERE id=?", (nuevo, pid))
-        sincronizar_paciente(pid, p["dni"], ["email"])
-        db.auditar(yo["id"], pid, "editar_paciente", f"E-mail del paciente: {nuevo}")
     if bien:
+        guardar_correos_del_formulario(p, yo)
         flash(f"✔ Informe enviado a {len(bien)} destinatario{'s' if len(bien) != 1 else ''}: {', '.join(bien)}.", "ok")
     for destino, _, detalle in mal:
         flash(f"No se pudo enviar a {destino}: {detalle}", "error")
@@ -1785,7 +1821,7 @@ def envio_enviar(pid):
 def envio_correo(pid):
     yo = usuario_actual()
     p = protocolo_o_404(pid)
-    modo = "eml" if request.form.get("modo") == "eml" else "mailto"
+    modo = "eml" if request.values.get("modo") == "eml" else "mailto"
 
     def fallo(mensaje):
         if modo == "mailto":
@@ -1802,6 +1838,7 @@ def envio_correo(pid):
     asunto = " ".join(request.form.get("asunto", "").split())[:150] or textos_envio(p)["asunto"]
     cuerpo = request.form.get("cuerpo", "").replace("\r\n", "\n").strip()[:3000] or textos_envio(p)["cuerpo"]
     texto, html = envios.armar_mensaje(cuerpo, datos_del_mensaje(p), informes.CENTRO if informes else {})
+    guardar_correos_del_formulario(p, yo)
     ahora_ = db.ahora()
     detalle = "Se abrió en el correo propio: el PDF lo adjunta quien envía" if modo == "mailto" else "Borrador (.eml) descargado con el PDF adjunto: lo envía quien lo abre"
     db.lote_ex([("INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
