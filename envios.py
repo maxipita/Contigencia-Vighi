@@ -3,7 +3,8 @@ import re
 import smtplib
 import ssl
 from email.message import EmailMessage
-from email.utils import formataddr
+from html import escape
+from email.utils import formataddr, formatdate, make_msgid
 
 import db
 
@@ -11,10 +12,21 @@ CLAVES = ("SMTP_HOST", "SMTP_PORT", "SMTP_USUARIO", "SMTP_CLAVE", "SMTP_DESDE", 
 EMAIL = re.compile(r"^[\w.+'-]+@[\w-]+(?:\.[\w-]+)+$")
 MAX_DESTINOS = 15
 _config = {}
+_marca = [None]
+
+
+def _fecha_archivo():
+    try:
+        return os.path.getmtime(db.ARCHIVO_CLOUDFLARE)
+    except OSError:
+        return None
 
 
 def config():
+    if _config and _marca[0] != _fecha_archivo():
+        _config.clear()
     if not _config:
+        _marca[0] = _fecha_archivo()
         valores = {k: os.environ.get(k, "") for k in CLAVES}
         if os.path.exists(db.ARCHIVO_CLOUDFLARE):
             with open(db.ARCHIVO_CLOUDFLARE, encoding="utf-8") as f:
@@ -33,6 +45,14 @@ def olvidar_config():
 def configurado():
     c = config()
     return bool(c["SMTP_HOST"] and c["SMTP_DESDE"])
+
+
+def resumen():
+    c = config()
+    return {"host": c["SMTP_HOST"], "puerto": c["SMTP_PORT"] or ("465" if c["SMTP_SEGURIDAD"] == "ssl" else "587"),
+            "seguridad": {"ssl": "SSL directo", "ninguna": "Sin cifrado"}.get(c["SMTP_SEGURIDAD"], "STARTTLS"),
+            "usuario": c["SMTP_USUARIO"], "con_clave": bool(c["SMTP_CLAVE"]), "desde": c["SMTP_DESDE"], "nombre": c["SMTP_NOMBRE"] or "CAP Vighi",
+            "responder_a": c["SMTP_RESPONDER_A"], "configurado": configurado(), "faltante": faltante()}
 
 
 def faltante():
@@ -75,7 +95,7 @@ def whatsapp_visible(numero):
     return f"+{numero[:2]} {numero[2]} {numero[3:]}" if numero else ""
 
 
-def enviar_emails(destinos, asunto, cuerpo, adjunto=None, nombre_adjunto="informe.pdf"):
+def enviar_emails(destinos, asunto, cuerpo, adjunto=None, nombre_adjunto="informe.pdf", html=None):
     c = config()
     puerto = int(c["SMTP_PORT"] or (465 if c["SMTP_SEGURIDAD"] == "ssl" else 587))
     contexto = ssl.create_default_context()
@@ -95,9 +115,13 @@ def enviar_emails(destinos, asunto, cuerpo, adjunto=None, nombre_adjunto="inform
                 m["Subject"] = asunto
                 m["From"] = formataddr((c["SMTP_NOMBRE"] or "CAP Vighi", c["SMTP_DESDE"]))
                 m["To"] = destino
+                m["Date"] = formatdate(localtime=True)
+                m["Message-ID"] = make_msgid(domain=c["SMTP_DESDE"].rpartition("@")[2] or None)
                 if c["SMTP_RESPONDER_A"]:
                     m["Reply-To"] = c["SMTP_RESPONDER_A"]
                 m.set_content(cuerpo)
+                if html:
+                    m.add_alternative(html, subtype="html")
                 if adjunto:
                     m.add_attachment(adjunto, maintype="application", subtype="pdf", filename=nombre_adjunto)
                 try:
@@ -160,3 +184,29 @@ def evaluar(alcance, estudios):
         elif any(c.startswith(tipo + ".") for c in elegidas):
             falta = True
     return "falta" if falta else "no"
+
+
+LEMA = "La prevención es cuidarnos."
+PIE = "Centro de Anatomía Patológica Dra. Susana Vighi"
+AVISO = "Información confidencial · secreto médico"
+
+
+def armar_mensaje(intro, datos, centro=None):
+    centro = centro or {}
+    filas = [(k, v) for k, v in datos if v]
+    contacto = " · ".join(x for x in (centro.get("direccion"), centro.get("telefono"), centro.get("email"), centro.get("web")) if x)
+    texto = "\n\n".join(x for x in (intro.strip(), "Informe adjunto\n" + "\n".join(f"{k}: {v}" for k, v in filas), f"{PIE}\n{contacto}".strip(), AVISO) if x.strip())
+    parrafos = "".join(f'<p style="margin:0 0 14px">{escape(p).replace(chr(10), "<br>")}</p>' for p in intro.strip().split("\n\n") if p.strip())
+    tabla = "".join(f'<tr><td style="padding:3px 0;font-weight:bold;color:#2b1a3a">{escape(k)}</td></tr><tr><td style="padding:0 0 10px;color:#2b1a3a">{escape(v)}</td></tr>' for k, v in filas)
+    html = f"""<!doctype html><html><body style="margin:0;padding:0;background:#f3eef8;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3eef8"><tr><td align="center" style="padding:20px 10px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:6px;overflow:hidden">
+<tr><td style="background:#4b1d6b;padding:18px 24px;color:#ffffff"><div style="font-size:20px;font-weight:bold;letter-spacing:.5px">{escape(centro.get("nombre", "CAP VIGHI"))}</div>
+<div style="font-size:12px;opacity:.85">{escape(centro.get("subtitulo", "").title())}</div></td></tr>
+<tr><td style="background:#c9a3dc;padding:8px 24px;text-align:center;color:#3a1655;font-size:15px">{escape(LEMA)}</td></tr>
+<tr><td style="padding:24px;color:#2b1a3a">{parrafos}
+<div style="font-weight:bold;font-size:15px;margin:18px 0 8px;color:#4b1d6b">Informe adjunto</div>
+<table role="presentation" cellpadding="0" cellspacing="0">{tabla}</table></td></tr>
+<tr><td style="background:#e9dcf2;padding:14px 24px;text-align:center;font-size:12px;color:#4b1d6b"><b>{escape(PIE)}</b><br>{escape(contacto)}<br><span style="opacity:.8">{escape(AVISO)}</span></td></tr>
+</table></td></tr></table></body></html>"""
+    return texto, html

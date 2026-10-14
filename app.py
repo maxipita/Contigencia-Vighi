@@ -1629,15 +1629,21 @@ SQL_ENVIOS = """SELECT v.id, v.canal, v.rol, v.destino, v.estado, v.detalle, v.v
 ROLES_ENVIO = {"paciente": "Paciente", "ubicacion": "Ubicación", "otro": "Otro"}
 
 
+def nombre_paciente(p):
+    return f"{p['nombre'] or ''} {p['apellido'] or ''}".strip().upper()
+
+
+def datos_del_mensaje(p):
+    return [("Protocolo", p["numero"]), ("Fecha de recolección", fecha(p["fecha_recoleccion"])), ("Paciente", nombre_paciente(p)), ("Médico", p["medico"])]
+
+
 def textos_envio(p):
     centro = informes.CENTRO if informes else {}
     contacto = " o por ".join(x for x in (f"teléfono al {centro['telefono']}" if centro.get("telefono") else "",
                                            f"e-mail a {centro['email']}" if centro.get("email") else "") if x)
-    firma = (centro.get("nombre", "CAP Vighi") + (" · " + centro["subtitulo"].title() if centro.get("subtitulo") else "")).strip()
-    cuerpo = (f"Buenos días,\n\nAdjuntamos el informe de anatomía patológica correspondiente al protocolo {p['numero']}."
-              + (f"\n\nAnte cualquier consulta pueden comunicarse con el laboratorio por {contacto}." if contacto else "")
-              + f"\n\nSaludos cordiales,\n{firma}")
-    return {"asunto": f"Informe de anatomía patológica · Protocolo {p['numero']}", "cuerpo": cuerpo,
+    cuerpo = (f"Adjuntamos el informe de anatomía patológica correspondiente al protocolo {p['numero']}."
+              + (f"\n\nAnte cualquier consulta pueden comunicarse con el laboratorio por {contacto}." if contacto else ""))
+    return {"asunto": f"Informe Adjunto : {nombre_paciente(p) or p['numero']}", "cuerpo": cuerpo,
             "whatsapp": f"Hola, te enviamos el informe de anatomía patológica del protocolo {p['numero']}. Ante cualquier consulta, escribinos por acá. {centro.get('nombre', 'CAP Vighi')}"}
 
 
@@ -1749,7 +1755,8 @@ def envio_enviar(pid):
     guardar_correo = (request.form.get("guardar_paciente") == "1" and request.form.get("usar_paciente") == "1" and puede("protocolo_editar")
                       and request.form.get("paciente_email", "").strip().lower() != (p["email"] or "").lower())
     pdf = db.uno("SELECT pdf, archivo FROM informes_emitidos WHERE id=?", (emitido["id"],))
-    resultados = envios.enviar_emails(list(vistos), asunto, cuerpo, bytes(pdf["pdf"]), pdf["archivo"] or "informe.pdf")
+    texto, html = envios.armar_mensaje(cuerpo, datos_del_mensaje(p), informes.CENTRO if informes else {})
+    resultados = envios.enviar_emails(list(vistos), asunto, texto, bytes(pdf["pdf"]), pdf["archivo"] or "informe.pdf", html=html)
     ahora_ = db.ahora()
     sentencias = [("INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
                    (pid, emitido["id"], emitido["version"], "email", vistos[destino], destino, "enviado" if ok else "error", detalle or None, yo["id"], ahora_))
@@ -1791,6 +1798,23 @@ def envio_whatsapp(pid):
                 ("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
                  (db.ahora(), yo["id"], pid, None, "informe_envio", f"Se abrió WhatsApp para enviar el informe a +{numero}"))])
     return jsonify(enlace=f"https://wa.me/{numero}" + (f"?text={quote(texto)}" if texto else ""))
+
+
+@app.route("/correo", methods=["GET", "POST"])
+@requiere_admin
+def correo():
+    resultado = None
+    if request.method == "POST":
+        destino = request.form.get("destino", "").strip().lower()
+        if not envios.configurado():
+            flash("El correo todavía no está configurado en este servidor.", "error")
+        elif not envios.email_valido(destino):
+            flash("Escribí un e-mail válido para la prueba.", "error")
+        else:
+            resultado = envios.enviar_emails([destino], "Prueba de correo · CAP Vighi",
+                                             "Este es un mensaje de prueba del sistema de contingencia del CAP Vighi.\n\nSi lo recibiste, el envío de informes por e-mail está funcionando.")[0]
+            db.auditar(usuario_actual()["id"], None, "correo_prueba", f"Prueba a {destino}: " + ("enviada" if resultado[1] else f"falló ({resultado[2]})"))
+    return render_template("correo.html", c=envios.resumen(), resultado=resultado, destino=request.form.get("destino", ""))
 
 
 @app.route("/usuarios/<int:uid>/firma")
