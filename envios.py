@@ -229,8 +229,11 @@ def armar_mensaje(intro, datos, centro=None):
 
 def armar_borrador(destinos, asunto, texto, html, adjunto, nombre_adjunto):
     m = EmailMessage()
+    c = config()
     m["X-Unsent"] = "1"
     m["Subject"] = asunto
+    if c["SMTP_DESDE"]:
+        m["From"] = formataddr((c["SMTP_NOMBRE"] or "CAP Vighi", c["SMTP_DESDE"]))
     if len(destinos) == 1:
         m["To"] = destinos[0]
     else:
