@@ -1,0 +1,314 @@
+from datetime import datetime
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+
+from vighi.core import db
+from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
+from vighi.dominio import trazabilidad
+from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
+from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado
+from vighi.servicios.fichas import INCLUSIONES, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, guardar_seccion, habilitada, macro_editable, motivo_no_listo, sumar_cassettes
+from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
+from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote
+from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
+
+bp = Blueprint("estudios", __name__)
+
+
+@bp.route("/protocolo/<int:pid>/estudio/nuevo", methods=["GET", "POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_nuevo(pid):
+    yo = usuario_actual()
+    p = protocolo_o_404(pid)
+    existentes = [dict(e) for e in db.q("SELECT tipo, subcategoria, anulado FROM estudios WHERE protocolo_id=?", (pid,))]
+    lista = [{"tipo": request.args["tipo"]}] if request.args.get("tipo") in REGISTRO else []
+    if request.method == "POST":
+        lista = estudios_del_formulario()
+        lote_del_prot = lote_del_protocolo(pid)
+        lote_valor, error = validar_estudios(lista, existentes, con_lote=not primer_estudio(pid))
+        if not lista:
+            error = "Elegí qué estudio agregar."
+        for e in lista:
+            if not error and (avance := flujo_avanzado(pid, e["tipo"])):
+                error = (f"Ya hay {REGISTRO[e['tipo']].nombre.lower()} de este protocolo en proceso (llegó a {avance}) y comparten el mismo flujo: "
+                         "para sumar otra hay que deshacer las etapas antes.")
+        if error:
+            flash(error, "error")
+        else:
+            lote = lote_del_prot if primer_estudio(pid) else concretar_lote(lote_valor, yo["id"])
+            for e in lista:
+                crear_estudio(pid, e, lote, yo["id"])
+            avisar_lote_lleno(ubicar_en_lote(pid, yo["id"]))
+            flash(f"Se agregó {', '.join(etiqueta(e) for e in lista)} al protocolo {p['numero']}.", "ok")
+            return redirect(url_for("protocolos.protocolo", pid=pid))
+    lote_fijo = lote_del_protocolo(pid)
+    return render_template("estudios/estudio_form.html", p=p, estudios=lista, editando=None, lote_editable=not primer_estudio(pid),
+                           lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **contexto_formulario())
+
+
+@bp.route("/estudio/<int:eid>/editar", methods=["GET", "POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_editar(eid):
+    yo = usuario_actual()
+    actual = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
+    p = protocolo_o_404(actual["protocolo_id"])
+    e = dict(actual)
+    primero = primer_estudio(p["id"])
+    es_primero = bool(primero and primero["id"] == eid)
+    if request.method == "POST":
+        e = {**leer_estudio("e-0-", actual["tipo"]), "id": eid}
+        otros = [dict(x) for x in db.q("SELECT tipo, subcategoria, anulado FROM estudios WHERE protocolo_id=? AND id<>?",
+                                       (p["id"], eid))]
+        lote_valor, error = validar_estudios([{**e, "anulado": actual["anulado"]}], otros, actual["lote_id"], con_lote=es_primero)
+        if error:
+            flash(error, "error")
+        else:
+            db.ex(f"UPDATE estudios SET {', '.join(k + '=?' for k in CAMPOS_ESTUDIO)} WHERE id=?",
+                  [e[k] for k in CAMPOS_ESTUDIO] + [eid])
+            recordar_tecnicas(e)
+            db.auditar(yo["id"], p["id"], "editar_estudio", etiqueta(e), eid)
+            if es_primero:
+                asignar_lote(p["id"], concretar_lote(lote_valor, yo["id"]), yo["id"])
+            avisar_lote_lleno(ubicar_en_lote(p["id"], yo["id"]))
+            flash("Datos del estudio actualizados.", "ok")
+            return redirect(url_for("estudios.estudio", eid=eid))
+    else:
+        e["lote_sel"] = str(actual["lote_id"] or "")
+    ctx = contexto_formulario()
+    ctx["lotes_abiertos"][actual["tipo"]] = lotes_para_formulario(actual["tipo"], actual["lote_id"])
+    lote_fijo = lote_del_protocolo(p["id"])
+    return render_template("estudios/estudio_form.html", p=p, estudios=[e], editando=eid, lote_editable=es_primero,
+                           lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **ctx)
+
+
+@bp.route("/estudio/<int:eid>")
+@requiere_login
+def estudio(eid):
+    db.precargar(consultas_ficha(eid) + [(SQL_ULTIMA_ETAPA, (eid,)), (SQL_HISTORIAL_ESTUDIO, (eid,)), (SQL_TEMPLATES, ("macro",)),
+                                         (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
+    primero = db.uno(SQL_FICHA, (eid,))
+    if primero:
+        db.precargar([(SQL_VARIANTE, (primero["protocolo_id"], primero["tipo"], primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],)), (SQL_IMAGENES, (primero["protocolo_id"],)), (SQL_TECNICAS, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
+    e, macro, micro, ihq, etapas, solicita = ficha(eid)
+    tipo = REGISTRO[e["tipo"]]
+    est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
+    ultima = db.uno(SQL_ULTIMA_ETAPA, (eid,))
+    historial = db.q(SQL_HISTORIAL_ESTUDIO, (eid,))
+    tpl = lambda clase: db.q(SQL_TEMPLATES, (clase,))
+    pasos = tipo.flujo(solicita)
+    decal = con_decal(solicita)
+    traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados(), decal=decal)
+    hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
+    activos = [h for h in hermanos if not h["anulado"]]
+    miembros = [h for h in hermanos if h["id"] == e["id"]] if e["anulado"] else [h for h in activos if h["tipo"] == e["tipo"]]
+    pestanas, vistos = [], set()
+    for h in hermanos:
+        if h["anulado"]:
+            pestanas.append({"id": h["id"], "texto": f"{h['etiqueta']} (anulado)", "activa": e["anulado"] and h["id"] == e["id"], "anulado": True})
+        elif h["tipo"] not in vistos:
+            vistos.add(h["tipo"])
+            n = sum(1 for x in activos if x["tipo"] == h["tipo"])
+            pestanas.append({"id": h["id"], "texto": h["etiqueta"] if n == 1 else f"{REGISTRO[h['tipo']].nombre} ({n} estudios)",
+                             "activa": not e["anulado"] and h["tipo"] == e["tipo"], "anulado": False})
+    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados(), decal) if prox and not e["anulado"] and not e["borrador"] else None
+    semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
+                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal)
+                if limite_etapa else "")
+    cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
+                            and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
+    tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
+    return render_template("estudios/estudio.html", tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+                           flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
+                           prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
+                           hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
+                           tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
+                           tecnicas_pedidas=sin_repetidos(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";")),
+                           lista_ihq=listas().get("ihq_marcadores", []),
+                           filtro_templates={"zona": e["subcategoria"] or "", "organo": e["sitio"] or "", "tipo": e["tipo_muestra"] or ""},
+                           ihq_hecha=any(k in etapas for k in PASOS_IHQ),
+                           edita_macro=macro_editable(e, etapas, solicita),
+                           decal_cambiable=macro_editable(e, etapas, solicita)[0] and "procesamiento" not in etapas and "decal" not in etapas,
+                           edita_micro=con_permiso("micro", habilitada(e, etapas, solicita, "microscopia")))
+
+
+@bp.route("/estudio/<int:eid>/macro", methods=["POST"])
+@requiere_permiso("macro", "micro")
+def guardar_macro(eid):
+    e, macro, _, _, etapas, solicita = ficha(eid)
+    ok, motivo = macro_editable(e, etapas, solicita)
+    if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
+        flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
+        return redirect(url_for("estudios.estudio", eid=eid) + "#macro")
+    valores = {"template": request.form.get("template", "").strip(),
+               "descripcion": request.form.get("descripcion", "").strip()}
+    detalle = ""
+    if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
+        decal = 1 if request.form.get("decal") == "1" else 0
+        valores["decal"] = decal
+        if decal != (1 if macro and macro["decal"] else 0):
+            detalle = "agrega Macro > Decal" if decal else "quita Macro > Decal"
+    guardar_seccion("macro", e["dueno"], valores)
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", detalle, eid)
+    flash("Macroscopía guardada.", "ok")
+    if request.form.get("y_listo"):
+        return marcar_listo(eid, "macroscopia")
+    return redirect(url_for("estudios.estudio", eid=eid) + "#macro")
+
+
+@bp.route("/estudio/<int:eid>/tecnicas", methods=["POST"])
+@requiere_permiso("macro", "micro")
+def tecnica_nueva(eid):
+    e, _, _, _, etapas, solicita = ficha(eid)
+    ok, motivo = macro_editable(e, etapas, solicita)
+    destino = url_for("estudios.estudio", eid=eid) + "#tecnicas"
+    if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
+        flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
+        return redirect(destino)
+    miembro = db.uno("SELECT id FROM estudios WHERE id=? AND protocolo_id=? AND tipo=? AND anulado=0",
+                     (request.form.get("estudio_id", "") if request.form.get("estudio_id", "").isdigit() else 0, e["protocolo_id"], e["tipo"]))
+    inclusion = request.form.get("inclusion", "")
+    fragmentos, cassettes = entero_positivo(request.form.get("fragmentos")), entero_positivo(request.form.get("cassettes"))
+    numero = request.form.get("numero", "").strip()[:10]
+    if not miembro:
+        flash("Elegí el estudio de la técnica.", "error")
+    elif inclusion not in INCLUSIONES:
+        flash("Elegí el tipo de inclusión.", "error")
+    elif not numero or not fragmentos or not cassettes:
+        flash("Completá el número, los fragmentos y los cassettes de la técnica.", "error")
+    else:
+        tacos = cargar_estudios("e.id=?", (miembro["id"],))[0]["tacos"]
+        db.ex("""INSERT INTO tecnicas (estudio_id, numero, fragmentos, inclusion, tacos, cassettes, comentarios, usuario_id, creado_en)
+                 VALUES (?,?,?,?,?,?,?,?,?)""", (miembro["id"], numero, fragmentos, inclusion, tacos, cassettes,
+                                                  request.form.get("comentarios", "").strip()[:300], usuario_actual()["id"], db.ahora()))
+        sumar_cassettes(e)
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica", f"{numero}: {inclusion}, {fragmentos} fragm., {cassettes} cassette(s)", miembro["id"])
+        flash("Técnica agregada.", "ok")
+    return redirect(destino)
+
+
+@bp.route("/tecnica/<int:tid>/borrar", methods=["POST"])
+@requiere_permiso("macro", "micro")
+def tecnica_borrar(tid):
+    t = db.uno("SELECT id, estudio_id, numero FROM tecnicas WHERE id=?", (tid,)) or abort(404)
+    e, _, _, _, etapas, solicita = ficha(t["estudio_id"])
+    ok, motivo = macro_editable(e, etapas, solicita)
+    destino = url_for("estudios.estudio", eid=t["estudio_id"]) + "#tecnicas"
+    if not ok:
+        flash(f"No se borró: {motivo}", "error")
+        return redirect(destino)
+    db.ex("DELETE FROM tecnicas WHERE id=?", (tid,))
+    sumar_cassettes(e)
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica_borrada", t["numero"] or "", t["estudio_id"])
+    flash("Técnica borrada.", "ok")
+    return redirect(destino)
+
+
+@bp.route("/estudio/<int:eid>/micro", methods=["POST"])
+@requiere_permiso("micro")
+def guardar_micro(eid):
+    e, _, micro, _, etapas, solicita = ficha(eid)
+    ok, motivo = habilitada(e, etapas, solicita, "microscopia")
+    if not ok:
+        flash(f"No se guardó: {motivo}", "error")
+        return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
+    con_ihq = "ihq" in REGISTRO[e["tipo"]].secciones
+    pide_ihq = 1 if con_ihq and request.form.get("solicita_ihq") == "1" else 0
+    guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(),
+                                   "descripcion": request.form.get("descripcion", "").strip(),
+                                   "conclusion": request.form.get("conclusion", "").strip(),
+                                   "bethesda": request.form.get("bethesda", "").strip(),
+                                   "solicita_ihq": pide_ihq})
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_micro", "solicita IHQ" if pide_ihq else "", eid)
+    flash("Microscopía guardada.", "ok")
+    if request.form.get("y_listo"):
+        return marcar_listo(eid, "microscopia")
+    return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
+
+
+@bp.route("/estudio/<int:eid>/ihq", methods=["POST"])
+@requiere_permiso("micro")
+def guardar_ihq(eid):
+    e = ficha(eid)[0]
+    guardar_seccion("ihq", e["dueno"], {"marcadores": request.form.get("marcadores", "").strip(),
+                                 "resultado": request.form.get("resultado", "").strip()})
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_ihq", "", eid)
+    flash("IHQ guardada.", "ok")
+    if request.form.get("y_listo"):
+        return marcar_listo(eid, "interp_ihq")
+    return redirect(url_for("estudios.estudio", eid=eid) + "#ihq")
+
+
+@bp.route("/estudio/<int:eid>/listo/<etapa>", methods=["POST"])
+@requiere_permiso("etapas")
+def marcar_listo(eid, etapa):
+    yo = usuario_actual()
+    e, macro, micro, ihq, etapas, solicita = ficha(eid)
+    if e["borrador"]:
+        flash("Primero completá los datos del paciente de este protocolo.", "error")
+        return redirect(url_for("protocolos.protocolo_editar", pid=e["protocolo_id"]))
+    tipo = REGISTRO[e["tipo"]]
+    _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
+    miembros = miembros_flujo(e)
+    sin = estudios_sin_tecnicas(miembros) if etapa == "macroscopia" and "macro" in tipo.secciones else []
+    motivo = motivo_no_listo(yo, e["tipo"], etapa, prox, solicita, macro, micro, ihq, sin)
+    if motivo:
+        flash(motivo, "error")
+    else:
+        ahora_ = db.ahora()
+        for m in miembros:
+            if not db.uno("SELECT 1 FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], etapa)):
+                db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (m["id"], etapa, yo["id"], ahora_))
+        db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa] + (f" (en {len(miembros)} estudios {tipo.nombre.lower()})" if len(miembros) > 1 else ""), eid)
+        flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']}"
+              + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
+        if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]):
+            db.ex("UPDATE protocolos SET firmante_id=? WHERE id=?", (yo["id"], e["protocolo_id"]))
+            db.auditar(yo["id"], e["protocolo_id"], "firmante", f"{yo['iniciales']} firmará el informe", eid)
+            flash("Vas a figurar como firmante del informe.", "ok")
+    return redirect(request.form.get("volver") or url_for("estudios.estudio", eid=eid))
+
+
+@bp.route("/estudio/<int:eid>/deshacer", methods=["POST"])
+@requiere_permiso("etapas")
+def deshacer(eid):
+    yo = usuario_actual()
+    e = ficha(eid)[0]
+    ultima = db.uno("SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (eid,))
+    if not ultima:
+        flash("No hay etapas para deshacer.", "error")
+    elif ultima["usuario_id"] != yo["id"] and not puede("etapas_deshacer"):
+        flash("Solo quien la registró o alguien con permiso puede deshacer la etapa.", "error")
+    else:
+        miembros = miembros_flujo(e)
+        for m in miembros or [e]:
+            db.ex("DELETE FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], ultima["etapa"]))
+        db.ex("UPDATE protocolos SET firmante_id=NULL WHERE id=?", (e["protocolo_id"],))
+        db.auditar(yo["id"], e["protocolo_id"], "deshacer", NOMBRE_ETAPA.get(ultima["etapa"], ultima["etapa"]), eid)
+        flash(f"Se deshizo {NOMBRE_ETAPA.get(ultima['etapa'])}.", "ok")
+    return redirect(url_for("estudios.estudio", eid=eid))
+
+
+@bp.route("/estudio/<int:eid>/anular", methods=["POST"])
+@requiere_permiso("estudio_anular")
+def anular(eid):
+    e = ficha(eid)[0]
+    motivo = request.form.get("motivo", "").strip()
+    nuevo = 0 if e["anulado"] else 1
+    otros = [dict(x) for x in db.q("SELECT tipo, subcategoria, anulado FROM estudios WHERE protocolo_id=? AND id<>?",
+                                   (e["protocolo_id"], eid))]
+    if nuevo and not motivo:
+        flash("Indicá el motivo de la anulación.", "error")
+    elif not nuevo and (error := validar_combinacion(otros + [{"tipo": e["tipo"], "subcategoria": e["subcategoria"]}])):
+        flash(f"No se puede reactivar: {error}", "error")
+    elif not nuevo and (avance := flujo_avanzado(e["protocolo_id"], e["tipo"])):
+        flash(f"No se puede reactivar: hay {REGISTRO[e['tipo']].nombre.lower()} de este protocolo en proceso (llegó a {avance}) y comparten el mismo "
+              "flujo. Primero hay que deshacer las etapas.", "error")
+    else:
+        db.ex("UPDATE estudios SET anulado=?, motivo_anulacion=? WHERE id=?", (nuevo, motivo if nuevo else None, eid))
+        db.consolidar_diagnosticos(db.con(), e["protocolo_id"], e["tipo"], extra=[eid] if nuevo else [])
+        db.olvidar_cache()
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "anular" if nuevo else "reactivar", motivo, eid)
+        flash("Estudio anulado." if nuevo else "Estudio reactivado.", "ok")
+        if not nuevo:
+            avisar_lote_lleno(ubicar_en_lote(e["protocolo_id"], usuario_actual()["id"]))
+    return redirect(url_for("estudios.estudio", eid=eid))

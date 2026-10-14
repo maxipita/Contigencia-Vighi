@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "compartidos/_semaforo.html" import pill with context %}
+{% block titulo %}Tablero{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Seguimiento</div>
+<h1>Tablero</h1>
+{% set args = request.args.to_dict() %}
+<div class="tabs">
+  {% for clave, nombre in [("pendientes","Pendientes (" ~ conteo.pendientes ~ ")"), ("mios","De mis sectores"),
+                           ("informados","Informados (" ~ conteo.informados ~ ")"), ("sin_cargar","Sin cargar al sistema (" ~ conteo.sin_cargar ~ ")"),
+                           ("anulados","Anulados"), ("todos","Todos")] %}
+    <a href="{{ url_for('tablero.tablero', **dict(args, ver=clave)) }}" class="{{ 'activo' if f.ver == clave }}">{{ nombre }}</a>
+  {% endfor %}
+</div>
+<form class="filtros" method="get">
+  <input type="hidden" name="ver" value="{{ f.ver }}">
+  <input name="q" value="{{ f.q }}" placeholder="Buscar protocolo, paciente, DNI, lote, sitio…" size="36">
+  <select name="tipo">
+    <option value="">Todos los estudios</option>
+    {% for k, n in TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <select name="sector">
+    <option value="">Pendiente en cualquier sector</option>
+    {% for k, n in SECTORES.items() if k not in ('ingreso', 'facturacion') %}<option value="{{ k }}" {{ 'selected' if f.sector == k }}>Pendiente en {{ n }}</option>{% endfor %}
+  </select>
+  <select name="etapa">
+    <option value="">Pendiente en cualquier etapa</option>
+    {% for k, n in etapas %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>Pendiente en {{ n }}</option>{% endfor %}
+  </select>
+  <select name="semaforo">
+    <option value="">Cualquier semáforo</option>
+    {% for k, n in SEMAFOROS.items() %}<option value="{{ k }}" {{ 'selected' if f.semaforo == k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <button class="btn sec">Filtrar</button>
+</form>
+<div class="semaforo-total">
+  {% for k, n in SEMAFOROS.items() %}
+  <a href="{{ url_for('tablero.tablero', **dict(args, semaforo='' if f.semaforo == k else k)) }}" class="{{ k }} {{ 'activo' if f.semaforo == k }}"><b>{{ por_semaforo[k] }}</b><span>{{ n }}</span></a>
+  {% endfor %}
+</div>
+<table>
+  <tr><th>Protocolo</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th><th>Ingresado</th></tr>
+  {% for c in filas %}
+  <tr>
+    <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.n_comentarios %} <a class="chip" href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}#comentarios" title="Comentarios del protocolo">{{ c.n_comentarios }} com.</a>{% endif %}{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
+        {% if c.estudios > 1 %}<div class="muted">{{ c.estudios }} estudios</div>{% endif %}</td>
+    <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
+    <td>{% for sub, tipo in c.muestras %}<div>{{ sub }}{% if tipo %}<div class="muted">{{ tipo }}</div>{% endif %}</div>{% endfor %}</td>
+    <td>{% if c.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=c.lote_id) }}">{{ c.lote }}</a>{% endif %}</td>
+    <td>{{ c.responsables | join(', ') }}</td>
+    <td>{% for estado, sector, anulado, informado in c.estados %}<div class="estado-celda"><span class="chip {{ 'anulado' if anulado else ('informado' if informado) }}">{{ estado }}</span>
+        {% if sector %}<span class="muted">{{ sector }}</span>{% endif %}</div>{% endfor %}</td>
+    <td>{{ pill(c.semaforo) }}</td>
+    <td class="muted">{% if c.vence %}{{ c.vence | dh }}{% endif %}</td>
+    <td class="muted">{{ c.creado_en | fh }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="9" class="muted">No hay protocolos para mostrar.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

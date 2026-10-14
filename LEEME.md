@@ -97,7 +97,7 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   Mama o Próstata en ONCO, según el procedimiento) se usa el **mayor**. El lote muestra su contador (*87 / 120 tacos*, también en la lista de lotes y en cada estudio). Cuando se **completa** un protocolo
   (o se agrega o edita un estudio) y el lote se pasaría de 120, el protocolo pasa solo al primer lote **del mismo tipo y del mismo día** que tenga lugar (o a uno nuevo) y el sistema avisa; el protocolo siempre va
   entero en un lote. Si un protocolo solo ya supera 120, queda solo en un lote nuevo. Los lotes cerrados no se tocan y, si alguien agrega un protocolo a mano a un lote que se pasa, solo se avisa. Los órganos
-  sin dato de tacos para ese tipo de lote cuentan 0 y el lote avisa cuántos estudios quedaron así. **Cargar o corregir la tabla:** `py cargar_tacos.py <planilla>` con la planilla de Excel original o con un CSV
+  sin dato de tacos para ese tipo de lote cuentan 0 y el lote avisa cuántos estudios quedaron así. **Cargar o corregir la tabla:** `py -m vighi.herramientas.cargar_tacos <planilla>` con la planilla de Excel original o con un CSV
   (`organo;ENDO;NO ONCO;ONCO`, un valor por celda); muestra qué va a guardar, pide escribir `SI`, suma o corrige lo cargado y lo deja en la base y en `seed/tacos_organo.json`. Los órganos del sistema que no están
   en la planilla quedan en `organos_sin_tacos.csv` para completar y volver a cargar. Los nombres de la planilla que no coinciden con un órgano del sistema (por ejemplo "Prostata RTU") se traducen con
   `seed/alias_organos.json`.
@@ -142,17 +142,18 @@ Usa el puerto 8001, así que no choca con el sistema que esté corriendo en la P
 
 ## Actualizar templates / catálogo / usuarios
 
-`py preparar_semillas.py` regenera `seed/*.json` desde el Excel y los CSV. Las semillas se cargan
+`py -m vighi.herramientas.preparar_semillas` regenera `seed/*.json` desde el Excel y los CSV. Las semillas se cargan
 solo en una base nueva (vacía).
 
 ## Estructura
 
-- `app.py` — pantallas y reglas comunes (protocolo, lotes, usuarios, tablero)
-- `estudios/` — **un módulo por tipo de estudio** (`pap.py`, `bp.py`, `ct.py`): etapas, plazos, lotes, cantidades,
-  responsable y requisitos. Para sumar un tipo nuevo se agrega un módulo y se registra en `estudios/__init__.py`.
-- `trazabilidad.py` — fechas límite, OT/LT y demoras
-- `db.py` — **todo el acceso a datos** (SQL estándar; para migrar a MySQL se cambia solo este módulo)
-- `templates/`, `static/` — interfaz · `seed/` — datos iniciales
+- `app.py` — entrada del sistema (arranca el servidor); el código está en el paquete `vighi/`
+- `vighi/features/` — una carpeta de código por funcionalidad: tablero, protocolos, estudios, informes, lotes, etiquetas, usuarios, facturación, listados
+- `vighi/dominio/estudios/` — **un módulo por tipo de estudio** (`pap.py`, `bp.py`, `ct.py`): etapas, plazos, lotes, cantidades,
+  responsable y requisitos. Para sumar un tipo nuevo se agrega un módulo y se registra en `vighi/dominio/estudios/__init__.py`.
+- `vighi/dominio/trazabilidad.py` — fechas límite, OT/LT y demoras
+- `vighi/core/db.py` — **todo el acceso a datos** (SQL estándar, vale para D1 y PostgreSQL)
+- `vighi/templates/`, `vighi/static/` — interfaz · `seed/` — datos iniciales · `tests/` — pruebas automáticas · `docs/` — manual y planillas
 
 ## Base de datos en Cloudflare D1
 
@@ -168,7 +169,15 @@ con el acceso a la base que le corresponda.
    Ese archivo es secreto (la carpeta `data` no va al repositorio): no se pega en chats ni se manda por mail. Cada persona usa su propio token (se la invita a la cuenta y crea el suyo).
 5. Con `py -m pip install -r requirements.txt` hecho, el sistema crea solo las tablas y los datos iniciales (médicos, catálogo, plantillas, feriados) la primera vez que arranca sobre una base vacía.
 
-**Subir datos de una base local vieja (opcional, una sola vez):** `py migrar_a_d1.py` toma `data\contingencia.db` (o la ruta que se le indique) y la sube a la base de Cloudflare configurada. Muestra cuántas
-filas va a subir (incluye datos de pacientes), pide escribir `SI`, sube todo y verifica que las cantidades coincidan. Si la base de Cloudflare ya tiene datos, no sube nada.
 
 Los datos son de pacientes: el uso de un servicio en la nube lo tiene que autorizar quien responda por la protección de datos del centro.
+
+## PostgreSQL y archivos en la nube (preparación para producción)
+
+El sistema puede usar **PostgreSQL** en lugar de Cloudflare D1: alcanza con definir `DATABASE_URL` en `data\cloudflare.env` (modelo en `cloudflare.env.ejemplo`); sin esa línea sigue usando D1.
+Las imágenes, firmas y PDF pueden guardarse en una carpeta (`ALMACEN_DIR`) o en un bucket de S3 (`S3_BUCKET`) en lugar de dentro de la base.
+
+**Copiar los datos de D1 a PostgreSQL (solo lee D1, no lo modifica):**
+1. Con `DATABASE_URL` apuntando a una base PostgreSQL vacía: `py -m vighi.herramientas.migrar_d1_a_pg --contar` muestra cuántas filas tiene cada tabla.
+2. `py -m vighi.herramientas.migrar_d1_a_pg` copia todo (pide escribir `SI`), mueve los archivos al almacén configurado y verifica cantidades y contenido de cada archivo.
+Si la base de destino ya tiene datos, no copia nada.

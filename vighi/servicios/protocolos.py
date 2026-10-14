@@ -1,0 +1,144 @@
+from flask import abort, redirect, request, url_for
+
+from vighi.core import db
+from vighi.dominio.estudios import REGISTRO, validar_combinacion
+from vighi.servicios.consultas import etiqueta, listas, responsables
+from vighi.servicios.lotes import asignar_lote, lotes_para_formulario, tipos_lote, validar_lote
+
+
+CAMPOS_PROTOCOLO = ["fecha_recoleccion", "dni", "cobertura", "n_afiliado", "nombre", "apellido", "sexo", "exento",
+                    "fecha_nacimiento", "email", "telefono", "medico", "lugar_recoleccion", "lugar_entrega", "observaciones"]
+CAMPOS_ESTUDIO = ["categoria", "subcategoria", "sitio", "tipo_muestra", "cantidad", "citologia_hormonal", "observaciones",
+                  "responsable_id", "tecnicas_especiales"]
+CAMPOS_PACIENTE = ["apellido", "nombre", "fecha_nacimiento", "sexo", "cobertura", "n_afiliado", "exento", "email", "telefono"]
+
+
+def sincronizar_paciente(pid, dni, campos=None):
+    if not dni:
+        return
+    p = protocolo_o_404(pid)
+    campos = [c for c in CAMPOS_PACIENTE if p[c]] if campos is None else [c for c in campos if c in CAMPOS_PACIENTE]
+    if not campos:
+        return
+    db.ex(f"UPDATE protocolos SET {', '.join(c + '=?' for c in campos)} WHERE dni=? AND id<>?", [p[c] for c in campos] + [dni, pid])
+
+
+def leer_protocolo():
+    d = {k: request.form.get(k, "").strip() for k in CAMPOS_PROTOCOLO}
+    d["numero"] = request.form.get("numero", "").strip()
+    return d
+
+
+def limpiar_valor(texto):
+    return " ".join((texto or "").replace(",", " ").replace(";", " ").split())[:80]
+
+
+def sin_repetidos(valores):
+    vistos = {}
+    for v in valores:
+        if v:
+            vistos.setdefault(v.lower(), v)
+    return list(vistos.values())
+
+
+def recordar_tecnicas(e):
+    pedidas = [x for x in (e.get("tecnicas_especiales") or "").split("; ") if x]
+    if not pedidas:
+        return
+    actuales = listas().get("tecnicas_especiales", [])
+    conocidas = {x.lower() for x in actuales}
+    nuevas = list(dict.fromkeys(x for x in pedidas if x.lower() not in conocidas))
+    if nuevas:
+        db.lote_ex([("INSERT INTO listas (nombre, orden, valor) VALUES (?,?,?)", ("tecnicas_especiales", len(actuales) + i, v)) for i, v in enumerate(nuevas)])
+
+
+def leer_estudio(prefijo, tipo):
+    t = REGISTRO[tipo]
+    campo = lambda k: request.form.get(prefijo + k, "").strip()
+    return {"tipo": tipo, "categoria": t.categoria,
+            "subcategoria": t.subcategoria_fija or campo("subcategoria"),
+            "sitio": t.sitio_fijo or campo("sitio"),
+            "tipo_muestra": campo("tipo_muestra"),
+            "cantidad": campo("cantidad") if campo("cantidad") in t.cantidades else None,
+            "citologia_hormonal": campo("citologia_hormonal") if t.citologia_hormonal else None,
+            "observaciones": campo("observaciones"),
+            "responsable_id": int(campo("responsable_id")) if campo("responsable_id").isdigit() else None,
+            "tecnicas_especiales": ("; ".join(sin_repetidos(limpiar_valor(x) for x in request.form.getlist(prefijo + "tecnicas_especiales"))) or None)
+            if t.pide_tecnicas else None,
+            "lote_sel": campo("lote_id"),
+            "id": int(campo("id")) if campo("id").isdigit() else None}
+
+
+def estudios_del_formulario():
+    indices = sorted({int(k.split("-")[1]) for k in request.form
+                      if k.startswith("e-") and k.endswith("-tipo") and k.split("-")[1].isdigit()})
+    return [leer_estudio(f"e-{i}-", request.form[f"e-{i}-tipo"]) for i in indices
+            if request.form.get(f"e-{i}-tipo") in REGISTRO]
+
+
+def validar_estudios(lista, existentes=(), actual_id=None, con_lote=True):
+    error = validar_combinacion(list(existentes) + lista)
+    if error:
+        return None, error
+    if not (con_lote and lista):
+        return None, None
+    return validar_lote(lista[0]["lote_sel"], lista[0]["tipo"], actual_id)
+
+
+def crear_estudio(protocolo_id, e, lote, usuario_id):
+    eid = db.ex(f"INSERT INTO estudios (protocolo_id, tipo, creado_por, creado_en, {', '.join(CAMPOS_ESTUDIO)}) "
+                f"VALUES (?,?,?,?,{','.join('?' * len(CAMPOS_ESTUDIO))})",
+                [protocolo_id, e["tipo"], usuario_id, db.ahora()] + [e[k] for k in CAMPOS_ESTUDIO])
+    recordar_tecnicas(e)
+    db.auditar(usuario_id, protocolo_id, "nuevo_estudio", etiqueta(e), eid)
+    asignar_lote(protocolo_id, lote, usuario_id)
+    return eid
+
+
+def contexto_formulario():
+    return {"listas": listas(),
+            "resp": {t: responsables(t) for t in REGISTRO},
+            "lotes_abiertos": {t: lotes_para_formulario(t) for t in REGISTRO},
+            "tipos_lote_de": {t: tipos_lote(t) for t in REGISTRO}}
+
+
+SQL_PROTOCOLO = "SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE p.id=?"
+SQL_HISTORIAL_PROTOCOLO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
+                        WHERE protocolo_id=? ORDER BY a.id DESC"""
+
+
+def protocolo_o_404(pid):
+    p = db.uno(SQL_PROTOCOLO, (pid,))
+    if not p:
+        abort(404)
+    return p
+
+
+def completo(p, estudios):
+    return bool(p["apellido"] and p["nombre"] and estudios and all(e["cantidad"] for e in estudios if not e["anulado"]))
+
+
+CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "fecha_recoleccion"]
+
+
+def protocolos_del_paciente(base):
+    if base["dni"]:
+        donde, params = "p.dni=?", (base["dni"],)
+    else:
+        donde = "LOWER(p.apellido)=LOWER(?) AND LOWER(COALESCE(p.nombre,''))=LOWER(?) AND COALESCE(p.fecha_nacimiento,'')=?"
+        params = (base["apellido"] or "", base["nombre"] or "", base["fecha_nacimiento"] or "")
+    protocolos = db.q(f"SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE {donde} ORDER BY p.id DESC", params)
+    return protocolos if any(x["id"] == base["id"] for x in protocolos) else [base]
+
+
+SQL_COMENTARIOS = """SELECT c.*, u.iniciales, u.nombre AS autor FROM comentarios c LEFT JOIN usuarios u ON u.id=c.usuario_id
+                     WHERE c.protocolo_id=? ORDER BY c.id DESC"""
+
+
+def comentarios_de(pid):
+    return db.q(SQL_COMENTARIOS, (pid,))
+
+
+def volver_a_comentarios(pid):
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolos.protocolo", pid=pid)
+    return redirect(destino.split("#")[0] + "#comentarios")
