@@ -61,6 +61,18 @@ def requiere_permiso(*claves):
     return decorador
 
 
+def requiere_permiso_o_403(*claves):
+    def decorador(f):
+        @wraps(f)
+        @requiere_login
+        def envuelta(*a, **k):
+            if not any(puede(c) for c in claves):
+                abort(403)
+            return f(*a, **k)
+        return envuelta
+    return decorador
+
+
 def requiere_admin(f):
     @wraps(f)
     @requiere_login

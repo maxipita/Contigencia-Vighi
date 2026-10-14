@@ -13,6 +13,7 @@ PERMISOS = {
     "etapas": ("Etapas", "Marcar etapas como listas (las de su sector)"),
     "etapas_deshacer": ("Etapas", "Deshacer etapas registradas por otros"),
     "exportar": ("Consultas", "Exportar a Excel"),
+    "usuarios": ("Administración", "Usuarios (crear y editar personas, claves y firmas; los perfiles siguen siendo del administrador)"),
     "ubicaciones": ("Administración", "Ubicaciones (crear, editar, importar y asignar médicos)"),
     "feriados": ("Administración", "Feriados"),
     "facturacion": ("Administración", "Facturación y tarifario"),

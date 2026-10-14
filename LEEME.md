@@ -107,6 +107,7 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 - **Semáforo** (estudios pendientes, en el tablero, el protocolo y la ficha del estudio): **On time** si ni la etapa en que está ni ninguna anterior se pasó de su fecha límite;
   **Delayed** si hay atraso de menos de 1 día hábil; **Late** si llegó a 1 día hábil o más. El atraso **se arrastra**: si una etapa anterior se completó tarde, el protocolo
   lo sigue contando aunque la etapa actual todavía esté en término (se toma el peor estado de todo el recorrido, incluido el ingreso). Los informados y anulados no llevan semáforo.
+- **Usuarios:** por defecto solo los administradores. Con el permiso *Usuarios* (se tilda por perfil o por persona, y solo lo da un administrador) alguien más puede crear y editar personas, ponerles clave temporal y cargar firmas; no puede tocar a los administradores, ni hacer administrador a nadie, ni dar permisos que no tiene. *Perfiles y permisos* queda siempre solo para administradores.
 - **Deshacer:** la última etapa la puede deshacer quien la registró o un administrador.
 - **Feriados** (administrador): se descuentan de los plazos. Verificar la lista cada año.
 - **Ubicaciones** (menú Más › Ubicaciones): lista de lugares con **abreviatura** (lo principal: es lo que se escribe y elige), **nombre completo** (el que sale en el informe), dirección, **contactos**, **a quién se envían los informes** (e-mails y WhatsApp) y

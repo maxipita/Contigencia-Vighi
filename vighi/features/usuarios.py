@@ -4,15 +4,19 @@ from werkzeug.security import generate_password_hash
 from vighi.core import almacen, db, permisos
 from vighi.core.config import SIN_INFORMES
 from vighi.core.opcionales import informes
-from vighi.core.sesion import requiere_admin, requiere_permiso, usuario_actual
+from vighi.core.sesion import requiere_admin, requiere_permiso, requiere_permiso_o_403, usuario_actual
 from vighi.dominio.estudios import SECTORES
 from vighi.servicios.usuarios import perfiles_con_permisos
 
 bp = Blueprint("usuarios", __name__)
 
 
+def otorgables(yo):
+    return set(permisos.PERMISOS) if yo["admin"] else set(yo["permisos"]) - {"usuarios"}
+
+
 @bp.route("/usuarios")
-@requiere_admin
+@requiere_permiso_o_403("usuarios")
 def usuarios():
     filas = db.q("""SELECT u.*, p.nombre AS perfil FROM usuarios u LEFT JOIN perfiles p ON p.id=u.perfil_id
                     ORDER BY u.activo DESC, u.iniciales""")
@@ -21,15 +25,21 @@ def usuarios():
 
 @bp.route("/usuarios/nuevo", methods=["GET", "POST"])
 @bp.route("/usuarios/<int:uid>", methods=["GET", "POST"])
-@requiere_admin
+@requiere_permiso_o_403("usuarios")
 def usuario(uid=None):
     yo = usuario_actual()
     u = db.uno("SELECT * FROM usuarios WHERE id=?", (uid,)) if uid else None
+    if u and u["admin"] and not yo["admin"]:
+        flash("Los administradores solo los puede editar otro administrador.", "error")
+        return redirect(url_for("usuarios.usuarios"))
+    concedibles = otorgables(yo)
+    lista_perfiles = [p for p in perfiles_con_permisos() if yo["admin"] or p["set"] <= concedibles or (u and p["id"] == u["perfil_id"])]
     if request.method == "POST":
         ini = request.form["iniciales"].strip().upper()
         sectores = ",".join(s for s in SECTORES if request.form.get("s_" + s))
         perfil_id = int(request.form["perfil_id"]) if request.form.get("perfil_id", "").isdigit() else None
-        ajuste = {k: request.form.get("p_" + k, "") for k in permisos.PERMISOS}
+        previo = {k: ("mas" if k in permisos.lista(u["permisos_mas"]) else "menos" if k in permisos.lista(u["permisos_menos"]) else "") for k in permisos.PERMISOS} if u else {}
+        ajuste = {k: request.form.get("p_" + k, "") if k in concedibles else previo.get(k, "") for k in permisos.PERMISOS}
         titulo = request.form.get("titulo", "") if request.form.get("titulo") in ("Dr.", "Dra.") else ""
         mn, mp = request.form.get("mn", "").strip()[:20], request.form.get("mp", "").strip()[:20]
         firma_png, firma_error = None, None
@@ -42,7 +52,7 @@ def usuario(uid=None):
             except ValueError as err:
                 firma_error = str(err)
         vals = (ini, request.form.get("nombre", "").strip() or ini, sectores,
-                1 if request.form.get("admin") else 0, 1 if request.form.get("activo") else 0, perfil_id,
+                (1 if request.form.get("admin") else 0) if yo["admin"] else (u["admin"] if u else 0), 1 if request.form.get("activo") else 0, perfil_id,
                 permisos.texto({k for k, v in ajuste.items() if v == "mas"}),
                 permisos.texto({k for k, v in ajuste.items() if v == "menos"}))
         dup = db.uno("SELECT id FROM usuarios WHERE iniciales=? AND id<>?", (ini, uid or 0))
@@ -53,7 +63,9 @@ def usuario(uid=None):
             flash("La clave temporal debe tener al menos 8 caracteres.", "error")
         elif perfil_id and not db.uno("SELECT 1 FROM perfiles WHERE id=?", (perfil_id,)):
             flash("El perfil elegido no existe.", "error")
-        elif uid == yo["id"] and not (vals[3] and vals[4]):
+        elif perfil_id and perfil_id not in {p["id"] for p in lista_perfiles}:
+            flash("Ese perfil da permisos que vos no tenés: pedile a un administrador que lo asigne.", "error")
+        elif uid == yo["id"] and not ((vals[3] or not yo["admin"]) and vals[4]):
             flash("No podés quitarte el rol de administrador ni desactivarte a vos mismo.", "error")
         elif firma_error:
             flash(f"Firma: {firma_error}", "error")
@@ -87,10 +99,9 @@ def usuario(uid=None):
         u = {**(dict(u) if u else {}), "iniciales": ini, "nombre": vals[1], "sectores": sectores, "admin": vals[3],
              "activo": vals[4], "perfil_id": perfil_id, "permisos_mas": vals[6], "permisos_menos": vals[7],
              "clave_hash": u["clave_hash"] if u else None, "titulo": titulo, "mn": mn, "mp": mp}
-    lista_perfiles = perfiles_con_permisos()
     tiene_firma = bool(uid and db.uno("SELECT 1 FROM firmas WHERE usuario_id=?", (uid,)))
     return render_template("usuarios/usuario.html", u=u, perfiles=lista_perfiles, tiene_firma=tiene_firma, PERMISOS=permisos.PERMISOS,
-                           GRUPOS=permisos.GRUPOS, lista_permisos=permisos.lista,
+                           GRUPOS=permisos.GRUPOS, lista_permisos=permisos.lista, concedibles=concedibles,
                            mapa_perfiles={p["id"]: sorted(p["set"]) for p in lista_perfiles})
 
 

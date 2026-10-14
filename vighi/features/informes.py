@@ -6,7 +6,7 @@ from vighi.core import almacen, db
 from vighi.core.config import SIN_INFORMES
 from vighi.core.fechas import fecha_hora
 from vighi.core.opcionales import informes
-from vighi.core.sesion import requiere_admin, requiere_permiso, usuario_actual
+from vighi.core.sesion import requiere_permiso, requiere_permiso_o_403, usuario_actual
 from vighi.servicios.fichas import ficha, informe_emitido, informe_vigente
 from vighi.servicios.protocolos import protocolo_o_404
 
@@ -85,7 +85,7 @@ def informe_ver(iid):
 
 
 @bp.route("/usuarios/<int:uid>/firma")
-@requiere_admin
+@requiere_permiso_o_403("usuarios")
 def usuario_firma(uid):
     f = db.uno("SELECT imagen FROM firmas WHERE usuario_id=?", (uid,))
     if not f:
