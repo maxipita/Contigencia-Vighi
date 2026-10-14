@@ -1,0 +1,10 @@
+data/
+*.db
+*.db-*
+__pycache__/
+.git/
+.vscode/
+tests/
+docs/
+*.pdf
+*.xlsx

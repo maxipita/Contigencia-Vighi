@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block titulo %}Factura {{ f.numero or ('borrador ' ~ f.id) }}{% endblock %}
+{% block contenido %}
+{% set editable = f.estado == 'borrador' %}
+<p class="no-imprimir"><a href="{{ url_for('facturacion.administracion') }}">Administración</a> › <a href="{{ url_for('facturacion.facturacion_lista') }}">Facturación</a></p>
+<div class="eyebrow">Facturación</div>
+<h1>{{ 'Factura ' ~ f.numero if f.numero else 'Borrador de factura #' ~ f.id }}
+  <span class="chip {{ clases[f.estado] }}">{{ estados[f.estado] }}</span></h1>
+<p class="muted">{{ f.cobertura }} · creada {{ f.creado_en | fh }} por {{ f.creador or '?' }}
+  {% if f.fecha_factura %} · FF {{ f.fecha_factura | f }}{% endif %}
+  {% if f.emitida_en %} · emitida por {{ f.emisor or '?' }}{% endif %}
+  {% if f.fecha_estimada_cobro %} · FEC (estimada) {{ f.fecha_estimada_cobro | f }}{% endif %}
+  {% if f.fecha_cobro %} · cobrada el {{ f.fecha_cobro | f }} por {{ f.cobrador or '?' }}{% endif %}
+  {% if f.estado == 'anulada' %} · anulada {{ f.anulada_en | fh }} por {{ f.anulador or '?' }}: {{ f.anulada_motivo }}{% endif %}</p>
+
+<div class="cols cols-factura">
+<div>
+  <form method="post" action="{{ url_for('facturacion.factura_guardar', fid=f.id) }}">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <table>
+      <tr><th>Protocolo</th><th>Fecha</th><th>Paciente</th><th>Afiliado</th><th>Estudio</th><th>Código</th><th class="num">Cant.</th><th class="num">Unitario</th><th>IVA</th><th class="num">Importe</th>{% if editable %}<th></th>{% endif %}</tr>
+      {% for i in items %}
+      <tr>
+        <td><a href="{{ url_for('protocolos.protocolo', pid=i.protocolo_id) }}"><b>{{ i.numero_protocolo }}</b></a></td>
+        <td class="muted">{{ i.fecha | f }}</td>
+        <td>{{ i.paciente }}</td>
+        <td class="muted">{{ i.afiliado }}</td>
+        <td><a href="{{ url_for('estudios.estudio', eid=i.estudio_id) }}">{{ i.estudio }}</a>{% if i.descripcion %}<div class="muted">{{ i.descripcion }}</div>{% endif %}</td>
+        {% if editable %}
+        <td><input name="k_{{ i.id }}" value="{{ i.codigo }}" size="8"></td>
+        <td class="num"><input name="c_{{ i.id }}" value="{{ i.cantidad }}" size="3" class="num"></td>
+        <td class="num"><input name="u_{{ i.id }}" value="{{ '%.2f' | format(i.unitario) | replace('.', ',') }}" size="10" class="num"></td>
+        <td><select name="i_{{ i.id }}">{% for k, n in tipos_iva.items() %}<option value="{{ k }}" {{ 'selected' if i.iva == k }}>{{ n }}</option>{% endfor %}</select></td>
+        <td class="num"><b>{{ i.importe | peso }}</b></td>
+        <td><button class="lapiz" form="quitar-{{ i.id }}" title="Quitar de la factura">Quitar</button></td>
+        {% else %}
+        <td>{{ i.codigo }}</td>
+        <td class="num">{{ i.cantidad }}</td>
+        <td class="num">{{ i.unitario | peso }}</td>
+        <td>{{ tipos_iva[i.iva] }}</td>
+        <td class="num"><b>{{ i.importe | peso }}</b></td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="muted">La factura no tiene ítems.</td></tr>
+      {% endfor %}
+    </table>
+    <div class="totales-fact">
+      {% for k, n in [("exento","Exento"),("gravado","Gravado"),("iva","IVA (" ~ (f.alicuota * 100) | round(1) ~ "%)"),("total","Total")] %}
+      <div><span>{{ n }}</span><b>{{ f[k] | peso }}</b></div>
+      {% endfor %}
+    </div>
+    {% if editable %}
+    <label style="margin-top:12px">Observaciones</label>
+    <textarea name="observaciones" style="min-height:60px">{{ f.observaciones or '' }}</textarea>
+    <div class="acciones"><button class="btn">Guardar cambios</button><span class="muted">Al guardar se recalculan importes e IVA.</span></div>
+    {% elif f.observaciones %}<p><b>Observaciones:</b> {{ f.observaciones }}</p>{% endif %}
+  </form>
+  {% if editable %}{% for i in items %}
+  <form id="quitar-{{ i.id }}" method="post" action="{{ url_for('facturacion.factura_quitar', fid=f.id, iid=i.id) }}" data-confirmar="¿Quitar {{ i.numero_protocolo }} · {{ i.estudio }} de la factura?">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"></form>
+  {% endfor %}{% endif %}
+</div>
+
+<div class="no-imprimir">
+  {% if f.estado == 'borrador' %}
+  <div class="tarjeta">
+    <h2>Emitir</h2>
+    <form method="post" action="{{ url_for('facturacion.factura_emitir', fid=f.id) }}" data-confirmar="¿Emitir la factura? Después no se podrán editar los ítems.">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Número de factura</label><input name="numero" required autocomplete="off" placeholder="0001-00000123">
+      <label style="margin-top:8px">Fecha de factura (FF)</label><input type="date" name="fecha_factura" value="{{ hoy }}">
+      <label style="margin-top:8px">Fecha estimada de cobro (FEC) <span class="muted">(opcional)</span></label><input type="date" name="fecha_estimada_cobro">
+      <label style="margin-top:8px">Tipo de fecha</label>
+      <select name="fec_tipo">{% for k, n in tipos_fec.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select>
+      <p class="muted">El número es el del comprobante emitido en el sistema fiscal. Guardá los cambios antes de emitir.</p>
+      <div class="acciones"><button class="btn">Emitir factura</button></div>
+    </form>
+  </div>
+  {% elif f.estado == 'emitida' %}
+  <div class="tarjeta">
+    <h2>Fecha estimada de cobro</h2>
+    <form method="post" action="{{ url_for('facturacion.factura_fec', fid=f.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>FEC</label><input type="date" name="fecha_estimada_cobro" value="{{ f.fecha_estimada_cobro or '' }}">
+      <label style="margin-top:8px">Tipo de fecha</label>
+      <select name="fec_tipo">{% for k, n in tipos_fec.items() %}<option value="{{ k }}" {{ 'selected' if f.fec_tipo == k }}>{{ n }}</option>{% endfor %}</select>
+      <p class="muted">Aparece en "Cobros previstos" de Administración.</p>
+      <div class="acciones"><button class="btn sec">Guardar fecha</button></div>
+    </form>
+  </div>
+  <div class="tarjeta">
+    <h2>Registrar cobro</h2>
+    <form method="post" action="{{ url_for('facturacion.factura_cobrar', fid=f.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Fecha en que se cobró</label><input type="date" name="fecha_cobro" value="{{ hoy }}">
+      <div class="acciones"><button class="btn">Marcar como cobrada</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="tarjeta">
+    <h2>Acciones</h2>
+    <div class="acciones">
+      <a class="btn sec" href="{{ url_for('facturacion.factura_csv', fid=f.id) }}">Descargar CSV</a>
+      <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
+    </div>
+    {% if f.estado in ('borrador', 'emitida') %}
+    <form method="post" action="{{ url_for('facturacion.factura_anular', fid=f.id) }}" class="acciones" data-confirmar="¿Anular la factura? Sus estudios vuelven a estar disponibles para facturar.">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <input name="motivo" placeholder="Motivo de anulación" required>
+      <button class="btn peligro">Anular</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+</div>
+{% endblock %}

@@ -1,3 +1,6 @@
-# Datos de pacientes, respaldos y clave de sesión: nunca al repositorio
+# Datos de pacientes, respaldos y clave de sesion: nunca al repositorio
 data/
 __pycache__/
+*.pyc
+.venv/
+.env

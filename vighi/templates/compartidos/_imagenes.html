@@ -1,0 +1,24 @@
+{% set puede_imagenes = puede('protocolo_editar') or puede('macro') or puede('micro') %}
+<div class="tarjeta" id="imagenes">
+  <h2>Imágenes{% if imagenes %} <span class="muted">({{ imagenes | length }})</span>{% endif %}</h2>
+  {% if imagenes %}
+  <div class="galeria">
+    {% for i in imagenes %}
+    <figure>
+      <a href="{{ url_for('imagenes.imagen_ver', iid=i.id) }}" data-visor title="{{ i.descripcion or '' }}"><img src="{{ url_for('imagenes.imagen_mini', iid=i.id) }}" loading="lazy" alt="{{ i.descripcion or 'Imagen' }}"></a>
+      <figcaption>{% if i.descripcion %}<div>{{ i.descripcion }}</div>{% endif %}<span class="muted">{{ i.iniciales or '?' }} · {{ i.creado_en | fh }}</span>
+        {% if puede_imagenes %}<form method="post" action="{{ url_for('imagenes.imagen_borrar', iid=i.id) }}" data-confirmar="¿Borrar esta imagen?">
+          <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="enlace" title="Borrar imagen">Borrar</button></form>{% endif %}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}<p class="muted">Todavía no hay imágenes.</p>{% endif %}
+  {% if puede_imagenes %}
+  <form method="post" action="{{ url_for('imagenes.imagenes_subir', pid=pid) }}" enctype="multipart/form-data" class="subida">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <input type="file" name="imagenes" accept="image/jpeg,image/png,image/webp" multiple required>
+    <input name="descripcion" maxlength="200" placeholder="Descripción (opcional, para todas las que subas)">
+    <div class="acciones"><button class="btn sec">Subir imágenes</button></div>
+  </form>
+  {% endif %}
+</div>

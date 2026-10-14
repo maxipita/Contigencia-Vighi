@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block titulo %}Facturar{% endblock %}
+{% block contenido %}
+<p class="no-imprimir"><a href="{{ url_for('facturacion.administracion') }}">Administración</a> › <a href="{{ url_for('facturacion.facturacion_lista') }}">Facturación</a></p>
+<div class="eyebrow">Administración</div>
+<h1><svg class="ic ic-titulo"><use href="#i-factura-dolar"/></svg> Facturar</h1>
+<p class="muted">Elegí los filtros y buscá los estudios a facturar; después los marcás y generás el borrador de la factura. Cada factura es de una sola cobertura; el nomenclador sale del tipo de muestra y el importe,
+  de la tarifa de la cobertura vigente a la fecha del estudio.</p>
+
+<form method="get" class="tarjeta filtros-facturar">
+  <input type="hidden" name="buscar" value="1">
+  <div class="fila-filtros">
+    <div class="campo"><label>Desde</label><input type="date" name="desde" value="{{ f.desde }}"></div>
+    <div class="campo"><label>Hasta</label><input type="date" name="hasta" value="{{ f.hasta }}"></div>
+    <div class="campo ancho-campo"><label>Cobertura</label>
+      <select name="cobertura">
+        <option value="">[ Todas ]</option>
+        {% for c in coberturas %}<option {{ 'selected' if f.cobertura == c }}>{{ c }}</option>{% endfor %}
+      </select></div>
+    <div class="campo ancho-campo"><label>Plan</label>
+      <select name="plan" disabled title="Todavía no se carga el plan del afiliado en los protocolos"><option value="">[ n/d ]</option></select></div>
+    <div class="campo ancho-campo"><label>Procedencia</label>
+      <select name="procedencia">
+        <option value="">[ Todas ]</option>
+        {% for p in procedencias %}<option {{ 'selected' if f.procedencia == p }}>{{ p }}</option>{% endfor %}
+      </select></div>
+  </div>
+  <div class="fila-filtros">
+    <div class="campo"><label>IVA</label>
+      <select name="iva">
+        <option value="">[ Todos ]</option>
+        {% for k, n in tipos_iva.items() %}<option value="{{ k }}" {{ 'selected' if f.iva == k }}>{{ n }}</option>{% endfor %}
+      </select></div>
+    <div class="campo"><label>Flujo</label>
+      <select name="flujo">
+        <option value="">[ Todos ]</option>
+        {% for k in ['BP', 'CT', 'PAP', 'IHQ'] %}<option {{ 'selected' if f.flujo == k }}>{{ k }}</option>{% endfor %}
+      </select></div>
+    <div class="campo ancho-campo"><label>Estudios</label>
+      <select name="zona">
+        <option value="">[ Todos ]</option>
+        {% for z in zonas %}<option {{ 'selected' if f.zona == z }}>{{ z }}</option>{% endfor %}
+      </select></div>
+    <div class="campo ancho-campo"><label>Tipo</label>
+      <select name="clase">
+        <option value="">[ Todos ]</option>
+        <option value="biop" {{ 'selected' if f.clase == 'biop' }}>Biopsias</option>
+        <option value="cito" {{ 'selected' if f.clase == 'cito' }}>Citologías</option>
+        <option value="ihq" {{ 'selected' if f.clase == 'ihq' }}>Inmunohistoquímicas</option>
+      </select></div>
+    <div class="campo"><label>Informados</label>
+      <select name="informados">
+        <option value="" {{ 'selected' if not f.informados }}>[ Todos ]</option>
+        <option value="si" {{ 'selected' if f.informados == 'si' }}>Informados</option>
+        <option value="no" {{ 'selected' if f.informados == 'no' }}>No informados</option>
+      </select></div>
+    <div class="campo"><label>Facturados</label>
+      <select name="facturados">
+        <option value="no" {{ 'selected' if f.facturados == 'no' }}>Sin facturar</option>
+        <option value="si" {{ 'selected' if f.facturados == 'si' }}>Ya facturados</option>
+        <option value="" {{ 'selected' if not f.facturados }}>[ Todos ]</option>
+      </select></div>
+    <div class="campo ancho-campo"><label>Prioridad técnicos</label>
+      <select name="prioridad">
+        <option value="">[ Todos ]</option>
+        <option value="ihq" {{ 'selected' if f.prioridad == 'ihq' }}>IHQ</option>
+        <option value="te" {{ 'selected' if f.prioridad == 'te' }}>Técnicas Especiales</option>
+      </select></div>
+    <div class="campo ancho-campo"><label>Buscar</label>
+      <input name="q" value="{{ f.q }}" placeholder="Protocolo, paciente, DNI o afiliado" autocomplete="off"></div>
+    <div class="campo"><label>&nbsp;</label><button class="btn">Buscar</button></div>
+  </div>
+</form>
+
+{% if buscado %}
+<form method="post" data-facturar>
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  {% for k in ['desde','hasta','cobertura','procedencia','iva','flujo','zona','clase','informados','facturados','prioridad','q'] %}<input type="hidden" name="{{ k }}" value="{{ f[k] }}">{% endfor %}
+  <div class="tarjeta">
+    <table class="tabla-facturar">
+      <tr>
+        <th><input type="checkbox" title="Marcar todos los que se pueden facturar" data-marcar-todos></th>
+        <th>Protocolo</th><th>Fecha</th><th>Paciente</th><th>Afiliado</th><th>Cobertura</th><th>Estudio</th><th>Código</th><th class="num">Cant.</th>
+        <th class="num">Unitario</th><th>IVA</th><th class="num">Importe</th><th>Estado</th>
+      </tr>
+      {% for r in filas %}
+      {% set posible = r.tarifa and not r.factura_id and r.cobertura %}
+      <tr class="{{ 'bloqueado' if not posible }}">
+        <td><input type="checkbox" name="ids" value="{{ r.id }}" class="fact-marca" data-importe="{{ r.importe or 0 }}" {{ 'disabled' if not posible }}></td>
+        <td><a href="{{ url_for('protocolos.protocolo', pid=r.protocolo_id) }}"><b>{{ r.numero }}</b></a></td>
+        <td class="muted">{{ r.fecha | f }}</td>
+        <td>{{ r.paciente }}</td>
+        <td class="muted">{{ r.afiliado }}</td>
+        <td>{{ r.cobertura or '—' }}</td>
+        <td><a href="{{ url_for('estudios.estudio', eid=r.id) }}">{{ r.etiqueta }}</a></td>
+        <td>{{ r.codigo }}</td>
+        <td class="num">{{ r.cantidad }}</td>
+        <td class="num">{% if r.tarifa %}{{ r.unitario | peso }}{% else %}<span class="lt" title="{{ r.motivo }}">{{ r.motivo | capitalize }}</span>{% endif %}</td>
+        <td>{{ tipos_iva[r.iva] }}</td>
+        <td class="num">{% if r.tarifa %}<b>{{ r.importe | peso }}</b>{% endif %}</td>
+        <td>
+          {% if r.factura_id %}<a class="chip activo" href="{{ url_for('facturacion.factura', fid=r.factura_id) }}">Facturado</a>{% endif %}
+          {% if r.informado %}<span class="chip informado">Informado</span>{% else %}<span class="chip">Pendiente</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="13" class="muted" style="text-align:center;padding:28px">No se encontraron protocolos para facturar con los filtros seleccionados.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% if total > filas | length %}<p class="muted">Se muestran los primeros {{ filas | length }} de {{ total }}: filtrá para ver el resto.</p>{% endif %}
+  {% if filas %}
+  <div class="acciones">
+    <button class="btn">Generar factura (borrador)</button>
+    <span class="muted" id="fact-resumen">Marcá los estudios que querés incluir.</span>
+  </div>
+  <p class="muted">Los estudios sin nomenclador o sin importe vigente no se pueden marcar: asociá el tipo de muestra en <a href="{{ url_for('facturacion.nomencladores') }}">Nomencladores</a>
+    o cargá el importe en el <a href="{{ url_for('facturacion.tarifario') }}">tarifario</a>.</p>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}
