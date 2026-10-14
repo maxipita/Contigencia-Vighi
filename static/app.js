@@ -459,7 +459,10 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
       alert(e.message);
       b.disabled = false;
     }
+  });
+})();
 
+(function () {
   const form = document.querySelector("form[data-facturar]");
   if (!form) return;
   const marcas = () => [...form.querySelectorAll(".fact-marca:not(:disabled)")];
