@@ -225,3 +225,17 @@ def armar_mensaje(intro, datos, centro=None):
 <tr><td style="background:#e9dcf2;padding:14px 24px;text-align:center;font-size:12px;color:#4b1d6b"><b>{escape(PIE)}</b><br>{escape(contacto)}<br><span style="opacity:.8">{escape(AVISO)}</span></td></tr>
 </table></td></tr></table></body></html>"""
     return texto, html
+
+
+def armar_borrador(destinos, asunto, texto, html, adjunto, nombre_adjunto):
+    m = EmailMessage()
+    m["X-Unsent"] = "1"
+    m["Subject"] = asunto
+    if len(destinos) == 1:
+        m["To"] = destinos[0]
+    else:
+        m["Bcc"] = ", ".join(destinos)
+    m.set_content(texto)
+    m.add_alternative(html, subtype="html")
+    m.add_attachment(adjunto, maintype="application", subtype="pdf", filename=nombre_adjunto)
+    return m.as_bytes()

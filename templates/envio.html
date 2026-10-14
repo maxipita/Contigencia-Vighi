@@ -35,7 +35,7 @@
 {% endif %}
 
 {% if not email_ok %}
-<div class="aviso error">El envío por e-mail todavía no está configurado en este servidor (falta {{ faltante | join(', ') }} en <code>data/cloudflare.env</code>). Mientras tanto se puede enviar por WhatsApp.</div>
+<div class="aviso">El envío automático por e-mail no está configurado en este servidor, y no hace falta: con <b>Abrir en mi correo</b> o <b>Descargar borrador</b> el mensaje se prepara y lo enviás desde tu propio Outlook, sin cuenta ni clave en el sistema.</div>
 {% endif %}
 
 <form method="post" action="{{ url_for('envio_enviar', pid=p.id) }}" id="form-envio" class="{{ '' if vigente else 'apagado' }}">
@@ -119,8 +119,10 @@
       </div>
     </div>
     <div class="acciones">
-      <button class="btn" id="btn-enviar" {{ 'disabled' if not (email_ok and vigente) }}><svg class="ic"><use href="#i-mail"/></svg><span>Enviar por e-mail</span></button>
-      <span class="muted" id="cuenta-envio">Cada destinatario recibe su propio e-mail: no ven las direcciones de los demás.</span>
+      <button type="button" class="btn {{ 'sec' if email_ok else '' }}" data-correo="mailto" {{ 'disabled' if not vigente }}><svg class="ic"><use href="#i-mail"/></svg><span>Abrir en mi correo</span></button>
+      <button class="btn sec" formaction="{{ url_for('envio_correo', pid=p.id) }}" name="modo" value="eml" data-borrador {{ 'disabled' if not vigente }} title="Un archivo .eml con el mensaje y el PDF adjunto: al abrirlo se ve como mensaje nuevo en Outlook"><svg class="ic"><use href="#i-descargar"/></svg><span>Descargar borrador (.eml)</span></button>
+      {% if email_ok %}<button class="btn" id="btn-enviar" {{ 'disabled' if not vigente }}><svg class="ic"><use href="#i-mail"/></svg><span>Enviar desde el sistema</span></button>{% endif %}
+      <span class="muted" id="cuenta-envio">Desde el sistema, cada destinatario recibe su propio e-mail. Con tu correo, las direcciones van en copia oculta.</span>
     </div>
   </div>
 </form>
@@ -134,10 +136,10 @@
     {% for v in historial %}
     <tr>
       <td>{{ v.creado_en | fh }}</td>
-      <td><svg class="ic"><use href="#{{ 'i-mail' if v.canal == 'email' else 'i-whatsapp' }}"/></svg> {{ 'E-mail' if v.canal == 'email' else 'WhatsApp' }}</td>
+      <td><svg class="ic"><use href="#{{ 'i-whatsapp' if v.canal == 'whatsapp' else 'i-mail' }}"/></svg> {{ {'email': 'E-mail', 'whatsapp': 'WhatsApp', 'correo': 'Correo propio'}.get(v.canal, v.canal) }}</td>
       <td>{{ v.destino }}</td>
       <td>{{ roles.get(v.rol, v.rol) }}</td>
-      <td>{% if v.estado == 'enviado' %}<span class="ot">Enviado</span>{% elif v.estado == 'abierto' %}<span class="chip" title="{{ v.detalle }}">Abierto en WhatsApp</span>{% else %}<span class="lt" title="{{ v.detalle }}">Error</span>{% if v.detalle %}<div class="muted">{{ v.detalle }}</div>{% endif %}{% endif %}</td>
+      <td>{% if v.estado == 'enviado' %}<span class="ot">Enviado</span>{% elif v.estado == 'abierto' %}<span class="chip" title="{{ v.detalle }}">{{ 'Abierto en WhatsApp' if v.canal == 'whatsapp' else 'Preparado en el correo' }}</span>{% else %}<span class="lt" title="{{ v.detalle }}">Error</span>{% if v.detalle %}<div class="muted">{{ v.detalle }}</div>{% endif %}{% endif %}</td>
       <td>{{ v.version or '—' }}{% if emitido and v.version != emitido.version %} <span class="muted">(anterior)</span>{% endif %}</td>
       <td>{{ v.iniciales or '—' }}</td>
     </tr>

@@ -425,7 +425,7 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     if (paciente && paciente.checked) n += 1;
     const otros = formulario.querySelector("[name=otro_email]").value.split(/[\s,;]+/).filter((x) => x.includes("@"));
     n += otros.length;
-    boton.querySelector("span").textContent = n ? `Enviar por e-mail (${n})` : "Enviar por e-mail";
+    if (boton) boton.querySelector("span").textContent = n ? `Enviar desde el sistema (${n})` : "Enviar desde el sistema";
     cuenta.textContent = n ? aviso : "Marcá a quién enviar el informe.";
   }
   formulario.addEventListener("input", (ev) => {
@@ -434,8 +434,29 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     actualizar();
   });
   formulario.addEventListener("change", actualizar);
-  formulario.addEventListener("submit", () => { boton.disabled = true; boton.querySelector("span").textContent = "Enviando…"; });
+  formulario.addEventListener("submit", (ev) => {
+    if (ev.submitter && ev.submitter.hasAttribute("data-borrador")) { setTimeout(() => location.reload(), 1500); return; }
+    if (boton) { boton.disabled = true; boton.querySelector("span").textContent = "Enviando…"; }
+  });
   actualizar();
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-correo]");
+    if (!b) return;
+    const datos = new FormData(formulario);
+    datos.set("modo", "mailto");
+    b.disabled = true;
+    try {
+      const r = await fetch(location.pathname + "/correo", { method: "POST", body: datos, headers: { "X-CSRF": formulario.querySelector("[name=_csrf]").value } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo preparar el mensaje.");
+      location.href = d.enlace;
+      setTimeout(() => location.reload(), 2000);
+    } catch (e) {
+      alert(e.message);
+      b.disabled = false;
+    }
+  });
 
   document.addEventListener("click", async (ev) => {
     const b = ev.target.closest("[data-wa]");

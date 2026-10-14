@@ -1705,6 +1705,34 @@ def envio(pid):
                            telefono_paciente=envios.whatsapp_visible(envios.whatsapp_numero(p["telefono"])) or (p["telefono"] or ""))
 
 
+def destinos_del_formulario():
+    pedidos = []
+    if request.form.get("usar_paciente") == "1":
+        correo = request.form.get("paciente_email", "").strip().lower()
+        if not envios.email_valido(correo):
+            return None, "El e-mail del paciente no es válido."
+        pedidos.append(("paciente", correo))
+    for correo in request.form.getlist("ubic_email"):
+        if not envios.email_valido(correo):
+            return None, f"El e-mail {correo[:60]} no es válido."
+        pedidos.append(("ubicacion", correo.strip().lower()))
+    otros = request.form.get("otro_email", "").strip()
+    if otros:
+        sueltos = [x for x in re.split(r"[\s,;]+", otros) if x]
+        malos = [x for x in sueltos if not envios.email_valido(x)]
+        if malos:
+            return None, f"El e-mail {malos[0][:60]} no es válido."
+        pedidos += [("otro", x.lower()) for x in sueltos]
+    vistos = {}
+    for rol, correo in pedidos:
+        vistos.setdefault(correo, rol)
+    if not vistos:
+        return None, "Elegí a quién enviar el informe."
+    if len(vistos) > envios.MAX_DESTINOS:
+        return None, f"Se pueden enviar hasta {envios.MAX_DESTINOS} e-mails por vez."
+    return vistos, None
+
+
 @app.route("/protocolo/<int:pid>/enviar", methods=["POST"])
 @requiere_permiso("informe")
 def envio_enviar(pid):
@@ -1718,34 +1746,9 @@ def envio_enviar(pid):
     if not envios.configurado():
         flash("El envío por e-mail no está configurado en este servidor.", "error")
         return volver
-    pedidos = []
-    if request.form.get("usar_paciente") == "1":
-        correo = request.form.get("paciente_email", "").strip().lower()
-        if not envios.email_valido(correo):
-            flash("El e-mail del paciente no es válido.", "error")
-            return volver
-        pedidos.append(("paciente", correo))
-    for correo in request.form.getlist("ubic_email"):
-        if not envios.email_valido(correo):
-            flash(f"El e-mail {correo[:60]} no es válido.", "error")
-            return volver
-        pedidos.append(("ubicacion", correo.strip().lower()))
-    otros = request.form.get("otro_email", "").strip()
-    if otros:
-        sueltos = [x for x in re.split(r"[\s,;]+", otros) if x]
-        malos = [x for x in sueltos if not envios.email_valido(x)]
-        if malos:
-            flash(f"El e-mail {malos[0][:60]} no es válido.", "error")
-            return volver
-        pedidos += [("otro", x.lower()) for x in sueltos]
-    vistos = {}
-    for rol, correo in pedidos:
-        vistos.setdefault(correo, rol)
-    if not vistos:
-        flash("Elegí a quién enviar el informe.", "error")
-        return volver
-    if len(vistos) > envios.MAX_DESTINOS:
-        flash(f"Se pueden enviar hasta {envios.MAX_DESTINOS} e-mails por vez.", "error")
+    vistos, error = destinos_del_formulario()
+    if error:
+        flash(error, "error")
         return volver
     asunto = " ".join(request.form.get("asunto", "").split())[:150] or textos_envio(p)["asunto"]
     cuerpo = request.form.get("cuerpo", "").replace("\r\n", "\n").strip()[:3000] or textos_envio(p)["cuerpo"]
@@ -1775,6 +1778,44 @@ def envio_enviar(pid):
     for destino, _, detalle in mal:
         flash(f"No se pudo enviar a {destino}: {detalle}", "error")
     return volver
+
+
+@app.route("/protocolo/<int:pid>/enviar/correo", methods=["POST"])
+@requiere_permiso("informe")
+def envio_correo(pid):
+    yo = usuario_actual()
+    p = protocolo_o_404(pid)
+    modo = "eml" if request.form.get("modo") == "eml" else "mailto"
+
+    def fallo(mensaje):
+        if modo == "mailto":
+            return jsonify(error=mensaje), 400
+        flash(mensaje, "error")
+        return redirect(url_for("envio", pid=pid))
+
+    emitido, vigente = informe_para_enviar(pid)
+    if not vigente:
+        return fallo("Primero hay que generar el informe: el guardado no existe o cambió el protocolo.")
+    vistos, error = destinos_del_formulario()
+    if error:
+        return fallo(error)
+    asunto = " ".join(request.form.get("asunto", "").split())[:150] or textos_envio(p)["asunto"]
+    cuerpo = request.form.get("cuerpo", "").replace("\r\n", "\n").strip()[:3000] or textos_envio(p)["cuerpo"]
+    texto, html = envios.armar_mensaje(cuerpo, datos_del_mensaje(p), informes.CENTRO if informes else {})
+    ahora_ = db.ahora()
+    detalle = "Se abrió en el correo propio: el PDF lo adjunta quien envía" if modo == "mailto" else "Borrador (.eml) descargado con el PDF adjunto: lo envía quien lo abre"
+    db.lote_ex([("INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                 (pid, emitido["id"], emitido["version"], "correo", rol, destino, "abierto", detalle, yo["id"], ahora_)) for destino, rol in vistos.items()]
+               + [("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
+                   (ahora_, yo["id"], pid, None, "informe_envio", f"Se preparó el envío por correo propio a {', '.join(vistos)}"))])
+    if modo == "mailto":
+        destinos = list(vistos)
+        campo = "to=" if len(destinos) == 1 else "bcc="
+        return jsonify(enlace="mailto:?" + campo + quote(",".join(destinos), safe="@,") + "&subject=" + quote(asunto) + "&body=" + quote(texto))
+    pdf = db.uno("SELECT pdf, archivo FROM informes_emitidos WHERE id=?", (emitido["id"],))
+    contenido = envios.armar_borrador(list(vistos), asunto, texto, html, bytes(pdf["pdf"]), pdf["archivo"] or "informe.pdf")
+    seguro = "".join(c if c.isalnum() or c in "-_" else "_" for c in p["numero"])
+    return send_file(io.BytesIO(contenido), mimetype="message/rfc822", as_attachment=True, download_name=f"Informe_{seguro}.eml", max_age=0)
 
 
 @app.route("/protocolo/<int:pid>/enviar/whatsapp", methods=["POST"])
