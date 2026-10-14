@@ -11,3 +11,9 @@ def tipos_de_muestra(tipo):
 
 def tipos_de_muestra_bp():
     return tipos_de_muestra("BP")
+
+
+def muestras_posibles(e):
+    filas = db.q("SELECT subcategoria, tipo_muestra FROM catalogo WHERE tipo=? AND sitio=? AND tipo_muestra IS NOT NULL AND tipo_muestra<>'' ORDER BY tipo_muestra", (e["tipo"], e["sitio"] or ""))
+    propias = [r["tipo_muestra"] for r in filas if (r["subcategoria"] or "") == (e["subcategoria"] or "")] or [r["tipo_muestra"] for r in filas]
+    return list(dict.fromkeys(propias + ([e["tipo_muestra"]] if e["tipo_muestra"] else [])))

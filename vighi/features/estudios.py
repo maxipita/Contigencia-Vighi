@@ -6,6 +6,7 @@ from vighi.core import db
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
+from vighi.servicios.catalogo import muestras_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado
 from vighi.servicios.fichas import INCLUSIONES, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, guardar_seccion, habilitada, macro_editable, motivo_no_listo, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
@@ -79,6 +80,23 @@ def estudio_editar(eid):
     lote_fijo = lote_del_protocolo(p["id"])
     return render_template("estudios/estudio_form.html", p=p, estudios=[e], editando=eid, lote_editable=es_primero,
                            lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **ctx)
+
+
+@bp.route("/estudio/<int:eid>/muestra", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_muestra(eid):
+    e = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
+    nuevo = request.form.get("tipo_muestra", "").strip()
+    destino = redirect(url_for("protocolos.protocolo", pid=e["protocolo_id"]))
+    if e["anulado"]:
+        flash("El estudio está anulado: no se puede cambiar la muestra.", "error")
+    elif nuevo not in muestras_posibles(e):
+        flash("Elegí un tipo de muestra de la lista.", "error")
+    elif nuevo != (e["tipo_muestra"] or ""):
+        db.ex("UPDATE estudios SET tipo_muestra=? WHERE id=?", (nuevo, eid))
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "cambiar_muestra", f"{etiqueta(e)}: {e['tipo_muestra'] or 'sin tipo'} → {nuevo}", eid)
+        flash(f"Tipo de muestra cambiado a «{nuevo}».", "ok")
+    return destino
 
 
 @bp.route("/estudio/<int:eid>")
