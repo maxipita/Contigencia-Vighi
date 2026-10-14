@@ -311,4 +311,6 @@ def anular(eid):
         flash("Estudio anulado." if nuevo else "Estudio reactivado.", "ok")
         if not nuevo:
             avisar_lote_lleno(ubicar_en_lote(e["protocolo_id"], usuario_actual()["id"]))
+    if request.form.get("volver") == "protocolo":
+        return redirect(url_for("protocolos.protocolo", pid=e["protocolo_id"]))
     return redirect(url_for("estudios.estudio", eid=eid))

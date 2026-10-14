@@ -590,3 +590,34 @@ document.querySelectorAll("[data-filtrar-filas]").forEach((entrada) => {
     });
   });
 });
+
+(function () {
+  document.querySelectorAll("form.form-estudios").forEach((f) => {
+    let enviado = false;
+    const botones = () => f.querySelectorAll("button:not([type=button])");
+    f.addEventListener("submit", (ev) => {
+      if (enviado) { ev.preventDefault(); return; }
+      enviado = true;
+      setTimeout(() => botones().forEach((b) => { b.disabled = true; }));
+    });
+    window.addEventListener("pageshow", (ev) => { if (ev.persisted) location.reload(); });
+    if (!f.dataset.soltar) return;
+    window.addEventListener("pagehide", () => {
+      if (enviado) return;
+      const d = new FormData();
+      d.append("_csrf", f.querySelector("[name=_csrf]").value);
+      d.append("edicion", f.querySelector("[name=edicion]").value);
+      navigator.sendBeacon(f.dataset.soltar, d);
+    });
+  });
+})();
+
+document.querySelectorAll("[data-alternar-anulados]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const tabla = b.closest(".tarjeta").querySelector("table");
+    const ocultas = [...tabla.querySelectorAll(".fila-anulada")];
+    const ver = ocultas.some((tr) => tr.hidden);
+    ocultas.forEach((tr) => { tr.hidden = !ver; });
+    b.textContent = (ver ? "Ocultar anulados (" : "Ver anulados (") + b.dataset.n + ")";
+  });
+});

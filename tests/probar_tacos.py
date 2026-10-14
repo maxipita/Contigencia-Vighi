@@ -1,6 +1,7 @@
 import builtins
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -150,7 +151,8 @@ with A.app.app_context():
 lote_inicial = filas[0]['lote_id']
 avisos = []
 for f in filas:
-    datos = {'_csrf': tok(c), 'numero': f['numero'], 'apellido': 'Paciente', 'nombre': f['numero'], 'e-0-id': str(f['eid']), 'e-0-tipo': 'BP',
+    marca = re.search(r'name="edicion" value="([0-9a-f]+)"', c.get(f"/protocolo/{f['id']}/editar").get_data(as_text=True)).group(1)
+    datos = {'_csrf': tok(c), 'edicion': marca, 'numero': f['numero'], 'apellido': 'Paciente', 'nombre': f['numero'], 'e-0-id': str(f['eid']), 'e-0-tipo': 'BP',
              'e-0-subcategoria': combo['subcategoria'], 'e-0-sitio': 'Mama', 'e-0-tipo_muestra': combo['tipo_muestra'], 'e-0-cantidad': '3',
              'e-0-responsable_id': str(ids['med']), 'e-0-lote_id': str(lote_inicial)}
     avisos.append('se llenó' in c.post(f"/protocolo/{f['id']}/editar", data=datos, follow_redirects=True).get_data(as_text=True))

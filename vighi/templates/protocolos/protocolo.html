@@ -106,10 +106,10 @@
       <tr><th>Estudio</th><th>Muestra</th><th>Tacos</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th></tr>
       {% for tipo, grupo in estudios | groupby('tipo') %}
       {% set activos = grupo | rejectattr('anulado') | list %}
-      <tr class="flujo-cab"><td colspan="8"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
+      <tr class="flujo-cab{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}><td colspan="8"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
         {% if activos | length > 1 %}<span class="muted">· flujo compartido por {{ activos | length }} estudios (mismo recorrido)</span>{% endif %}</td></tr>
       {% for e in grupo %}
-      <tr class="{{ 'bloqueado' if e.anulado }}">
+      <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
         <td><a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>
         <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
         <td>{{ e.tacos if e.tacos is not none else '' }}</td>
@@ -123,6 +123,8 @@
       {% endfor %}
       {% endfor %}
     </table>
+    {% set n_anulados = estudios | selectattr('anulado') | list | length %}
+    {% if n_anulados %}<div class="acciones"><button type="button" class="btn sec mini-btn" data-alternar-anulados data-n="{{ n_anulados }}">Ver anulados ({{ n_anulados }})</button></div>{% endif %}
     {% if puede('protocolo_editar') %}
     <div class="acciones">
       <span class="muted">Agregar estudio:</span>

@@ -1,3 +1,6 @@
+import secrets
+import time
+
 from flask import abort, redirect, request, url_for
 
 from vighi.core import db
@@ -116,6 +119,46 @@ def protocolo_o_404(pid):
 
 def completo(p, estudios):
     return bool(p["apellido"] and p["nombre"] and estudios and all(e["cantidad"] for e in estudios if not e["anulado"]))
+
+
+VIGENCIA_EDICION = 900
+
+
+def edicion_vigente(pid):
+    return db.uno("""SELECT e.usuario_id, e.token, e.desde, e.vence, u.nombre FROM ediciones e LEFT JOIN usuarios u ON u.id=e.usuario_id
+                     WHERE e.protocolo_id=? AND e.vence>=?""", (pid, time.time()))
+
+
+def ediciones_en_curso():
+    return {r["protocolo_id"]: r for r in db.q("""SELECT e.protocolo_id, e.usuario_id, e.desde, u.nombre FROM ediciones e
+                                                  LEFT JOIN usuarios u ON u.id=e.usuario_id WHERE e.vence>=?""", (time.time(),))}
+
+
+def tomar_edicion(pid, usuario_id):
+    token = secrets.token_hex(16)
+    ahora_ = time.time()
+    db.ex("DELETE FROM ediciones WHERE protocolo_id=? AND vence<?", (pid, ahora_))
+    try:
+        db.ex("INSERT INTO ediciones (protocolo_id, usuario_id, token, desde, vence) VALUES (?,?,?,?,?)",
+              (pid, usuario_id, token, db.ahora(), ahora_ + VIGENCIA_EDICION))
+    except db.IntegrityError:
+        db.ex("UPDATE ediciones SET token=?, vence=? WHERE protocolo_id=? AND usuario_id=?", (token, ahora_ + VIGENCIA_EDICION, pid, usuario_id))
+    fila = db.uno("SELECT token FROM ediciones WHERE protocolo_id=?", (pid,))
+    if fila and fila["token"] == token:
+        return token, None
+    return None, edicion_vigente(pid)
+
+
+def edicion_propia(pid, usuario_id, token):
+    fila = db.uno("SELECT usuario_id, token FROM ediciones WHERE protocolo_id=?", (pid,))
+    return bool(token and fila and fila["usuario_id"] == usuario_id and fila["token"] == token)
+
+
+def soltar_edicion(pid, usuario_id=None, token=None):
+    if token is None:
+        db.ex("DELETE FROM ediciones WHERE protocolo_id=?", (pid,))
+    else:
+        db.ex("DELETE FROM ediciones WHERE protocolo_id=? AND usuario_id=? AND token=?", (pid, usuario_id, token))
 
 
 CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "lugar_entrega", "fecha_recoleccion"]

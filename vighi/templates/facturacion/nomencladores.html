@@ -72,39 +72,6 @@
       <div class="acciones"><button class="btn">Guardar</button></div>
     </form>
   </div>
-
-  <div class="tarjeta">
-    <h2>Importar asignaciones a {{ actual.nombre }}</h2>
-    <form method="post">
-      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tarifario" value="{{ actual.id }}"><input type="hidden" name="accion" value="importar">
-      <p class="muted" style="margin-top:0">Una línea por asignación: <b>tipo (BP, CT, PAP); tipo de muestra; sitio; nomenclador</b>. Dejá vacío el tipo de muestra o el sitio para que valga para cualquiera. Las líneas sin nomenclador se omiten, así que se puede completar la planilla descargada de a partes. Con <b>-</b> como nomenclador, ese tipo de muestra y sitio <b>no tiene código asignado</b> en esta tarifa.</p>
-      <textarea name="texto" rows="4" spellcheck="false" placeholder="BP; Biopsia; ; 150101&#10;BP; Resección; ; 150102"></textarea>
-      <div class="acciones"><button class="btn sec">Importar</button></div>
-    </form>
-  </div>
-
-  <div class="tarjeta">
-    <h2>Nomencladores</h2>
-    <form method="post">
-      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tarifario" value="{{ actual.id }}"><input type="hidden" name="accion" value="guardar_nomenclador">
-      <label>Código</label><input name="codigo" required autocomplete="off" placeholder="150102">
-      <label style="margin-top:8px">Descripción</label><input name="descripcion" autocomplete="off">
-      <div class="acciones"><button class="btn sec">Guardar nomenclador</button></div>
-    </form>
-    <table style="margin-top:12px">
-      <tr><th>Código</th><th>Descripción</th><th>Usos</th><th></th></tr>
-      {% for n in nomencladores %}
-      <tr>
-        <td><b>{{ n.codigo }}</b></td><td>{{ n.descripcion }}</td><td class="muted">{{ uso.get(n.codigo, 0) }}</td>
-        <td><form method="post" data-confirmar="¿Borrar el nomenclador {{ n.codigo }}?">
-          <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tarifario" value="{{ actual.id }}"><input type="hidden" name="accion" value="borrar_nomenclador"><input type="hidden" name="codigo" value="{{ n.codigo }}">
-          <button class="lapiz">Borrar</button></form></td>
-      </tr>
-      {% else %}
-      <tr><td colspan="4" class="muted">Sin nomencladores: se crean al cargar importes en el tarifario.</td></tr>
-      {% endfor %}
-    </table>
-  </div>
 </div>
 </div>
 {% endblock %}
