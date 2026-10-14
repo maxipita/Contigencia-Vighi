@@ -11,7 +11,7 @@ from vighi.core.texto import sin_acentos
 from vighi.dominio import facturacion
 from vighi.servicios.catalogo import tipos_de_muestra, tipos_de_muestra_bp
 from vighi.servicios.consultas import cargar_estudios
-from vighi.servicios.facturas import (coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, importar_asignaciones, items_de_factura,
+from vighi.servicios.facturas import (coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, items_de_factura,
                                      planilla_de_tarifa, sentencias_asignacion, tarifa_elegida)
 
 bp = Blueprint("facturacion", __name__)
@@ -415,23 +415,7 @@ def nomencladores():
     destino = url_for("facturacion.nomencladores", tarifario=actual["id"])
     if request.method == "POST":
         accion = request.form.get("accion", "")
-        if accion == "guardar_nomenclador":
-            codigo = request.form.get("codigo", "").strip()[:20]
-            descripcion = request.form.get("descripcion", "").strip()[:300]
-            if not codigo:
-                flash("Indicá el código del nomenclador.", "error")
-            else:
-                db.lote_ex([("DELETE FROM nomencladores WHERE codigo=?", (codigo,)), ("INSERT INTO nomencladores (codigo, descripcion) VALUES (?,?)", (codigo, descripcion))])
-                db.auditar(yo["id"], None, "nomenclador", f"{codigo} · {descripcion}")
-                flash("Nomenclador guardado.", "ok")
-        elif accion == "borrar_nomenclador":
-            codigo = request.form.get("codigo", "")
-            if db.uno("SELECT 1 FROM tarifario_valores WHERE codigo=?", (codigo,)) or db.uno("SELECT 1 FROM nomenclador_muestras WHERE codigo=?", (codigo,)):
-                flash("No se puede borrar: tiene importes o tipos de muestra asociados.", "error")
-            else:
-                db.ex("DELETE FROM nomencladores WHERE codigo=?", (codigo,))
-                flash("Nomenclador borrado.", "ok")
-        elif accion == "asignar":
+        if accion == "asignar":
             tipo = request.form.get("tipo", "")
             tipo_muestra = " ".join(request.form.get("tipo_muestra", "").split())[:80]
             sitio = " ".join(request.form.get("sitio", "").split())[:80]
@@ -458,18 +442,8 @@ def nomencladores():
         elif accion == "borrar_asignacion" and request.form.get("id", "").isdigit():
             db.ex("DELETE FROM nomenclador_muestras WHERE id=? AND tarifario_id=?", (int(request.form["id"]), actual["id"]))
             flash("Asignación borrada.", "ok")
-        elif accion == "importar":
-            cantidad, errores, sin_codigo = importar_asignaciones(actual["id"], request.form.get("texto", ""))
-            if errores:
-                flash("No se importó nada: " + " · ".join(errores[:6]), "error")
-            elif not cantidad:
-                flash("No hay líneas con nomenclador para importar.", "error")
-            else:
-                db.auditar(yo["id"], None, "nomenclador_muestra", f"{actual['nombre']}: {cantidad} asignaciones importadas")
-                flash(f"Se importaron {cantidad} asignaciones en {actual['nombre']}." + (f" {sin_codigo} línea(s) sin nomenclador se dejaron como estaban." if sin_codigo else ""), "ok")
         return redirect(destino)
     lista = db.q("SELECT codigo, descripcion FROM nomencladores ORDER BY codigo")
-    uso = {r["codigo"]: r["n"] for r in db.q("SELECT codigo, COUNT(*) AS n FROM nomenclador_muestras GROUP BY codigo")}
     asignaciones = db.q("""SELECT m.id, m.tipo, m.sitio, m.tipo_muestra, m.codigo, n.descripcion FROM nomenclador_muestras m
                            LEFT JOIN nomencladores n ON n.codigo=m.codigo WHERE m.tarifario_id=? ORDER BY m.tipo, m.tipo_muestra, m.sitio""", (actual["id"],))
     cubiertos = {(r["tarifario_id"], r["tipo"], sin_acentos(r["tipo_muestra"])) for r in db.q("SELECT tarifario_id, tipo, tipo_muestra FROM nomenclador_muestras WHERE sitio=''")}
@@ -480,7 +454,7 @@ def nomencladores():
             sin_asignar.append((facturacion.TIPOS_ESTUDIO[tipo], faltan))
     sitios = sorted({r["sitio"] for r in db.q("SELECT DISTINCT sitio FROM catalogo WHERE tipo='BP'")})
     heredadas = db.uno("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=?", (general["id"],))["n"] if actual["id"] != general["id"] else 0
-    return render_template("facturacion/nomencladores.html", nomencladores=lista, uso=uso, asignaciones=asignaciones, tipos=facturacion.TIPOS_ESTUDIO, sin_asignar=sin_asignar,
+    return render_template("facturacion/nomencladores.html", nomencladores=lista, asignaciones=asignaciones, tipos=facturacion.TIPOS_ESTUDIO, sin_asignar=sin_asignar,
                            tipos_muestra=tipos_de_muestra_bp(), sitios=sitios, tarifarios=tarifarios, actual=actual, general=general, heredadas=heredadas)
 
 

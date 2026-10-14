@@ -8,6 +8,7 @@ from werkzeug.datastructures import MultiDict
 
 A, db, ids, admin = datos_informe.preparar()
 from vighi.dominio import estudios as dom_estudios
+from vighi.servicios.facturas import importar_asignaciones
 F = datos_informe.FALSO
 c = A.app.test_client()
 with c.session_transaction() as s:
@@ -22,6 +23,11 @@ def chequear(n, ok, det=''):
     print(('  OK   ' if ok else '  FALLA'), n, '' if ok else det)
     if not ok:
         fallas.append(n)
+
+
+def importar(tarifario_id, texto):
+    with A.app.app_context():
+        return importar_asignaciones(tarifario_id, texto)
 
 
 def post(url, datos=None):
@@ -74,10 +80,10 @@ h = post('/nomencladores', {'accion': 'asignar', 'tipo': 'BP', 'tipo_muestra': '
 h = post('/nomencladores', {'accion': 'asignar', 'tipo': 'CT', 'tipo_muestra': '', 'sitio': '', 'codigo': '150106'})
 h = post('/nomencladores', {'accion': 'asignar', 'tipo': 'BP', 'tipo_muestra': '', 'sitio': '', 'codigo': 'NOEXISTE'})
 chequear('no asigna un nomenclador inexistente', 'que exista' in h)
-h = post('/nomencladores', {'accion': 'importar', 'texto': 'BP; Resección; ; 150102\nPAP; ; ; 150106'})
-chequear('importa asignaciones', 'Se importaron 2 asignaciones' in h)
-h = post('/nomencladores', {'accion': 'importar', 'texto': 'XX; ; ; 150102'})
-chequear('importación inválida no carga nada', 'No se importó nada' in h)
+cantidad, errores, _ = importar(general, 'BP; Resección; ; 150102\nPAP; ; ; 150106')
+chequear('importa asignaciones', cantidad == 2 and not errores, (cantidad, errores))
+cantidad, errores, _ = importar(general, 'XX; ; ; 150102')
+chequear('importación inválida no carga nada', errores and not cantidad, (cantidad, errores))
 h = c.get('/nomencladores').get_data(as_text=True)
 chequear('pantalla de nomencladores', '150101' in h and 'Biopsia por incisión' in h)
 
@@ -191,8 +197,8 @@ r = c.get(f'/nomencladores/planilla?tarifario={tarifa_cob}')
 planilla = r.get_data(as_text=True)
 chequear('descarga la planilla con todos los tipos de muestra', r.status_code == 200 and 'attachment' in r.headers.get('Content-Disposition', '') and planilla.count('\r\n') > 30
          and 'BP;Biopsia;;777001' in planilla and 'Tipo;Tipo de muestra;Sitio;Nomenclador' in planilla, planilla[:300])
-h = post('/nomencladores', {'accion': 'importar', 'tarifario': str(tarifa_cob), 'texto': 'BP; Resección; ; 150102\nBP; Extirpación; ; \nCT; Líquido; ; 150106'})
-chequear('importa omitiendo las líneas sin nomenclador', 'Se importaron 2 asignaciones' in h and '1 línea(s) sin nomenclador' in h, h[:200])
+cantidad, errores, sin_codigo = importar(tarifa_cob, 'BP; Resección; ; 150102\nBP; Extirpación; ; \nCT; Líquido; ; 150106')
+chequear('importa omitiendo las líneas sin nomenclador', cantidad == 2 and sin_codigo == 1 and not errores, (cantidad, errores, sin_codigo))
 chequear('lo importado queda en la tarifa elegida', F.con.execute("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=? AND codigo IN ('150102','150106')", (tarifa_cob,)).fetchone()['n'] == 2)
 with A.app.app_context():
     t_id, t_nombre = cli.tarifa_de(COB)
@@ -213,8 +219,8 @@ except SystemExit as e:
 chequear('sin tarifa asignada la herramienta avisa', avisa)
 
 print('combinaciones que no se facturan en una cobertura')
-h = post('/nomencladores', {'accion': 'importar', 'tarifario': str(tarifa_cob), 'texto': 'BP; Biopsia; Hígado; -\nBP; Biopsia; ; 777001'})
-chequear('importa "-" como no se factura', 'Se importaron 2 asignaciones' in h, h[:200])
+cantidad, errores, _ = importar(tarifa_cob, 'BP; Biopsia; Hígado; -\nBP; Biopsia; ; 777001')
+chequear('importa "-" como no se factura', cantidad == 2 and not errores, (cantidad, errores))
 with A.app.app_context():
     ctx = dom_fact.contexto()
     con_codigo = dom_fact.resolver(ctx, COB, 'BP', 'Estómago', 'Biopsia', '2026-10-14')
@@ -223,6 +229,10 @@ chequear('el sitio marcado no se factura aunque la general tenga código', not s
 chequear('el resto de los sitios sigue facturando', con_codigo.get('codigo') == '777001', con_codigo)
 chequear('en la pantalla figura como "No tiene código asignado"', 'No tiene código asignado' in c.get(f'/nomencladores?tarifario={tarifa_cob}').get_data(as_text=True))
 chequear('la planilla lo devuelve como "-"', 'BP;Biopsia;Hígado;-' in c.get(f'/nomencladores/planilla?tarifario={tarifa_cob}').get_data(as_text=True))
+
+print('tarjetas retiradas de la pantalla')
+h = c.get(f'/nomencladores?tarifario={tarifa_cob}').get_data(as_text=True)
+chequear('ya no ofrece importar asignaciones ni administrar la lista de nomencladores', 'value="importar"' not in h and 'guardar_nomenclador' not in h and 'borrar_nomenclador' not in h)
 
 print('editar el nomenclador de una asignación')
 fila_id = F.con.execute("SELECT id FROM nomenclador_muestras WHERE tarifario_id=? AND tipo='BP' AND tipo_muestra='Biopsia' AND sitio=''", (tarifa_cob,)).fetchone()['id']
