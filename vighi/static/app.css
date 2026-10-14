@@ -529,3 +529,11 @@ details.modificar .acciones { margin-top: 6px; }
 .cobro-empresa:hover { text-decoration: underline; }
 .cobros-mes-cab { font-size: 18px; font-weight: 500; color: var(--pizarra); }
 .cobros-mes-cab b { font-weight: 500; }
+.editar-codigo { display: flex; gap: 6px; align-items: center; margin: 0; }
+.editar-codigo input { width: 110px; }
+.buscador-combo .sugerencias { position: fixed; z-index: 1000; right: auto; min-width: 280px; width: max-content; max-width: min(520px, 90vw); }
+.sugerencias [data-valor] { display: flex; flex-direction: column; gap: 1px; }
+.sugerencias [data-valor] b { font-weight: 600; }
+.sugerencias .desc { font-size: 12px; color: var(--pizarra); white-space: normal; }
+.sugerencias [data-valor].activo .desc, .sugerencias [data-valor]:hover .desc { color: var(--primario); }
+.editar-codigo .buscador-combo { width: 110px; }

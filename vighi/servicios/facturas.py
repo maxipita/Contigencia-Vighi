@@ -4,6 +4,7 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.texto import sin_acentos
 from vighi.dominio import facturacion
+from vighi.servicios.catalogo import tipos_de_muestra
 from vighi.servicios.consultas import cargar_estudios, listas
 from vighi.servicios.lotes import orden_numero
 
@@ -83,3 +84,38 @@ def facturacion_buscar(f):
 
 def dos_decimales(v):
     return f"{v:.2f}".replace(".", ",")
+
+
+def tarifa_elegida(valor):
+    tarifarios = db.q("SELECT id, nombre, iva FROM tarifarios ORDER BY nombre")
+    general = next((x for x in tarifarios if x["nombre"] == facturacion.GENERAL), tarifarios[0] if tarifarios else None)
+    actual = next((x for x in tarifarios if str(x["id"]) == str(valor)), general)
+    return tarifarios, general, actual
+
+
+def sentencias_asignacion(tarifario_id, nuevas):
+    sentencias = []
+    for n in nuevas:
+        sentencias += [("DELETE FROM nomenclador_muestras WHERE tarifario_id=? AND tipo=? AND sitio=? AND tipo_muestra=?", (tarifario_id, n["tipo"], n["sitio"], n["tipo_muestra"])),
+                       ("INSERT INTO nomenclador_muestras (tarifario_id, tipo, sitio, tipo_muestra, codigo) VALUES (?,?,?,?,?)",
+                        (tarifario_id, n["tipo"], n["sitio"], n["tipo_muestra"], "" if n["codigo"] == facturacion.SIN_FACTURAR else n["codigo"]))]
+    return sentencias
+
+
+def importar_asignaciones(tarifario_id, texto):
+    nuevas, errores, sin_codigo = facturacion.leer_asignaciones(texto)
+    existentes = {r["codigo"] for r in db.q("SELECT codigo FROM nomencladores")}
+    errores += [f"El nomenclador {n['codigo']} no existe." for n in nuevas if n["codigo"] != facturacion.SIN_FACTURAR and n["codigo"] not in existentes]
+    if errores:
+        return 0, list(dict.fromkeys(errores)), sin_codigo
+    sentencias = sentencias_asignacion(tarifario_id, nuevas)
+    for i in range(0, len(sentencias), 40):
+        db.lote_ex(sentencias[i:i + 40])
+    return len(nuevas), [], sin_codigo
+
+
+def planilla_de_tarifa(tarifario_id):
+    combinaciones = [(tipo, tm) for tipo in facturacion.TIPOS_ESTUDIO for tm in tipos_de_muestra(tipo)]
+    asignadas = db.q("SELECT tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras WHERE tarifario_id=?", (tarifario_id,))
+    descripciones = {r["codigo"]: r["descripcion"] for r in db.q("SELECT codigo, descripcion FROM nomencladores")}
+    return facturacion.planilla_codigos(combinaciones, asignadas, descripciones)

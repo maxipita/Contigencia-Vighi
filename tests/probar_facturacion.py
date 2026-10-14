@@ -165,6 +165,82 @@ chequear('descarga CSV con nomenclador', r.status_code == 200 and b'0001-0000012
 h = c.get('/facturacion?estado=cobrada').get_data(as_text=True)
 chequear('listado con totales', '0001-00000123' in h and 'totales-fact' in h)
 
+print('códigos por cobertura (una asignación distinta por tarifa)')
+from vighi.dominio import facturacion as dom_fact
+from vighi.herramientas import codigos_por_cobertura as cli
+tarifa_cob = F.con.execute("SELECT t.id FROM tarifario_coberturas c JOIN tarifarios t ON t.id=c.tarifario_id WHERE c.cobertura=?", (COB,)).fetchone()['id']
+post('/tarifario', {'accion': 'valor', 'tarifario': str(tarifa_cob), 'codigo': '777001', 'descripcion': 'Código propio de la cobertura', 'importe': '5000', 'vigente_desde': '2026-01-01'})
+post('/tarifario', {'accion': 'valor', 'tarifario': str(general), 'codigo': '150101', 'descripcion': 'Biopsia', 'importe': '1000', 'vigente_desde': '2026-01-01'})
+post('/nomencladores', {'accion': 'asignar', 'tarifario': str(general), 'tipo': 'BP', 'tipo_muestra': 'Biopsia', 'sitio': '', 'codigo': '150101'})
+h = post('/nomencladores', {'accion': 'asignar', 'tarifario': str(tarifa_cob), 'tipo': 'BP', 'tipo_muestra': 'Biopsia', 'sitio': '', 'codigo': '777001'})
+chequear('asigna un código propio a la tarifa de la cobertura', 'Asignación guardada' in h)
+n_gen = F.con.execute("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=?", (general,)).fetchone()['n']
+n_cob = F.con.execute("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=?", (tarifa_cob,)).fetchone()['n']
+chequear('la asignación de la cobertura no pisa la general', n_cob == 1 and F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE tarifario_id=? AND tipo='BP' AND tipo_muestra='Biopsia'", (general,)).fetchone()['codigo'] == '150101', (n_gen, n_cob))
+with A.app.app_context():
+    ctx = dom_fact.contexto()
+    propio = dom_fact.resolver(ctx, COB, 'BP', 'Estómago', 'Biopsia', '2026-10-14')
+    otra = dom_fact.resolver(ctx, COB2, 'BP', 'Estómago', 'Biopsia', '2026-10-14')
+    heredado = dom_fact.resolver(ctx, COB, 'CT', '', 'Líquido', '2026-10-14')
+chequear('la cobertura factura con su código y su importe', propio.get('codigo') == '777001' and propio.get('importe') == 5000, propio)
+chequear('otra cobertura sigue con el código general', otra.get('codigo') == '150101', otra)
+chequear('lo que la tarifa no define se toma de la general', heredado.get('codigo') == '150106' and heredado.get('ok'), heredado)
+r = c.get(f'/nomencladores?tarifario={tarifa_cob}')
+chequear('la pantalla muestra la tarifa elegida y su selector', r.status_code == 200 and 'Descargar planilla de códigos' in r.get_data(as_text=True) and '777001' in r.get_data(as_text=True))
+r = c.get(f'/nomencladores/planilla?tarifario={tarifa_cob}')
+planilla = r.get_data(as_text=True)
+chequear('descarga la planilla con todos los tipos de muestra', r.status_code == 200 and 'attachment' in r.headers.get('Content-Disposition', '') and planilla.count('\r\n') > 30
+         and 'BP;Biopsia;;777001' in planilla and 'Tipo;Tipo de muestra;Sitio;Nomenclador' in planilla, planilla[:300])
+h = post('/nomencladores', {'accion': 'importar', 'tarifario': str(tarifa_cob), 'texto': 'BP; Resección; ; 150102\nBP; Extirpación; ; \nCT; Líquido; ; 150106'})
+chequear('importa omitiendo las líneas sin nomenclador', 'Se importaron 2 asignaciones' in h and '1 línea(s) sin nomenclador' in h, h[:200])
+chequear('lo importado queda en la tarifa elegida', F.con.execute("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=? AND codigo IN ('150102','150106')", (tarifa_cob,)).fetchone()['n'] == 2)
+with A.app.app_context():
+    t_id, t_nombre = cli.tarifa_de(COB)
+chequear('la herramienta encuentra la tarifa por cobertura', t_id == tarifa_cob, (t_id, t_nombre))
+import tempfile
+archivo = os.path.join(tempfile.mkdtemp(), 'codigos.csv')
+cli_salida = cli.main(['exportar', COB, archivo])
+texto_planilla = open(archivo, encoding='utf-8').read()
+chequear('la herramienta exporta la planilla', cli_salida == 0 and 'BP;Biopsia;;777001' in texto_planilla)
+open(archivo, 'w', encoding='utf-8').write('Tipo;Tipo de muestra;Sitio;Nomenclador\r\nBP;Biopsia Seriada;;150102\r\nCT;Citología Exfoliativa;;150106\r\nBP;Reseccion Maligna;;\r\n')
+chequear('la herramienta importa la planilla completada', cli.main(['importar', COB, archivo, '--si']) == 0
+         and F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE tarifario_id=? AND tipo='BP' AND tipo_muestra='Biopsia Seriada'", (tarifa_cob,)).fetchone()['codigo'] == '150102')
+try:
+    cli.main(['exportar', 'NO EXISTE'])
+    avisa = False
+except SystemExit as e:
+    avisa = 'no tiene una tarifa asignada' in str(e)
+chequear('sin tarifa asignada la herramienta avisa', avisa)
+
+print('combinaciones que no se facturan en una cobertura')
+h = post('/nomencladores', {'accion': 'importar', 'tarifario': str(tarifa_cob), 'texto': 'BP; Biopsia; Hígado; -\nBP; Biopsia; ; 777001'})
+chequear('importa "-" como no se factura', 'Se importaron 2 asignaciones' in h, h[:200])
+with A.app.app_context():
+    ctx = dom_fact.contexto()
+    con_codigo = dom_fact.resolver(ctx, COB, 'BP', 'Estómago', 'Biopsia', '2026-10-14')
+    sin_factura = dom_fact.resolver(ctx, COB, 'BP', 'Hígado', 'Biopsia', '2026-10-14')
+chequear('el sitio marcado no se factura aunque la general tenga código', not sin_factura['ok'] and 'sin nomenclador' in sin_factura['motivo'], sin_factura)
+chequear('el resto de los sitios sigue facturando', con_codigo.get('codigo') == '777001', con_codigo)
+chequear('en la pantalla figura como "No tiene código asignado"', 'No tiene código asignado' in c.get(f'/nomencladores?tarifario={tarifa_cob}').get_data(as_text=True))
+chequear('la planilla lo devuelve como "-"', 'BP;Biopsia;Hígado;-' in c.get(f'/nomencladores/planilla?tarifario={tarifa_cob}').get_data(as_text=True))
+
+print('editar el nomenclador de una asignación')
+fila_id = F.con.execute("SELECT id FROM nomenclador_muestras WHERE tarifario_id=? AND tipo='BP' AND tipo_muestra='Biopsia' AND sitio=''", (tarifa_cob,)).fetchone()['id']
+h = c.get(f'/nomencladores?tarifario={tarifa_cob}').get_data(as_text=True)
+chequear('cada fila trae su campo para editar el nomenclador', 'value="editar_asignacion"' in h and f'name="id" value="{fila_id}"' in h and 'id="lista-codigos"' in h)
+h = post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(tarifa_cob), 'id': str(fila_id), 'codigo': '150106'})
+chequear('cambia el código de la asignación', 'Nomenclador actualizado' in h and F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE id=?", (fila_id,)).fetchone()['codigo'] == '150106')
+h = post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(tarifa_cob), 'id': str(fila_id), 'codigo': 'NUEVO99'})
+chequear('un código que no existe se crea sin descripción', F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE id=?", (fila_id,)).fetchone()['codigo'] == 'NUEVO99'
+         and F.con.execute("SELECT 1 FROM nomencladores WHERE codigo='NUEVO99'").fetchone() is not None)
+h = post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(tarifa_cob), 'id': str(fila_id), 'codigo': '-'})
+chequear('con "-" pasa a no facturarse', F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE id=?", (fila_id,)).fetchone()['codigo'] == '')
+h = post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(tarifa_cob), 'id': str(fila_id), 'codigo': ''})
+chequear('no acepta el campo vacío', 'Indicá el nomenclador' in h and F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE id=?", (fila_id,)).fetchone()['codigo'] == '')
+h = post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(general), 'id': str(fila_id), 'codigo': '150101'})
+chequear('no edita asignaciones de otra tarifa', F.con.execute("SELECT codigo FROM nomenclador_muestras WHERE id=?", (fila_id,)).fetchone()['codigo'] == '')
+post('/nomencladores', {'accion': 'editar_asignacion', 'tarifario': str(tarifa_cob), 'id': str(fila_id), 'codigo': '777001'})
+
 F.con.execute("INSERT INTO usuarios (iniciales, nombre, sectores, admin, activo, debe_cambiar_clave) VALUES ('ZZSIN','Sin permiso','ingreso',0,1,0)")
 uid = F.con.execute("SELECT id FROM usuarios WHERE iniciales='ZZSIN'").fetchone()['id']
 c2 = A.app.test_client()

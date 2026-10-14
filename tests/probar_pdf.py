@@ -5,7 +5,7 @@ from datos_informe import preparar
 A, db, ids, admin = preparar()
 from vighi.dominio import informes
 import fitz
-SC = os.path.dirname(__file__)
+SC = __import__("tempfile").gettempdir()
 fallas = []
 
 
