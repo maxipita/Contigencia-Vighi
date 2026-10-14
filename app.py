@@ -1639,10 +1639,7 @@ def datos_del_mensaje(p):
 
 def textos_envio(p):
     centro = informes.CENTRO if informes else {}
-    contacto = " o por ".join(x for x in (f"teléfono al {centro['telefono']}" if centro.get("telefono") else "",
-                                           f"e-mail a {centro['email']}" if centro.get("email") else "") if x)
-    cuerpo = (f"Adjuntamos el informe de anatomía patológica correspondiente al protocolo {p['numero']}."
-              + (f"\n\nAnte cualquier consulta pueden comunicarse con el laboratorio por {contacto}." if contacto else ""))
+    cuerpo = f"Adjuntamos el informe de anatomía patológica correspondiente al protocolo {p['numero']}."
     return {"asunto": f"Informe Adjunto : {nombre_paciente(p) or p['numero']}", "cuerpo": cuerpo,
             "whatsapp": f"Hola, te enviamos el informe de anatomía patológica del protocolo {p['numero']}. Ante cualquier consulta, escribinos por acá. {centro.get('nombre', 'CAP Vighi')}"}
 

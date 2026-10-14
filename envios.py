@@ -137,11 +137,21 @@ def enviar_emails(destinos, asunto, cuerpo, adjunto=None, nombre_adjunto="inform
     return resultados
 
 
+def _respuesta(err):
+    if isinstance(err, smtplib.SMTPRecipientsRefused):
+        partes = [f"{codigo} {(texto.decode('utf-8', 'replace') if isinstance(texto, bytes) else str(texto))}" for codigo, texto in err.recipients.values()]
+    else:
+        texto = getattr(err, "smtp_error", b"")
+        partes = [f"{getattr(err, 'smtp_code', '')} {texto.decode('utf-8', 'replace') if isinstance(texto, bytes) else texto}".strip()]
+    detalle = " ".join(" ".join(partes).split())[:220]
+    return f" Respuesta del servidor: {detalle}" if detalle else ""
+
+
 def _texto_error(err):
     if isinstance(err, smtplib.SMTPAuthenticationError):
-        return "El servidor de correo rechazó el usuario o la clave."
+        return "El servidor de correo rechazó el usuario o la clave." + _respuesta(err)
     if isinstance(err, smtplib.SMTPRecipientsRefused):
-        return "El servidor de correo rechazó la dirección."
+        return "El servidor de correo rechazó la dirección." + _respuesta(err)
     if isinstance(err, smtplib.SMTPConnectError) or isinstance(err, OSError):
         return "No se pudo conectar con el servidor de correo."
     return (str(err) or err.__class__.__name__)[:200]
@@ -189,13 +199,17 @@ def evaluar(alcance, estudios):
 LEMA = "La prevención es cuidarnos."
 PIE = "Centro de Anatomía Patológica Dra. Susana Vighi"
 AVISO = "Información confidencial · secreto médico"
+AUTOMATICO = "Este es un mensaje automático: por favor no lo responda."
 
 
 def armar_mensaje(intro, datos, centro=None):
     centro = centro or {}
     filas = [(k, v) for k, v in datos if v]
     contacto = " · ".join(x for x in (centro.get("direccion"), centro.get("telefono"), centro.get("email"), centro.get("web")) if x)
-    texto = "\n\n".join(x for x in (intro.strip(), "Informe adjunto\n" + "\n".join(f"{k}: {v}" for k, v in filas), f"{PIE}\n{contacto}".strip(), AVISO) if x.strip())
+    consultas = " ".join(x for x in (f"Ante cualquier consulta, comuníquese con el laboratorio por teléfono al {centro['telefono']}" if centro.get("telefono") else "",
+                                      f"o por e-mail a {centro['email']}." if centro.get("email") else "") if x)
+    automatico = (AUTOMATICO + (" " + consultas if consultas else "")).strip()
+    texto = "\n\n".join(x for x in (intro.strip(), "Informe adjunto\n" + "\n".join(f"{k}: {v}" for k, v in filas), automatico, f"{PIE}\n{contacto}".strip(), AVISO) if x.strip())
     parrafos = "".join(f'<p style="margin:0 0 14px">{escape(p).replace(chr(10), "<br>")}</p>' for p in intro.strip().split("\n\n") if p.strip())
     tabla = "".join(f'<tr><td style="padding:3px 0;font-weight:bold;color:#2b1a3a">{escape(k)}</td></tr><tr><td style="padding:0 0 10px;color:#2b1a3a">{escape(v)}</td></tr>' for k, v in filas)
     html = f"""<!doctype html><html><body style="margin:0;padding:0;background:#f3eef8;font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5">
@@ -207,6 +221,7 @@ def armar_mensaje(intro, datos, centro=None):
 <tr><td style="padding:24px;color:#2b1a3a">{parrafos}
 <div style="font-weight:bold;font-size:15px;margin:18px 0 8px;color:#4b1d6b">Informe adjunto</div>
 <table role="presentation" cellpadding="0" cellspacing="0">{tabla}</table></td></tr>
+<tr><td style="padding:14px 24px;background:#fff7e0;border-top:1px solid #f2dc9a;text-align:center;font-size:12px;color:#5c4400"><b>{escape(AUTOMATICO)}</b>{(" " + escape(consultas)) if consultas else ""}</td></tr>
 <tr><td style="background:#e9dcf2;padding:14px 24px;text-align:center;font-size:12px;color:#4b1d6b"><b>{escape(PIE)}</b><br>{escape(contacto)}<br><span style="opacity:.8">{escape(AVISO)}</span></td></tr>
 </table></td></tr></table></body></html>"""
     return texto, html

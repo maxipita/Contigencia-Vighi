@@ -51,7 +51,7 @@ SMTP_RESPONDER_A=</pre>
     <li><b>SMTP_USUARIO</b> / <b>SMTP_CLAVE</b>: la cuenta con la que se autentica (casi siempre es la misma dirección del remitente).</li>
     <li><b>SMTP_SEGURIDAD</b>: vacío = STARTTLS (puerto 587), <code>ssl</code> = SSL directo (465), <code>ninguna</code> = sin cifrado (solo servidores internos).</li>
     <li><b>Microsoft 365:</b> <code>smtp.office365.com</code>, puerto 587; el remitente tiene que ser la misma cuenta y debe tener habilitado «SMTP autenticado».</li>
-    <li><b>Gmail / Google Workspace:</b> <code>smtp.gmail.com</code>, puerto 587, con una «contraseña de aplicación».</li>
+    <li><b>Gmail / Google Workspace:</b> <code>smtp.gmail.com</code>, puerto 587. La clave común no sirve: hay que activar la verificación en 2 pasos de la cuenta y crear una «contraseña de aplicación» (Cuenta de Google › Seguridad › Contraseñas de aplicaciones) de 16 letras. El remitente es siempre la misma cuenta de Gmail.</li>
   </ul>
   <p class="muted">Usá una casilla propia para informes (por ejemplo la de anatomía patológica) y no la clave personal de nadie.</p>
 </div>
