@@ -28,6 +28,27 @@
   <div class="acciones">
     {% if emitido and informe_vigente %}<a class="btn" href="{{ url_for('informes.informe_ver', iid=emitido.id) }}" target="_blank"><svg class="ic"><use href="#i-informe"/></svg>Ver informe</a>{% endif %}
     {% if informes_ok and informe_listo %}<a class="btn {{ 'sec' if emitido and informe_vigente else '' }}" href="{{ url_for('informes.informe', pid=p.id) }}">{{ 'Generar de nuevo' if emitido else 'Generar informe' }}</a>{% endif %}
+    {% if (emitido and informe_vigente) or informe_listo %}<a class="btn {{ '' if emitido and informe_vigente else 'sec' }}" href="{{ url_for('envios.envio', pid=p.id) }}"><svg class="ic"><use href="#i-mail"/></svg>Enviar informe</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% set malig_visibles = flujos_malignidad | selectattr('informado') | list if not p.borrador else [] %}
+{% if malig_visibles %}
+<div class="panel-malignidad" id="malignidad">
+  <div class="texto"><b>Malignidad</b>
+    <div class="muted">Se asigna con el estudio informado y define a qué destinos corresponde el informe al enviarlo.</div></div>
+  <div class="malig-flujos">
+  {% for f in malig_visibles %}
+  <form method="post" action="{{ url_for('protocolos.malignidad_asignar', pid=p.id) }}" class="malig-flujo">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tipo" value="{{ f.tipo }}">
+    <span class="malig-tipo">{{ f.nombre }}</span>
+    {% if puede('micro') or puede('informe') %}
+    {% for m, mn in malignidades %}<button name="valor" value="{{ m }}" class="malig-btn {{ m | lower }} {{ 'activo' if f.valor == m }}" {{ 'aria-pressed=true' if f.valor == m }}>{{ mn }}</button>{% endfor %}
+    {% if f.valor %}<button name="valor" value="" class="malig-quitar" title="Quitar la malignidad asignada">Quitar</button>{% endif %}
+    {% elif f.valor %}{% for m, mn in malignidades if m == f.valor %}<span class="malig-btn {{ m | lower }} activo">{{ mn }}</span>{% endfor %}
+    {% else %}<span class="muted">Sin asignar</span>{% endif %}
+  </form>
+  {% endfor %}
   </div>
 </div>
 {% endif %}
@@ -43,8 +64,10 @@
   <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>{% endset %}
 {% set campos_cobertura %}<div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>{% endset %}
 {% set campos_medico %}<div><label>Médico solicitante</label><div class="buscador"><input name="medico" value="{{ p.medico or '' }}" data-medicos autocomplete="off" placeholder="Escribí apellido…"></div></div>{% endset %}
-{% set campos_recoleccion %}<div><label>Lugar recolección</label><input name="lugar_recoleccion" value="{{ p.lugar_recoleccion or '' }}"></div>
+{% set campos_recoleccion %}<div><label>Lugar recolección</label><div class="buscador"><input name="lugar_recoleccion" value="{{ p.lugar_recoleccion or '' }}" data-ubicaciones autocomplete="off" placeholder="Escribí la ubicación…"></div></div>
   <div><label>Fecha recolección</label><input type="date" name="fecha_recoleccion" value="{{ p.fecha_recoleccion or '' }}"></div>{% endset %}
+{% set campos_entrega %}<div><label>Lugar entrega</label><div class="buscador"><input name="lugar_entrega" value="{{ p.lugar_entrega or '' }}" data-ubicaciones autocomplete="off" placeholder="Escribí la ubicación…"></div></div>{% endset %}
+{% macro lugar(nombre, vacio) %}{% if nombre %}{% if nombre in ubicaciones %}<a href="{{ url_for('ubicaciones.ubicacion', uid=ubicaciones[nombre].id) }}" title="Ver la ubicación">{{ nombre }}</a>{% else %}{{ nombre }}{% endif %}{% else %}{{ vacio }}{% endif %}{% endmacro %}
 <div class="tarjeta" id="datos-rapidos">
   <div class="datos-fila">
     <div class="dato"><h2>Paciente</h2>
@@ -62,7 +85,12 @@
       {% endcall %}</div>
     <div class="dato"><h2>Recolección</h2>
       {% call edicion(campos_recoleccion) %}
-      <div class="ver">{{ p.lugar_recoleccion or 'Sin lugar' }}<div class="muted">{{ p.fecha_recoleccion | f }} {{ lapiz() }}</div></div>
+      <div class="ver">{{ lugar(p.lugar_recoleccion, 'Sin lugar') }}<div class="muted">{{ p.fecha_recoleccion | f }} {{ lapiz() }}</div></div>
+      {% endcall %}</div>
+    <div class="dato"><h2>Entrega</h2>
+      {% call edicion(campos_entrega) %}
+      <div class="ver">{{ lugar(p.lugar_entrega, 'Sin lugar') }} {{ lapiz() }}
+        {% if p.lugar_entrega in ubicaciones %}{% set ue = ubicaciones[p.lugar_entrega] %}{% if ue.emails or ue.contactos %}<div class="muted">{{ ue.emails or ue.contactos }}</div>{% endif %}{% endif %}</div>
       {% endcall %}</div>
     <div class="dato"><h2>Lote</h2>
       {% if con_lote %}<div>{{ con_lote[0].lote.split('-')[0] }}</div>

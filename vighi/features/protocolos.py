@@ -5,12 +5,15 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from vighi.core import db
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO, TIPOS, validar_combinacion
+from vighi.servicios import mensajeria
 from vighi.servicios.consultas import cargar_estudios, consultas_estudios, flujos_de, listas
+from vighi.servicios.entrega import malignidad_por_flujo
 from vighi.servicios.etiquetas import numero_emitido, numero_protocolo
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO, informe_emitido, informe_vigente
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, validar_estudios, volver_a_comentarios
+from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
 
 bp = Blueprint("protocolos", __name__)
 
@@ -32,6 +35,7 @@ def protocolo_nuevo():
             error = f"El protocolo {p['numero']} ya existe: para sumarle un estudio usá «+ Agregar estudio» en su ficha."
         elif not lista:
             error = "Agregá al menos un estudio (PAP, Biopsia o Citología)."
+        error = error or error_ubicaciones(p)
         if error:
             flash(error, "error")
         else:
@@ -79,6 +83,7 @@ def protocolo_editar(pid):
             error = "Falta el N° de protocolo."
         elif db.uno("SELECT 1 FROM protocolos WHERE numero=? AND id<>?", (d["numero"], pid)):
             error = f"Ya existe otro protocolo {d['numero']}."
+        error = error or error_ubicaciones(d, p)
         if error:
             flash(error, "error")
         else:
@@ -175,6 +180,10 @@ def protocolo_datos(pid):
         return redirect(url_for("protocolos.protocolo_editar", pid=pid))
     d = {k: request.form[k].strip() for k in CAMPOS_RAPIDOS if k in request.form}
     cambios = [k for k in d if d[k] != (p[k] or "")]
+    error = error_ubicaciones(d, p)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("protocolos.protocolo", pid=pid))
     if cambios:
         db.ex(f"UPDATE protocolos SET {', '.join(k + '=?' for k in cambios)} WHERE id=?", [d[k] for k in cambios] + [pid])
         db.auditar(usuario_actual()["id"], pid, "editar_protocolo", ", ".join(cambios))
@@ -213,10 +222,33 @@ def protocolo(pid):
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
     return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid),
+                           ubicaciones=ubicaciones_del_protocolo(p), flujos_malignidad=malignidad_por_flujo(estudios), malignidades=mensajeria.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
                            informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
                            pendientes=pendientes, informe_vigente=informe_vigente(pid, informe_emitido(pid)))
+
+
+@bp.route("/protocolo/<int:pid>/malignidad", methods=["POST"])
+@requiere_permiso("micro", "informe")
+def malignidad_asignar(pid):
+    yo = usuario_actual()
+    protocolo_o_404(pid)
+    tipo = request.form.get("tipo", "")
+    valor = request.form.get("valor", "")
+    volver = redirect(url_for("protocolos.protocolo", pid=pid) + "#malignidad")
+    if tipo not in TIPOS or (valor and valor not in mensajeria.NOMBRE_MALIGNIDAD):
+        flash("Elegí una malignidad válida.", "error")
+        return volver
+    activos = [x for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if x["tipo"] == tipo and not x["anulado"]]
+    if not activos or any(x["borrador"] or x["proxima"] for x in activos):
+        flash("La malignidad se asigna cuando los estudios están informados.", "error")
+        return volver
+    db.ex("UPDATE estudios SET malignidad=? WHERE protocolo_id=? AND tipo=? AND anulado=0", (valor or None, pid, tipo))
+    nombre = mensajeria.NOMBRE_MALIGNIDAD.get(valor, "sin malignidad")
+    db.auditar(yo["id"], pid, "malignidad", f"{TIPOS[tipo]}: {nombre}")
+    flash(f"Malignidad de {TIPOS[tipo].lower()}: {nombre.lower()}.", "ok")
+    return volver
 
 
 @bp.route("/protocolo/<int:pid>/comentario", methods=["POST"])

@@ -18,7 +18,7 @@ bp = Blueprint("tablero", __name__)
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo")}
+    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion")}
     f["ver"] = f["ver"] or "pendientes"
     grupos = {}
     for e in cargar_estudios():
@@ -67,6 +67,8 @@ def tablero():
     for g in grupos.values():
         if not del_ver(g) or (f["q"] and not con_texto(g)):
             continue
+        if f["ubicacion"] and f["ubicacion"] not in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]):
+            continue
         elegidos = [e for e in g if estudio_ok(e)]
         if f["ver"] == "anulados":
             vista = [e for e in elegidos if e["anulado"]]
@@ -93,7 +95,8 @@ def tablero():
     por_semaforo = {k: sum(1 for r in filas if r["semaforo"] == k) for k in SEMAFOROS}
     if f["semaforo"]:
         filas = [r for r in filas if r["semaforo"] == f["semaforo"]]
-    return render_template("tablero/tablero.html", filas=filas, f=f, conteo=conteo, por_semaforo=por_semaforo,
+    lugares = sorted({l for g in grupos.values() for l in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]) if l} | ({f["ubicacion"]} if f["ubicacion"] else set()), key=db.clave_nombre)
+    return render_template("tablero/tablero.html", filas=filas, f=f, conteo=conteo, por_semaforo=por_semaforo, lugares=lugares,
                            etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"])
 
 

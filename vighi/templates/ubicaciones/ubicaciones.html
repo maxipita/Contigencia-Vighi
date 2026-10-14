@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Ubicaciones{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Consultas</div>
+<h1>Ubicaciones</h1>
+<p class="muted">Lugares de recolección y entrega, con los médicos asociados y sus contactos. Se eligen en el protocolo, filtran el tablero y sirven para enviar los informes.</p>
+<form class="filtros" method="get">
+  <input name="q" value="{{ q }}" placeholder="Buscar por abreviatura, nombre, dirección, contacto o médico…" size="44">
+  <button class="btn sec">Buscar</button>
+  {% if q %}<a href="{{ url_for('ubicaciones.ubicaciones_lista') }}">Ver todas</a>{% endif %}
+  {% if puede('ubicaciones') %}<span style="flex:1"></span><a class="btn" href="{{ url_for('ubicaciones.ubicacion_nueva') }}">+ Nueva ubicación</a>{% endif %}
+</form>
+{% if puede('ubicaciones') %}
+<details class="tarjeta importar">
+  <summary>Importar desde CSV</summary>
+  <p class="muted">Archivo con las columnas <b>abreviatura, nombre, direccion, medicos, telefonos</b> (los médicos separados con « | »). Suma las ubicaciones y médicos que falten y completa direcciones y contactos vacíos; no borra nada de lo ya cargado.</p>
+  <form method="post" action="{{ url_for('ubicaciones.ubicaciones_importar') }}" enctype="multipart/form-data" class="en-linea">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <input type="file" name="archivo" accept=".csv,text/csv" required>
+    <button class="btn">Importar</button>
+  </form>
+</details>
+{% endif %}
+<p class="muted">{{ ubicaciones | length }} ubicación(es)</p>
+<table>
+  <tr><th>Abreviatura</th><th>Nombre completo</th><th>Dirección</th><th>Contactos</th><th>Médicos</th><th>Recolección</th><th>Entrega</th></tr>
+  {% for u in ubicaciones %}
+  <tr>
+    <td><a href="{{ url_for('ubicaciones.ubicacion', uid=u.id) }}"><b>{{ u.abreviatura }}</b></a></td>
+    <td>{{ u.nombre or '' }}</td>
+    <td>{{ u.direccion or '' }}</td>
+    <td>{{ u.contactos or '' }}{% if u.emails %}<div class="muted">{{ u.emails }}</div>{% endif %}</td>
+    <td>{{ u.n_medicos }}</td>
+    <td>{% if recoleccion.get(u.abreviatura) %}<a href="{{ url_for('tablero.tablero', ver='todos', ubicacion=u.abreviatura) }}" title="Ver sus estudios en el tablero">{{ recoleccion[u.abreviatura] }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+    <td>{% if entrega.get(u.abreviatura) %}<a href="{{ url_for('tablero.tablero', ver='todos', ubicacion=u.abreviatura) }}" title="Ver sus estudios en el tablero">{{ entrega[u.abreviatura] }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">No hay ubicaciones{% if q %} que coincidan con la búsqueda{% endif %}.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

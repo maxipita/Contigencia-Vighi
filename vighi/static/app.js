@@ -167,8 +167,10 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
 });
 
 const sinAcentos = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-document.querySelectorAll("input[data-medicos]").forEach(async inp => {
-  const nombres = (await (await fetch("/api/medicos")).json()).map(n => [n, sinAcentos(n)]);
+document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEach(async inp => {
+  const deLista = inp.hasAttribute("data-ubicaciones");
+  const nombres = (await (await fetch(deLista ? "/api/ubicaciones" : "/api/medicos")).json())
+    .map(n => typeof n === "string" ? [n, sinAcentos(n), n] : [n.v, sinAcentos(n.v + " " + n.n), n.n ? n.v + " — " + n.n : n.v]);
   const caja = document.createElement("div");
   caja.className = "sugerencias";
   caja.hidden = true;
@@ -190,13 +192,14 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
     const coinciden = nombres.filter(([, s]) => palabras.every(p => s.includes(p)));
     const hallados = [...coinciden.filter(([, s]) => s.startsWith(palabras[0])),
                       ...coinciden.filter(([, s]) => !s.startsWith(palabras[0]))].slice(0, 40);
-    hallados.forEach(([n]) => {
+    hallados.forEach(([n, , texto]) => {
       const el = document.createElement("div");
-      el.textContent = n;
+      el.textContent = texto;
+      el.dataset.valor = n;
       el.addEventListener("mousedown", e => { e.preventDefault(); elegir(n); });
       caja.append(el);
     });
-    if (!hallados.length) caja.innerHTML = '<div class="nada">Sin coincidencias (se guarda lo escrito)</div>';
+    if (!hallados.length) caja.innerHTML = '<div class="nada">' + (deLista ? "Sin coincidencias: elegí una de la lista" : "Sin coincidencias (se guarda lo escrito)") + "</div>";
     caja.hidden = false;
   };
   inp.addEventListener("input", mostrar);
@@ -205,8 +208,16 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
   inp.addEventListener("keydown", e => {
     if (caja.hidden) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); marcar(activo + (e.key === "ArrowDown" ? 1 : -1)); }
-    else if (e.key === "Enter" && activo >= 0 && caja.children[activo].textContent) { e.preventDefault(); elegir(caja.children[activo].textContent); }
+    else if (e.key === "Enter" && activo >= 0 && caja.children[activo].dataset.valor) { e.preventDefault(); elegir(caja.children[activo].dataset.valor); }
     else if (e.key === "Escape") caja.hidden = true;
+  });
+});
+
+document.querySelectorAll("input[data-filtrar]").forEach(inp => {
+  const items = [...document.querySelectorAll(inp.dataset.filtrar + " > label")].map(el => [el, sinAcentos(el.textContent)]);
+  inp.addEventListener("input", () => {
+    const palabras = sinAcentos(inp.value).split(/\s+/).filter(Boolean);
+    items.forEach(([el, s]) => { el.hidden = !palabras.every(p => s.includes(p)); });
   });
 });
 
@@ -474,6 +485,64 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     if (ev.key === "Enter" && ev.target.matches("[data-otra-tecnica]")) {
       ev.preventDefault();
       agregar(ev.target);
+    }
+  });
+})();
+
+(function () {
+  const formulario = document.getElementById("form-envio");
+  if (!formulario) return;
+  formulario.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.tagName === "INPUT") ev.preventDefault();
+  });
+  formulario.addEventListener("submit", (ev) => {
+    const s = ev.submitter;
+    if (!s) return;
+    if (s.hasAttribute("data-borrador")) { setTimeout(() => location.reload(), 1500); return; }
+    const texto = s.querySelector("span");
+    setTimeout(() => { s.disabled = true; if (texto) texto.textContent = "Enviando…"; });
+  });
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-correo]");
+    if (!b) return;
+    const datos = new FormData(formulario);
+    datos.set("modo", "mailto");
+    datos.set("solo", b.dataset.solo || "");
+    b.disabled = true;
+    try {
+      const r = await fetch(location.pathname + "/correo", { method: "POST", body: datos, headers: { "X-CSRF": formulario.querySelector("[name=_csrf]").value } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo preparar el mensaje.");
+      location.href = d.enlace;
+      setTimeout(() => location.reload(), 2000);
+    } catch (e) {
+      alert(e.message);
+      b.disabled = false;
+    }
+  });
+
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-wa]");
+    if (!b) return;
+    const numero = b.closest(".dest-fila").querySelector("[data-wa-numero]").value.trim();
+    if (!numero) { alert("Escribí el número de WhatsApp."); return; }
+    const ventana = window.open("about:blank", "_blank");
+    const datos = new FormData();
+    datos.append("numero", numero);
+    datos.append("rol", b.dataset.rol);
+    datos.append("texto", document.getElementById("texto_wa").value);
+    b.disabled = true;
+    try {
+      const r = await fetch(location.pathname + "/whatsapp", { method: "POST", body: datos, headers: { "X-CSRF": formulario.querySelector("[name=_csrf]").value } });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "No se pudo abrir WhatsApp.");
+      if (ventana) ventana.location = d.enlace; else location.href = d.enlace;
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      if (ventana) ventana.close();
+      alert(e.message);
+      b.disabled = false;
     }
   });
 })();

@@ -118,7 +118,7 @@ def completo(p, estudios):
     return bool(p["apellido"] and p["nombre"] and estudios and all(e["cantidad"] for e in estudios if not e["anulado"]))
 
 
-CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "fecha_recoleccion"]
+CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "lugar_entrega", "fecha_recoleccion"]
 
 
 def protocolos_del_paciente(base):

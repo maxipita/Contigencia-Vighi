@@ -3,6 +3,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS estudios (
     responsable_id INTEGER REFERENCES usuarios(id),
     lote_id INTEGER REFERENCES lotes(id),
     anulado INTEGER NOT NULL DEFAULT 0, motivo_anulacion VARCHAR(200),
-    lab_etiquetado_en VARCHAR(19), tecnicas_especiales VARCHAR(500),
+    lab_etiquetado_en VARCHAR(19), tecnicas_especiales VARCHAR(500), malignidad VARCHAR(12),
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS etapas (
@@ -115,7 +116,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     accion VARCHAR(40) NOT NULL, detalle TEXT
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
-CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL);
+CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL, email VARCHAR(150));
 CREATE TABLE IF NOT EXISTS bloqueos (nombre VARCHAR(40) PRIMARY KEY, vence REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS firmas (usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id), imagen BLOB NOT NULL, actualizada_en VARCHAR(19));
 CREATE TABLE IF NOT EXISTS informes_emitidos (
@@ -211,6 +212,36 @@ CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_etiquetas_tipo ON etiquetas_lotes(tipo, desde);
+CREATE TABLE IF NOT EXISTS ubicaciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    abreviatura VARCHAR(120) NOT NULL UNIQUE,
+    nombre VARCHAR(200),
+    direccion VARCHAR(200), contactos TEXT, emails TEXT
+);
+CREATE TABLE IF NOT EXISTS ubicacion_medicos (
+    ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+    medico_id INTEGER NOT NULL REFERENCES medicos(id),
+    PRIMARY KEY (ubicacion_id, medico_id)
+);
+CREATE INDEX IF NOT EXISTS ix_ubicacion_medicos_medico ON ubicacion_medicos(medico_id);
+CREATE TABLE IF NOT EXISTS ubicacion_destinos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+    canal VARCHAR(10) NOT NULL, destino VARCHAR(120) NOT NULL,
+    informes INTEGER NOT NULL DEFAULT 1, alcance VARCHAR(160) NOT NULL DEFAULT '',
+    UNIQUE (ubicacion_id, canal, destino)
+);
+CREATE INDEX IF NOT EXISTS ix_protocolos_recoleccion ON protocolos(lugar_recoleccion);
+CREATE INDEX IF NOT EXISTS ix_protocolos_entrega ON protocolos(lugar_entrega);
+CREATE TABLE IF NOT EXISTS envios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    informe_id INTEGER, version INTEGER,
+    canal VARCHAR(10) NOT NULL, rol VARCHAR(12) NOT NULL, destino VARCHAR(120) NOT NULL,
+    estado VARCHAR(10) NOT NULL, detalle VARCHAR(250),
+    usuario_id INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_envios_protocolo ON envios(protocolo_id);
 """
 
 
@@ -372,6 +403,48 @@ def feriados():
     return {date.fromisoformat(r["fecha"]) for r in q("SELECT fecha FROM feriados")}
 
 
+def clave_nombre(texto):
+    s = unicodedata.normalize("NFD", (texto or "").lower())
+    return re.sub(r"[^a-z0-9]+", " ", "".join(ch for ch in s if unicodedata.category(ch) != "Mn")).strip()
+
+
+def _en_trozos(c, sentencias):
+    for i in range(0, len(sentencias), d1.DECLARACIONES_POR_PEDIDO):
+        c.lote(sentencias[i:i + d1.DECLARACIONES_POR_PEDIDO])
+
+
+def ubicaciones_importar(filas):
+    c = con()
+    existentes = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
+    nuevas = [f for f in filas if f["abreviatura"] not in existentes]
+    c.executemany("INSERT INTO ubicaciones (abreviatura, nombre, direccion, contactos) VALUES (?,?,?,?)",
+                  [(f["abreviatura"], f["nombre"], f["direccion"], f["contactos"]) for f in nuevas])
+    _en_trozos(c, [("UPDATE ubicaciones SET nombre=COALESCE(NULLIF(?,''), nombre), direccion=COALESCE(NULLIF(?,''), direccion), contactos=COALESCE(NULLIF(?,''), contactos) WHERE id=?",
+                    (f["nombre"], f["direccion"], f["contactos"], existentes[f["abreviatura"]])) for f in filas if f["abreviatura"] in existentes])
+    ids = {r["abreviatura"]: r["id"] for r in c.execute("SELECT id, abreviatura FROM ubicaciones").fetchall()}
+    medicos = {}
+    for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
+        medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
+    pedidos = {}
+    for f in filas:
+        for m in f["medicos"]:
+            pedidos.setdefault(clave_nombre(m), m)
+    faltan = [(m,) for k, m in pedidos.items() if k not in medicos]
+    c.executemany("INSERT INTO medicos (nombre) VALUES (?)", faltan)
+    if faltan:
+        for r in c.execute("SELECT id, nombre FROM medicos ORDER BY id").fetchall():
+            medicos.setdefault(clave_nombre(r["nombre"]), r["id"])
+    ya = {(r["ubicacion_id"], r["medico_id"]) for r in c.execute("SELECT ubicacion_id, medico_id FROM ubicacion_medicos").fetchall()}
+    vinculos = {(ids[f["abreviatura"]], medicos[clave_nombre(m)]) for f in filas for m in f["medicos"]} - ya
+    c.executemany("INSERT INTO ubicacion_medicos (ubicacion_id, medico_id) VALUES (?,?)", sorted(vinculos))
+    ya_destinos = {(r["ubicacion_id"], r["destino"]) for r in c.execute("SELECT ubicacion_id, destino FROM ubicacion_destinos WHERE canal='email'").fetchall()}
+    destinos = sorted({(ids[f["abreviatura"]], "email", e) for f in filas for e in re.split(r"[\s,;]+", f["emails"]) if "@" in e} - {(u, "email", d) for u, d in ya_destinos})
+    c.executemany("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino) VALUES (?,?,?)", destinos)
+    c.commit()
+    olvidar_cache()
+    return {"nuevas": len(nuevas), "actualizadas": len(filas) - len(nuevas), "medicos_nuevos": len(faltan), "vinculos": len(vinculos), "destinos": len(destinos)}
+
+
 def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
     ex("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
        (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
@@ -390,6 +463,8 @@ def preparar_esquema(c):
                      WHERE i.id IN (SELECT MAX(i2.id) FROM informes_por_estudio i2 JOIN estudios e2 ON e2.id=i2.estudio_id GROUP BY e2.protocolo_id)""")
         c.execute("DROP TABLE informes_por_estudio")
         c.commit()
+    if "abreviatura" not in [r["name"] for r in c.execute("PRAGMA table_info(ubicaciones)")] and c.execute("PRAGMA table_info(ubicaciones)").fetchall():
+        c.execute("ALTER TABLE ubicaciones RENAME COLUMN nombre TO abreviatura")
     c.executescript(SCHEMA)
     cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
     if "tarifario_id" not in cols("nomenclador_muestras"):
@@ -414,9 +489,12 @@ def preparar_esquema(c):
                                    ("protocolos", "firmante_id", "INTEGER"),
                                    ("estudios", "lab_etiquetado_en", "VARCHAR(19)"),
                                    ("estudios", "tecnicas_especiales", "VARCHAR(500)"),
+                                   ("estudios", "malignidad", "VARCHAR(12)"),
+                                   ("medicos", "email", "VARCHAR(150)"),
                                    ("macro", "decal", "INTEGER NOT NULL DEFAULT 0"),
                                    ("templates", "organo", "VARCHAR(80)"),
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),
+                                   ("ubicaciones", "nombre", "VARCHAR(200)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
@@ -483,7 +561,18 @@ def flujos_por_consolidar(c):
 
 def inicializar():
     c = _conectar()
+    sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
+    sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     antes_de_informes = preparar_esquema(c)
+    if sin_destinos:
+        pasar = []
+        for r in c.execute("SELECT id, emails FROM ubicaciones WHERE COALESCE(emails,'')<>''").fetchall():
+            for correo in dict.fromkeys(x.lower() for x in re.split(r"[\s,;]+", r["emails"]) if "@" in x):
+                pasar.append((r["id"], "email", correo[:120]))
+        c.executemany("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino) VALUES (?,?,?)", pasar)
+    if sin_ubicaciones:
+        c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'ubicaciones' ELSE permisos || ',ubicaciones' END "
+                  "WHERE nombre = 'Ingreso' AND (',' || permisos || ',') NOT LIKE '%,ubicaciones,%'")
     if antes_de_informes:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'informe' ELSE permisos || ',informe' END "
                   "WHERE nombre = 'Médico firmante' AND (',' || permisos || ',') NOT LIKE '%,informe,%'")
