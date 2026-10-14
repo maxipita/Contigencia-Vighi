@@ -24,7 +24,8 @@
     <td>{% for e in p.estudios %}{% if e.lote %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{{ ' ' if not loop.last }}{% endif %}{% endfor %}</td>
     <td>{% for e in p.estudios %}{{ e.responsable or '' }}{{ ' ' if not loop.last }}{% endfor %}</td>
     <td>{{ p.fecha_recoleccion | f if p.fecha_recoleccion else '' }}</td>
-    <td><a class="btn mini-btn" href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">Completar</a></td>
+    <td>{% set en = ediciones.get(p.id) %}{% if en and en.usuario_id != yo.id %}<span class="muted">Lo está completando {{ en.nombre }}</span>
+      {% else %}<a class="btn mini-btn" href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">Completar</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>

@@ -10,6 +10,7 @@ from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
 from vighi.servicios.consultas import cargar_estudios
+from vighi.servicios.protocolos import ediciones_en_curso
 
 bp = Blueprint("tablero", __name__)
 
@@ -112,7 +113,7 @@ def completar():
     lotes_con = db.q("""SELECT l.id, l.codigo, COUNT(DISTINCT p.id) AS n FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                         JOIN lotes l ON l.id=e.lote_id WHERE p.borrador=1 GROUP BY l.id, l.codigo, l.fecha ORDER BY l.fecha DESC, l.codigo""")
     return render_template("tablero/completar.html", protocolos=sorted(protocolos.values(), key=lambda x: x["numero"]),
-                           lotes_con=lotes_con, lote_sel=lote_sel)
+                           lotes_con=lotes_con, lote_sel=lote_sel, ediciones=ediciones_en_curso())
 
 
 @bp.route("/exportar")

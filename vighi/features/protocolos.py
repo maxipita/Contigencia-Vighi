@@ -12,7 +12,7 @@ from vighi.servicios.etiquetas import numero_emitido, numero_protocolo
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO, informe_emitido, informe_vigente
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
-from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, validar_estudios, volver_a_comentarios
+from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, edicion_propia, edicion_vigente, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
 from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
 
 bp = Blueprint("protocolos", __name__)
@@ -61,9 +61,39 @@ def protocolo_nuevo():
 @bp.route("/protocolo/<int:pid>/editar", methods=["GET", "POST"])
 @requiere_permiso("protocolo_crear", "protocolo_editar")
 def protocolo_editar(pid):
+    if request.method != "POST":
+        return _protocolo_editar(pid)
+    try:
+        with db.bloqueo(f"completar-{pid}"):
+            return _protocolo_editar(pid)
+    except RuntimeError:
+        flash("Otra persona está guardando este protocolo en este momento. Esperá unos segundos y revisá cómo quedó.", "error")
+        return redirect(url_for("protocolos.protocolo", pid=pid))
+
+
+@bp.route("/protocolo/<int:pid>/editar/soltar", methods=["POST"])
+@requiere_permiso("protocolo_crear", "protocolo_editar")
+def protocolo_soltar(pid):
+    soltar_edicion(pid, usuario_actual()["id"], request.form.get("edicion", ""))
+    return ("", 204)
+
+
+def _protocolo_editar(pid):
     yo = usuario_actual()
     p = protocolo_o_404(pid)
     borrador = bool(p["borrador"])
+    token_form = request.form.get("edicion")
+    if request.method == "POST" and token_form is not None and not borrador:
+        flash(f"El protocolo {p['numero']} ya estaba completo: no se cambió nada.", "ok")
+        return redirect(url_for("protocolos.protocolo", pid=pid))
+    if request.method == "POST" and borrador:
+        if not edicion_propia(pid, yo["id"], token_form):
+            otra = edicion_vigente(pid)
+            if otra and otra["usuario_id"] != yo["id"]:
+                flash(f"{otra['nombre'] or 'Otra persona'} está completando este protocolo: no se guardó nada.", "error")
+                return redirect(url_for("tablero.completar"))
+            flash("Este formulario quedó desactualizado (el protocolo ya se guardó o se abrió en otra ventana). Abrilo de nuevo para completarlo.", "error")
+            return redirect(url_for("protocolos.protocolo_editar", pid=pid))
     if not borrador and not puede("protocolo_editar"):
         flash("No tenés permiso para editar protocolos. Pedíselo a un administrador.", "error")
         return redirect(url_for("protocolos.protocolo", pid=pid))
@@ -95,6 +125,7 @@ def protocolo_editar(pid):
             if not borrador:
                 flash("Datos del protocolo actualizados.", "ok")
                 return redirect(url_for("protocolos.protocolo", pid=pid))
+            soltar_edicion(pid)
             lote = concretar_lote(lote_valor, yo["id"])
             for e in lista:
                 if e["id"]:
@@ -117,11 +148,18 @@ def protocolo_editar(pid):
             flash("Datos guardados. Para completar el protocolo faltan apellido, nombre y la cantidad de cada estudio.", "ok")
             return redirect(url_for("protocolos.protocolo_editar", pid=pid))
         p = {**dict(p), **d}
+    token = None
+    if borrador:
+        token, otra = tomar_edicion(pid, yo["id"])
+        if not token:
+            hora = (otra["desde"] or "")[11:16] if otra else ""
+            flash(f"{(otra and otra['nombre']) or 'Otra persona'} está completando este protocolo" + (f" desde las {hora}" if hora else "") + ". Esperá a que termine o pedile que salga.", "error")
+            return redirect(url_for("tablero.completar"))
     ctx = contexto_formulario()
     for e in actuales.values():
         if e["lote_id"] and all(l["id"] != e["lote_id"] for l in ctx["lotes_abiertos"][e["tipo"]]):
             ctx["lotes_abiertos"][e["tipo"]].insert(0, db.uno("SELECT * FROM lotes WHERE id=?", (e["lote_id"],)))
-    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, ultimos=[], **ctx)
+    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, edicion=token, ultimos=[], **ctx)
 
 
 @bp.route("/paciente/<int:pid>/datos", methods=["POST"])

@@ -8,8 +8,9 @@
 <h1>{{ titulo() }}</h1>
 {% if completar %}<p class="muted">Protocolo generado desde las etiquetas de Recepción. Queda completo con apellido, nombre y la cantidad
   de cada estudio; con eso se habilitan las etiquetas de laboratorio y aparece en el tablero.</p>{% endif %}
-<form method="post" class="form-estudios">
+<form method="post" class="form-estudios"{% if edicion %} data-soltar="{{ url_for('protocolos.protocolo_soltar', pid=p.id) }}"{% endif %}>
   <input type="hidden" name="_csrf" value="{{ csrf }}">
+  {% if edicion %}<input type="hidden" name="edicion" value="{{ edicion }}">{% endif %}
   <div class="tarjeta">
     <h2>Protocolo</h2>
     <div class="grilla">

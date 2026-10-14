@@ -237,13 +237,6 @@
       {% endfor %}
       <div class="acciones">
         {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudios.estudio_editar', eid=m.id) }}">Editar estudio</a>{% endif %}
-        {% if puede('estudio_anular') %}
-        <form method="post" action="{{ url_for('estudios.anular', eid=m.id) }}" class="en-linea" data-confirmar="{{ '¿Reactivar este estudio?' if m.anulado else '¿Anular este estudio? El resto del protocolo sigue igual.' }}">
-          <input type="hidden" name="_csrf" value="{{ csrf }}">
-          {% if not m.anulado %}<input name="motivo" placeholder="Motivo de anulación">{% endif %}
-          <button class="btn peligro">{{ 'Reactivar estudio' if m.anulado else 'Anular' }}</button>
-        </form>
-        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -261,6 +254,28 @@
       {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
     </div>
   </div>
+
+  {% if puede('estudio_anular') %}
+  <div class="tarjeta zona-eliminar">
+    <h2>{{ 'Estudio eliminado' if e.anulado else 'Eliminar este estudio' }}</h2>
+    {% if e.anulado %}
+    <p>Este estudio fue quitado del protocolo{% if e.motivo_anulacion %}: <b>{{ e.motivo_anulacion }}</b>{% endif %}. No figura en los listados ni se factura.</p>
+    <form method="post" action="{{ url_for('estudios.anular', eid=e.id) }}" data-confirmar="¿Reactivar el estudio {{ etiqueta }} del protocolo {{ e.numero }}?">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button class="btn sec">Reactivar estudio</button>
+    </form>
+    {% else %}
+    <p><b>Atención:</b> el estudio <b>{{ etiqueta }}</b> del protocolo <b>{{ e.numero }}</b> se va a <b>eliminar</b>: deja de figurar en el protocolo, en el tablero, en los lotes y en la facturación.
+      {% if miembros | length > 1 %}Los demás estudios del flujo siguen igual. {% endif %}Queda registrado en el historial y se puede reactivar desde esta misma pantalla, pero no lo hagas si no estás seguro.</p>
+    <form method="post" action="{{ url_for('estudios.anular', eid=e.id) }}" class="en-linea"
+          data-confirmar="Vas a ELIMINAR el estudio {{ etiqueta }} del protocolo {{ e.numero }}. ¿Confirmás?">
+      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="volver" value="protocolo">
+      <input name="motivo" required placeholder="Motivo (obligatorio)" autocomplete="off">
+      <button class="btn peligro">Eliminar estudio</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 </div>
 {% endblock %}
