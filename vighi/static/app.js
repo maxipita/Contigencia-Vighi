@@ -210,6 +210,82 @@ document.querySelectorAll("input[data-medicos]").forEach(async inp => {
   });
 });
 
+document.querySelectorAll("input[list]").forEach(inp => {
+  const lista = document.getElementById(inp.getAttribute("list"));
+  if (!lista) return;
+  const opciones = [...lista.options].map(o => ({ valor: o.value, texto: o.textContent.trim(), buscar: sinAcentos(o.value + " " + o.textContent) }));
+  inp.removeAttribute("list");
+  const envoltorio = document.createElement("div");
+  envoltorio.className = "buscador buscador-combo";
+  inp.before(envoltorio);
+  envoltorio.append(inp);
+  const caja = document.createElement("div");
+  caja.className = "sugerencias";
+  caja.hidden = true;
+  envoltorio.append(caja);
+  let activo = -1;
+  const marcar = i => {
+    const items = caja.querySelectorAll("[data-valor]");
+    if (!items.length) return;
+    activo = (i + items.length) % items.length;
+    items.forEach((el, k) => el.classList.toggle("activo", k === activo));
+    items[activo].scrollIntoView({ block: "nearest" });
+  };
+  const elegir = valor => { inp.value = valor; caja.hidden = true; };
+  const mostrar = (todo) => {
+    const palabras = todo ? [] : sinAcentos(inp.value).split(/\s+/).filter(Boolean);
+    const hallados = opciones.filter(o => palabras.every(p => o.buscar.includes(p))).slice(0, 60);
+    caja.innerHTML = "";
+    activo = -1;
+    hallados.forEach(o => {
+      const el = document.createElement("div");
+      el.dataset.valor = o.valor;
+      const b = document.createElement("b");
+      b.textContent = o.valor;
+      el.append(b);
+      if (o.texto && o.texto !== o.valor) {
+        const d = document.createElement("span");
+        d.className = "desc";
+        d.textContent = o.texto;
+        el.append(d);
+      }
+      el.addEventListener("mousedown", e => { e.preventDefault(); elegir(o.valor); });
+      caja.append(el);
+    });
+    if (!hallados.length) caja.innerHTML = '<div class="nada">Sin coincidencias (se guarda lo escrito)</div>';
+    caja.hidden = false;
+    ubicar();
+  };
+  const ubicar = () => {
+    const r = inp.getBoundingClientRect();
+    const abajo = window.innerHeight - r.bottom;
+    caja.style.left = Math.max(8, Math.min(r.left, window.innerWidth - caja.offsetWidth - 8)) + "px";
+    if (abajo < 220 && r.top > abajo) {
+      caja.style.top = "auto";
+      caja.style.bottom = (window.innerHeight - r.top + 2) + "px";
+      caja.style.maxHeight = Math.min(260, r.top - 12) + "px";
+    } else {
+      caja.style.bottom = "auto";
+      caja.style.top = (r.bottom + 2) + "px";
+      caja.style.maxHeight = Math.min(260, abajo - 12) + "px";
+    }
+  };
+  window.addEventListener("scroll", () => { if (!caja.hidden) ubicar(); }, true);
+  window.addEventListener("resize", () => { if (!caja.hidden) ubicar(); });
+  inp.addEventListener("input", () => mostrar(false));
+  inp.addEventListener("focus", () => { inp.select(); mostrar(true); });
+  inp.addEventListener("blur", () => { caja.hidden = true; });
+  inp.addEventListener("keydown", e => {
+    if (caja.hidden) {
+      if (e.key === "ArrowDown") { e.preventDefault(); mostrar(false); }
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); marcar(activo + (e.key === "ArrowDown" ? 1 : -1)); }
+    else if (e.key === "Enter" && activo >= 0) { e.preventDefault(); elegir(caja.querySelectorAll("[data-valor]")[activo].dataset.valor); }
+    else if (e.key === "Escape") caja.hidden = true;
+  });
+});
+
 document.querySelectorAll("form[data-confirmar]").forEach(f =>
   f.addEventListener("submit", e => { if (!confirm(f.dataset.confirmar)) e.preventDefault(); }));
 
@@ -431,3 +507,17 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     form.submit();
   });
 })();
+
+document.querySelectorAll("[data-filtrar-filas]").forEach((entrada) => {
+  const tabla = document.querySelector(entrada.dataset.filtrarFilas);
+  if (!tabla) return;
+  const norma = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  entrada.addEventListener("input", () => {
+    const q = norma(entrada.value.trim());
+    tabla.querySelectorAll("tr").forEach((fila, i) => {
+      if (i === 0) return;
+      const texto = norma(fila.textContent + " " + [...fila.querySelectorAll("input[name=codigo]")].map((x) => x.value).join(" "));
+      fila.hidden = !!q && !texto.includes(q);
+    });
+  });
+});

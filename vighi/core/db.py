@@ -174,9 +174,10 @@ CREATE TABLE IF NOT EXISTS tarifario_valores (
 CREATE INDEX IF NOT EXISTS ix_tarifario_valores ON tarifario_valores(tarifario_id, codigo);
 CREATE TABLE IF NOT EXISTS nomenclador_muestras (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id),
     tipo VARCHAR(3) NOT NULL, sitio VARCHAR(80) NOT NULL DEFAULT '', tipo_muestra VARCHAR(80) NOT NULL DEFAULT '',
     codigo VARCHAR(20) NOT NULL,
-    UNIQUE (tipo, sitio, tipo_muestra)
+    UNIQUE (tarifario_id, tipo, sitio, tipo_muestra)
 );
 CREATE TABLE IF NOT EXISTS facturas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -391,6 +392,15 @@ def preparar_esquema(c):
         c.commit()
     c.executescript(SCHEMA)
     cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
+    if "tarifario_id" not in cols("nomenclador_muestras"):
+        c.execute("ALTER TABLE nomenclador_muestras RENAME TO nomenclador_muestras_vieja")
+        c.executescript(SCHEMA)
+        if not c.execute("SELECT 1 FROM tarifarios WHERE nombre='TARIFA GENERAL'").fetchone():
+            c.execute("INSERT INTO tarifarios (nombre, iva) VALUES ('TARIFA GENERAL', 'exento')")
+        general = c.execute("SELECT id FROM tarifarios WHERE nombre='TARIFA GENERAL'").fetchone()["id"]
+        c.execute("INSERT INTO nomenclador_muestras (tarifario_id, tipo, sitio, tipo_muestra, codigo) "
+                  "SELECT ?, tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras_vieja", (general,))
+        c.execute("DROP TABLE nomenclador_muestras_vieja")
     antes_de_informes = "titulo" not in cols("usuarios")
     for tabla, col, definicion in (("usuarios", "perfil_id", "INTEGER REFERENCES perfiles(id)"),
                                    ("usuarios", "permisos_mas", "VARCHAR(500) NOT NULL DEFAULT ''"),

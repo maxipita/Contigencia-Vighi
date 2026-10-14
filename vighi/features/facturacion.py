@@ -9,9 +9,10 @@ from vighi.core.fechas import MESES, MESES_CORTOS, hoy
 from vighi.core.sesion import requiere_permiso, usuario_actual
 from vighi.core.texto import sin_acentos
 from vighi.dominio import facturacion
-from vighi.servicios.catalogo import tipos_de_muestra_bp
+from vighi.servicios.catalogo import tipos_de_muestra, tipos_de_muestra_bp
 from vighi.servicios.consultas import cargar_estudios
-from vighi.servicios.facturas import coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, items_de_factura
+from vighi.servicios.facturas import (coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, importar_asignaciones, items_de_factura,
+                                     planilla_de_tarifa, sentencias_asignacion, tarifa_elegida)
 
 bp = Blueprint("facturacion", __name__)
 
@@ -410,6 +411,8 @@ def tarifario():
 @requiere_permiso("facturacion")
 def nomencladores():
     yo = usuario_actual()
+    tarifarios, general, actual = tarifa_elegida(request.values.get("tarifario", ""))
+    destino = url_for("facturacion.nomencladores", tarifario=actual["id"])
     if request.method == "POST":
         accion = request.form.get("accion", "")
         if accion == "guardar_nomenclador":
@@ -433,39 +436,57 @@ def nomencladores():
             tipo_muestra = " ".join(request.form.get("tipo_muestra", "").split())[:80]
             sitio = " ".join(request.form.get("sitio", "").split())[:80]
             codigo = request.form.get("codigo", "").strip()
-            if tipo not in facturacion.TIPOS_ESTUDIO or not db.uno("SELECT 1 FROM nomencladores WHERE codigo=?", (codigo,)):
+            if tipo not in facturacion.TIPOS_ESTUDIO or (codigo != facturacion.SIN_FACTURAR and not db.uno("SELECT 1 FROM nomencladores WHERE codigo=?", (codigo,))):
                 flash("Elegí el tipo de estudio y un nomenclador que exista.", "error")
             else:
-                db.lote_ex([("DELETE FROM nomenclador_muestras WHERE tipo=? AND sitio=? AND tipo_muestra=?", (tipo, sitio, tipo_muestra)),
-                            ("INSERT INTO nomenclador_muestras (tipo, sitio, tipo_muestra, codigo) VALUES (?,?,?,?)", (tipo, sitio, tipo_muestra, codigo))])
-                db.auditar(yo["id"], None, "nomenclador_muestra", f"{tipo} · {tipo_muestra or 'cualquier muestra'} · {sitio or 'cualquier sitio'} → {codigo}")
+                db.lote_ex(sentencias_asignacion(actual["id"], [{"tipo": tipo, "tipo_muestra": tipo_muestra, "sitio": sitio, "codigo": codigo}]))
+                db.auditar(yo["id"], None, "nomenclador_muestra", f"{actual['nombre']} · {tipo} · {tipo_muestra or 'cualquier muestra'} · {sitio or 'cualquier sitio'} → {codigo}")
                 flash("Asignación guardada.", "ok")
-        elif accion == "borrar_asignacion" and request.form.get("id", "").isdigit():
-            db.ex("DELETE FROM nomenclador_muestras WHERE id=?", (int(request.form["id"]),))
-            flash("Asignación borrada.", "ok")
-        elif accion == "importar":
-            nuevas, errores = facturacion.leer_asignaciones(request.form.get("texto", ""))
-            existentes = {r["codigo"] for r in db.q("SELECT codigo FROM nomencladores")}
-            errores += [f"El nomenclador {n['codigo']} no existe." for n in nuevas if n["codigo"] not in existentes]
-            if errores:
-                flash("No se importó nada: " + " · ".join(dict.fromkeys(errores[:6])), "error")
-            elif not nuevas:
-                flash("No hay líneas para importar.", "error")
+        elif accion == "editar_asignacion" and request.form.get("id", "").isdigit():
+            codigo = request.form.get("codigo", "").strip()[:20]
+            fila = db.uno("SELECT id, tipo, sitio, tipo_muestra FROM nomenclador_muestras WHERE id=? AND tarifario_id=?", (int(request.form["id"]), actual["id"]))
+            if not fila or not codigo:
+                flash("Indicá el nomenclador (o - si no tiene código asignado).", "error")
             else:
                 sentencias = []
-                for n in nuevas:
-                    sentencias += [("DELETE FROM nomenclador_muestras WHERE tipo=? AND sitio=? AND tipo_muestra=?", (n["tipo"], n["sitio"], n["tipo_muestra"])),
-                                   ("INSERT INTO nomenclador_muestras (tipo, sitio, tipo_muestra, codigo) VALUES (?,?,?,?)", (n["tipo"], n["sitio"], n["tipo_muestra"], n["codigo"]))]
-                for i in range(0, len(sentencias), 40):
-                    db.lote_ex(sentencias[i:i + 40])
-                flash(f"Se importaron {len(nuevas)} asignaciones.", "ok")
-        return redirect(url_for("facturacion.nomencladores"))
+                if codigo != facturacion.SIN_FACTURAR and not db.uno("SELECT 1 FROM nomencladores WHERE codigo=?", (codigo,)):
+                    sentencias.append(("INSERT INTO nomencladores (codigo, descripcion) VALUES (?, '')", (codigo,)))
+                sentencias.append(("UPDATE nomenclador_muestras SET codigo=? WHERE id=? AND tarifario_id=?", ("" if codigo == facturacion.SIN_FACTURAR else codigo, fila["id"], actual["id"])))
+                db.lote_ex(sentencias)
+                db.auditar(yo["id"], None, "nomenclador_muestra", f"{actual['nombre']} · {fila['tipo']} · {fila['tipo_muestra'] or 'cualquier muestra'} · {fila['sitio'] or 'cualquier sitio'} → {codigo}")
+                flash("Nomenclador actualizado.", "ok")
+        elif accion == "borrar_asignacion" and request.form.get("id", "").isdigit():
+            db.ex("DELETE FROM nomenclador_muestras WHERE id=? AND tarifario_id=?", (int(request.form["id"]), actual["id"]))
+            flash("Asignación borrada.", "ok")
+        elif accion == "importar":
+            cantidad, errores, sin_codigo = importar_asignaciones(actual["id"], request.form.get("texto", ""))
+            if errores:
+                flash("No se importó nada: " + " · ".join(errores[:6]), "error")
+            elif not cantidad:
+                flash("No hay líneas con nomenclador para importar.", "error")
+            else:
+                db.auditar(yo["id"], None, "nomenclador_muestra", f"{actual['nombre']}: {cantidad} asignaciones importadas")
+                flash(f"Se importaron {cantidad} asignaciones en {actual['nombre']}." + (f" {sin_codigo} línea(s) sin nomenclador se dejaron como estaban." if sin_codigo else ""), "ok")
+        return redirect(destino)
     lista = db.q("SELECT codigo, descripcion FROM nomencladores ORDER BY codigo")
     uso = {r["codigo"]: r["n"] for r in db.q("SELECT codigo, COUNT(*) AS n FROM nomenclador_muestras GROUP BY codigo")}
     asignaciones = db.q("""SELECT m.id, m.tipo, m.sitio, m.tipo_muestra, m.codigo, n.descripcion FROM nomenclador_muestras m
-                           LEFT JOIN nomencladores n ON n.codigo=m.codigo ORDER BY m.tipo, m.tipo_muestra, m.sitio""")
-    cubiertos = {(r["tipo"], sin_acentos(r["tipo_muestra"])) for r in asignaciones if not r["sitio"]}
-    sin_asignar = [t for t in tipos_de_muestra_bp() if ("BP", sin_acentos(t)) not in cubiertos]
+                           LEFT JOIN nomencladores n ON n.codigo=m.codigo WHERE m.tarifario_id=? ORDER BY m.tipo, m.tipo_muestra, m.sitio""", (actual["id"],))
+    cubiertos = {(r["tarifario_id"], r["tipo"], sin_acentos(r["tipo_muestra"])) for r in db.q("SELECT tarifario_id, tipo, tipo_muestra FROM nomenclador_muestras WHERE sitio=''")}
+    sin_asignar = []
+    for tipo in facturacion.TIPOS_ESTUDIO:
+        faltan = [t for t in tipos_de_muestra(tipo) if not any((tid, tipo, sin_acentos(t)) in cubiertos for tid in (actual["id"], general["id"]))]
+        if faltan:
+            sin_asignar.append((facturacion.TIPOS_ESTUDIO[tipo], faltan))
     sitios = sorted({r["sitio"] for r in db.q("SELECT DISTINCT sitio FROM catalogo WHERE tipo='BP'")})
-    return render_template("facturacion/nomencladores.html", nomencladores=lista, uso=uso, asignaciones=asignaciones, tipos=facturacion.TIPOS_ESTUDIO,
-                           sin_asignar=sin_asignar, tipos_muestra=tipos_de_muestra_bp(), sitios=sitios)
+    heredadas = db.uno("SELECT COUNT(*) AS n FROM nomenclador_muestras WHERE tarifario_id=?", (general["id"],))["n"] if actual["id"] != general["id"] else 0
+    return render_template("facturacion/nomencladores.html", nomencladores=lista, uso=uso, asignaciones=asignaciones, tipos=facturacion.TIPOS_ESTUDIO, sin_asignar=sin_asignar,
+                           tipos_muestra=tipos_de_muestra_bp(), sitios=sitios, tarifarios=tarifarios, actual=actual, general=general, heredadas=heredadas)
+
+
+@bp.route("/nomencladores/planilla")
+@requiere_permiso("facturacion")
+def nomencladores_planilla():
+    _, _, actual = tarifa_elegida(request.args.get("tarifario", ""))
+    nombre = re.sub(r"[^A-Za-z0-9]+", "_", sin_acentos(actual["nombre"])).strip("_") or "tarifa"
+    return send_file(io.BytesIO(planilla_de_tarifa(actual["id"]).encode("utf-8")), mimetype="text/csv", as_attachment=True, download_name=f"codigos_{nombre}.csv")

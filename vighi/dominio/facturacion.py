@@ -11,6 +11,7 @@ ESTADOS = {"borrador": "Borrador", "emitida": "Emitida", "cobrada": "Cobrada", "
 TIPOS_IVA = {"exento": "Exento", "gravado": "Gravado"}
 TIPOS_ESTUDIO = {"BP": "Biopsias", "CT": "Citologías", "PAP": "PAP"}
 CLASES_ESTADO = {"borrador": "", "emitida": "activo", "cobrada": "informado", "anulada": "anulado"}
+SIN_FACTURAR = "-"
 TIPOS_FEC = {"tentativa": "Fecha estimada tentativa", "confirmada": "Fecha estimada confirmada", "cargada": "Fecha de cobro cargada"}
 
 
@@ -50,18 +51,19 @@ def contexto():
     for r in db.q("SELECT tarifario_id, codigo, importe, vigente_desde FROM tarifario_valores ORDER BY vigente_desde"):
         valores.setdefault((r["tarifario_id"], r["codigo"]), []).append((r["vigente_desde"], r["importe"]))
     muestras = {}
-    for r in db.q("SELECT tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras"):
-        muestras[(r["tipo"], sin_acentos(r["sitio"]), sin_acentos(r["tipo_muestra"]))] = r["codigo"]
+    for r in db.q("SELECT tarifario_id, tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras"):
+        muestras[(r["tarifario_id"], r["tipo"], sin_acentos(r["sitio"]), sin_acentos(r["tipo_muestra"]))] = r["codigo"]
     return {"tarifarios": tarifarios, "general": general, "valores": valores, "muestras": muestras,
             "por_cobertura": {sin_acentos(r["cobertura"]): r["tarifario_id"] for r in db.q("SELECT cobertura, tarifario_id FROM tarifario_coberturas")},
             "nomencladores": {r["codigo"]: r["descripcion"] for r in db.q("SELECT codigo, descripcion FROM nomencladores")}}
 
 
-def codigo_de(ctx, tipo, sitio, tipo_muestra):
+def codigo_de(ctx, tarifario_id, tipo, sitio, tipo_muestra):
     s, m = sin_acentos(sitio), sin_acentos(tipo_muestra)
-    for clave in ((tipo, s, m), (tipo, "", m), (tipo, s, ""), (tipo, "", "")):
-        if clave in ctx["muestras"]:
-            return ctx["muestras"][clave]
+    for t in dict.fromkeys((tarifario_id, ctx["general"])):
+        for clave in ((t, tipo, s, m), (t, tipo, "", m), (t, tipo, s, ""), (t, tipo, "", "")):
+            if clave in ctx["muestras"]:
+                return ctx["muestras"][clave]
     return None
 
 
@@ -75,7 +77,7 @@ def importe_vigente(ctx, tarifario_id, codigo, fecha):
 
 def resolver(ctx, cobertura, tipo, sitio, tipo_muestra, fecha):
     tid = ctx["por_cobertura"].get(sin_acentos(cobertura), ctx["general"])
-    codigo = codigo_de(ctx, tipo, sitio, tipo_muestra)
+    codigo = codigo_de(ctx, tid, tipo, sitio, tipo_muestra)
     if not codigo:
         return {"ok": False, "motivo": "sin nomenclador para este tipo de muestra"}
     importe = importe_vigente(ctx, tid, codigo, fecha)
@@ -170,7 +172,7 @@ def leer_valores(texto, hoy):
 
 
 def leer_asignaciones(texto):
-    nuevas, errores = [], []
+    nuevas, errores, sin_codigo = [], [], 0
     for n, fila in enumerate(_lector(texto), start=1):
         fila = [c.strip() for c in fila]
         if not any(fila):
@@ -184,10 +186,27 @@ def leer_asignaciones(texto):
         if tipo not in TIPOS_ESTUDIO:
             errores.append(f"Línea {n}: el tipo «{fila[0]}» tiene que ser BP, CT o PAP.")
         elif not fila[3]:
-            errores.append(f"Línea {n}: falta el nomenclador.")
+            sin_codigo += 1
         else:
             nuevas.append({"tipo": tipo, "tipo_muestra": " ".join(fila[1].split())[:80], "sitio": " ".join(fila[2].split())[:80], "codigo": fila[3][:20]})
-    return nuevas, errores
+    return nuevas, errores, sin_codigo
+
+
+def planilla_codigos(combinaciones, asignadas, descripciones):
+    salida = io.StringIO()
+    w = csv.writer(salida, delimiter=";", lineterminator="\r\n")
+    w.writerow(["Tipo", "Tipo de muestra", "Sitio", "Nomenclador", "Descripción"])
+    por_clave = {(a["tipo"], sin_acentos(a["sitio"]), sin_acentos(a["tipo_muestra"])): a for a in asignadas}
+    usadas = set()
+    for tipo, tipo_muestra in combinaciones:
+        clave = (tipo, "", sin_acentos(tipo_muestra))
+        usadas.add(clave)
+        codigo = (por_clave[clave]["codigo"] or SIN_FACTURAR) if clave in por_clave else ""
+        w.writerow([tipo, tipo_muestra, "", codigo, descripciones.get(codigo, "")])
+    for clave, a in sorted(por_clave.items(), key=lambda x: (x[1]["tipo"], x[1]["tipo_muestra"], x[1]["sitio"])):
+        if clave not in usadas:
+            w.writerow([a["tipo"], a["tipo_muestra"], a["sitio"], a["codigo"] or SIN_FACTURAR, descripciones.get(a["codigo"], "")])
+    return "﻿" + salida.getvalue()
 
 
 def fecha_de_estudio(e):
