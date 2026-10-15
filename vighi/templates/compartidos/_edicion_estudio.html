@@ -1,4 +1,4 @@
 {% macro lapiz() %}<button type="button" class="lapiz" data-editar title="Editar"><svg class="ic"><use href="#i-lapiz"/></svg>cambiar</button>{% endmacro %}
-{% macro edicion_estudio(ruta, eid, campo, volver='') %}<form method="post" action="{{ url_for(ruta, eid=eid) }}" class="edicion">
-  <input type="hidden" name="_csrf" value="{{ csrf }}">{% if volver %}<input type="hidden" name="volver" value="{{ volver }}">{% endif %}{{ caller() }}
+{% macro edicion_estudio(ruta, eid, campo) %}<form method="post" action="{{ url_for(ruta, eid=eid) }}" class="edicion">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">{{ caller() }}
   <div class="editar">{{ campo }}<div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div></div></form>{% endmacro %}

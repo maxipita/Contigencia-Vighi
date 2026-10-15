@@ -54,9 +54,11 @@ def enviar(ruta, **datos):
     return c.post(ruta, data=dict(datos, _csrf=csrf), follow_redirects=True).get_data(as_text=True)
 
 
-h = c.get(f"/protocolo/{pid}").get_data(as_text=True)
+h = c.get(f"/estudio/{e1}").get_data(as_text=True)
 chequear("cada dato tiene su lápiz", all(f"/estudio/{e1}/{x}" in h for x in ("sitio", "muestra", "cantidad", "responsable", "lote")))
-chequear("el lote solo se cambia desde el primer estudio", f"/estudio/{e2}/lote" not in h and f"/estudio/{e2}/sitio" in h)
+chequear("el lote solo se cambia desde el primer estudio", f"/estudio/{e2}/lote" not in c.get(f"/estudio/{e2}").get_data(as_text=True) and f"/estudio/{e2}/sitio" in c.get(f"/estudio/{e2}").get_data(as_text=True))
+hp = c.get(f"/protocolo/{pid}").get_data(as_text=True)
+chequear("la ficha del protocolo no ofrece cambiar nada (para no tocar por error)", f"/estudio/{e1}/sitio" not in hp and f"/estudio/{e1}/cantidad" not in hp and f"/estudio/{e1}/muestra" not in hp and "data-editar" in hp)
 chequear("el órgano ofrece los de la misma subcategoría", "Cuello Uterino</option>" in h and "Sitio de prueba</option>" in h and "Estómago</option>" not in h)
 
 print("1) órgano")
@@ -97,24 +99,13 @@ chequear("rechaza un lote que no existe", "no existe" in t and estudio(e1)["lote
 t = enviar(f"/estudio/{e1}/lote", lote_id="")
 chequear("permite dejar el protocolo sin lote", estudio(e1)["lote_id"] is None and estudio(e2)["lote_id"] is None)
 
-print("5) desde la pantalla del estudio")
-h = c.get(f"/estudio/{e1}").get_data(as_text=True)
-chequear("la tarjeta del estudio ofrece cambiar cada dato", all(f"/estudio/{e1}/{x}" in h for x in ("sitio", "muestra", "cantidad", "responsable", "lote")) and 'name="volver" value="estudio"' in h)
-chequear("el segundo estudio no ofrece el lote", f"/estudio/{e2}/lote" not in c.get(f"/estudio/{e2}").get_data(as_text=True) and f"/estudio/{e2}/cantidad" in c.get(f"/estudio/{e2}").get_data(as_text=True))
-r = c.post(f"/estudio/{e1}/cantidad", data={"_csrf": csrf, "cantidad": "6", "volver": "estudio"}, follow_redirects=True)
-chequear("vuelve a la pantalla del estudio y guarda", r.request.path == f"/estudio/{e1}" and estudio(e1)["cantidad"] == "6" and "Cantidad cambiada a 6" in r.get_data(as_text=True))
-r = c.post(f"/estudio/{e1}/lote", data={"_csrf": csrf, "lote_id": f"nuevo:{tipo_lote}", "volver": "estudio"}, follow_redirects=True)
-chequear("el lote también vuelve al estudio", r.request.path == f"/estudio/{e1}" and estudio(e1)["lote_id"] is not None)
-r = c.post(f"/estudio/{e1}/cantidad", data={"_csrf": csrf, "cantidad": "5"}, follow_redirects=True)
-chequear("sin el aviso vuelve al protocolo", r.request.path == f"/protocolo/{pid}")
-
-print("6) permisos")
+print("5) permisos")
 sin, scsrf = cliente(ids["otro"])
 antes = estudio(e1)
 for ruta, datos in (("sitio", {"sitio": "Sitio de prueba"}), ("cantidad", {"cantidad": "7"}), ("responsable", {"responsable_id": str(ids["med"])}), ("lote", {"lote_id": f"nuevo:{tipo_lote}"}), ("muestra", {"tipo_muestra": "Reseccion"})):
     sin.post(f"/estudio/{e1}/{ruta}", data=dict(datos, _csrf=scsrf))
 chequear("sin el permiso de edición no cambia nada", estudio(e1) == antes)
-chequear("y no ve los lápices", f"/estudio/{e1}/sitio" not in sin.get(f"/protocolo/{pid}").get_data(as_text=True))
+chequear("y no ve los lápices", f"/estudio/{e1}/sitio" not in sin.get(f"/estudio/{e1}").get_data(as_text=True))
 c.post(f"/estudio/{e2}/anular", data={"_csrf": csrf, "motivo": "prueba"})
 t = enviar(f"/estudio/{e2}/cantidad", cantidad="9")
 chequear("un estudio anulado no se modifica", estudio(e2)["cantidad"] == "2" and "está anulado" in t)

@@ -59,7 +59,6 @@
   <input type="hidden" name="_csrf" value="{{ csrf }}">{{ caller() }}
   {% if editable %}<div class="editar">{{ campos }}<div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div></div>{% endif %}</form>{% endmacro %}
 {% set editable = puede('protocolo_editar') and not p.borrador %}
-{% from "compartidos/_edicion_estudio.html" import edicion_estudio with context %}
 {% set campos_paciente %}<div><label>Apellido</label><input name="apellido" value="{{ p.apellido or '' }}"></div>
   <div><label>Nombre</label><input name="nombre" value="{{ p.nombre or '' }}"></div>
   <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>{% endset %}
@@ -110,30 +109,12 @@
       <tr class="flujo-cab{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}><td colspan="8"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
         {% if activos | length > 1 %}<span class="muted">· flujo compartido por {{ activos | length }} estudios (mismo recorrido)</span>{% endif %}</td></tr>
       {% for e in grupo %}
-      {% set t = REGISTRO[e.tipo] %}
       <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
-        <td>{% if ed.sitios.get(e.id) %}
-          {% set campo %}<label>Sitio (órgano)</label><select name="sitio">{% for x in ed.sitios[e.id] %}<option {{ 'selected' if x == e.sitio }}>{{ x }}</option>{% endfor %}</select>{% endset %}
-          {% call edicion_estudio('estudios.estudio_sitio', e.id, campo) %}<div class="ver"><a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a> {{ lapiz() }}</div>{% endcall %}
-          {% else %}<a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a>{% endif %}</td>
-        <td>{% if ed.muestras.get(e.id) %}
-          {% set campo %}<div class="muted">{{ e.subcategoria or '' }}</div><select name="tipo_muestra" aria-label="Tipo de muestra">{% for m in ed.muestras[e.id] %}<option {{ 'selected' if m == e.tipo_muestra }}>{{ m }}</option>{% endfor %}</select>{% endset %}
-          {% call edicion_estudio('estudios.estudio_muestra', e.id, campo) %}<div class="ver">{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or 'Sin tipo' }} {{ lapiz() }}</div></div>{% endcall %}
-          {% else %}{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div>{% endif %}</td>
-        <td>{% if ed.muestras.get(e.id) %}
-          {% set campo %}<label>Cantidad ({{ t.etiqueta_cantidad }})</label><select name="cantidad">{% for x in t.cantidades %}<option {{ 'selected' if x == e.cantidad }}>{{ x }}</option>{% endfor %}</select>{% endset %}
-          {% call edicion_estudio('estudios.estudio_cantidad', e.id, campo) %}<div class="ver">{{ e.tacos if e.tacos is not none else '' }}<div class="muted">{{ e.cantidad or '—' }} {{ t.etiqueta_cantidad }} {{ lapiz() }}</div></div>{% endcall %}
-          {% else %}{{ e.tacos if e.tacos is not none else '' }}{% endif %}</td>
-        <td>{% if ed.lote.estudio == e.id %}
-          {% set campo %}<label>Lote del protocolo</label><select name="lote_id"><option value="">— Sin lote —</option>
-            {% if ed.lote.abiertos %}<optgroup label="Lotes abiertos de hoy">{% for l in ed.lote.abiertos %}<option value="{{ l.id }}" {{ 'selected' if l.id == e.lote_id }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}</optgroup>{% endif %}
-            <optgroup label="Crear lote nuevo de hoy">{% for tl in ed.lote.nuevos %}<option value="nuevo:{{ tl }}">+ Nuevo lote {{ tl }}</option>{% endfor %}</optgroup></select>{% endset %}
-          {% call edicion_estudio('estudios.estudio_lote', e.id, campo) %}<div class="ver">{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% else %}<span class="muted">Sin lote</span>{% endif %} {{ lapiz() }}</div>{% endcall %}
-          {% else %}{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}{% endif %}</td>
-        <td>{% if ed.muestras.get(e.id) %}
-          {% set campo %}<label>Responsable</label><select name="responsable_id">{% for r in ed.responsables[e.tipo] %}<option value="{{ r.id }}" {{ 'selected' if r.id == e.responsable_id }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} · {{ r.nombre }}{% endif %}</option>{% endfor %}</select>{% endset %}
-          {% call edicion_estudio('estudios.estudio_responsable', e.id, campo) %}<div class="ver">{{ e.responsable or '—' }} {{ lapiz() }}</div>{% endcall %}
-          {% else %}{{ e.responsable or '' }}{% endif %}</td>
+        <td><a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>
+        <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
+        <td>{{ e.tacos if e.tacos is not none else '' }}</td>
+        <td>{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
+        <td>{{ e.responsable or '' }}</td>
         <td><div class="estado-celda"><span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
           {% if e.proxima %}<span class="muted">{{ SECTORES[e.proxima[2]] }}</span>{% endif %}</div></td>
         <td>{{ pill(e.semaforo) }}</td>

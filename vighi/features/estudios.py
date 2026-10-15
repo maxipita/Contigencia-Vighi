@@ -85,7 +85,7 @@ def estudio_editar(eid):
 
 def estudio_para_modificar(eid):
     e = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
-    destino = redirect(url_for("estudios.estudio", eid=eid) if request.form.get("volver") == "estudio" else url_for("protocolos.protocolo", pid=e["protocolo_id"]))
+    destino = redirect(url_for("estudios.estudio", eid=eid))
     if e["anulado"]:
         flash("El estudio está anulado: no se puede modificar.", "error")
         return None, destino
