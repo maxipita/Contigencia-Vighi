@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Responsables de tareas{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Administración</div>
+<h1>Responsables de tareas</h1>
+<p class="muted">Cada título de tarea tiene un responsable por defecto (se puede cambiar al crear la tarea) y, si corresponde, la etapa que la cierra sola.</p>
+<div class="acciones" style="margin:0 0 12px"><a class="btn" href="{{ url_for('tareas.tipo_tarea') }}">+ Nuevo título</a></div>
+<table>
+  <tr><th>Título</th><th>Responsable</th><th>Cierre automático</th><th></th></tr>
+  {% for t in tipos %}
+  <tr>
+    <td>{{ t.titulo }}</td>
+    <td>{% if t.iniciales %}{{ t.iniciales }}{% if t.responsable and t.responsable != t.iniciales %} <span class="muted">· {{ t.responsable }}</span>{% endif %}{% else %}<span class="muted">Sin asignar</span>{% endif %}</td>
+    <td>{{ t.cierre_texto or '' }}</td>
+    <td><a class="lapiz" href="{{ url_for('tareas.tipo_tarea', tid=t.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>Modificar</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

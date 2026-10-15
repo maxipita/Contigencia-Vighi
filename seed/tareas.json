@@ -1,0 +1,62 @@
+[
+ {
+  "titulo": "Caso incompleto",
+  "cierre": "entrega"
+ },
+ {
+  "titulo": "Errores de autorización",
+  "cierre": ""
+ },
+ {
+  "titulo": "Ingreso muestra",
+  "cierre": "entrega"
+ },
+ {
+  "titulo": "Macro urgente",
+  "cierre": "procesamiento"
+ },
+ {
+  "titulo": "Nueva técnica especial",
+  "cierre": ""
+ },
+ {
+  "titulo": "Nuevo corte",
+  "cierre": ""
+ },
+ {
+  "titulo": "Pedir autorización",
+  "cierre": ""
+ },
+ {
+  "titulo": "Presupuesto",
+  "cierre": ""
+ },
+ {
+  "titulo": "Procesamiento externo",
+  "cierre": "entrega"
+ },
+ {
+  "titulo": "Procesamiento IHQ urgente",
+  "cierre": "interp_ihq"
+ },
+ {
+  "titulo": "Procesamiento urgente",
+  "cierre": "microscopia"
+ },
+ {
+  "titulo": "Reclamo IHQ externa",
+  "cierre": "interp_ihq"
+ },
+ {
+  "titulo": "Reclamo informe",
+  "cierre": "entrega"
+ },
+ {
+  "titulo": "Solicitud de IHQ",
+  "cierre": ""
+ },
+ {
+  "titulo": "Solicitud taco",
+  "cierre": ""
+ }
+]

@@ -1,0 +1,45 @@
+<div class="tarjeta" id="tareas">
+  {% set abiertas = tareas | selectattr('estado', 'equalto', 'abierta') | list %}
+  {% set cerradas = tareas | selectattr('estado', 'equalto', 'cerrada') | list %}
+  <h2>Tareas{% if abiertas %} <span class="muted">({{ abiertas | length }} abierta{{ 's' if abiertas | length > 1 }})</span>{% endif %}</h2>
+  {% macro fila(t) %}
+  <div class="tarea {{ 'cerrada' if t.estado == 'cerrada' }}">
+    <div class="tarea-cab">
+      <b>{{ t.titulo }}</b>
+      {% if t.urgencia == 'urgente' %}<span class="chip urgente">Urgente</span>{% endif %}
+      <span class="chip prio-{{ t.prioridad }}">Prioridad {{ t.prioridad }}</span>
+      {% if t.estado == 'cerrada' %}<span class="chip">Cerrada</span>{% endif %}
+    </div>
+    {% if t.descripcion %}<div class="tarea-texto">{{ t.descripcion }}</div>{% endif %}
+    <form method="post" action="{{ url_for('tareas.tarea_responsable', tid=t.id) }}" class="edicion">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="ver">Responsable: <b>{{ t.resp_iniciales or 'Sin asignar' }}</b>{% if t.resp_nombre and t.resp_nombre != t.resp_iniciales %} <span class="muted">· {{ t.resp_nombre }}</span>{% endif %}
+        {% if t.estado == 'abierta' %}<button type="button" class="lapiz" data-editar title="Cambiar responsable"><svg class="ic"><use href="#i-lapiz"/></svg>cambiar</button>{% endif %}</div>
+      {% if t.estado == 'abierta' %}<div class="editar">
+        <select name="responsable_id"><option value="">— Sin asignar —</option>
+          {% for u in usuarios_tarea %}<option value="{{ u.id }}" {{ 'selected' if u.id == t.responsable_id }}>{{ u.iniciales }}{% if u.nombre and u.nombre != u.iniciales %} · {{ u.nombre }}{% endif %}</option>{% endfor %}
+        </select>
+        <div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div>
+      </div>{% endif %}
+    </form>
+    <div class="tarea-pie muted">Creada por {{ t.creador or '?' }} · {{ t.creado_en | fh }}
+      {% if t.estado == 'cerrada' %}<br>Cerrada por {{ t.cerrador or 'el sistema' }} · {{ t.cerrada_en | fh }}{% if t.cierre_detalle %} ({{ t.cierre_detalle }}){% endif %}{% endif %}</div>
+    <div class="acciones">
+      {% if t.estado == 'abierta' %}
+      <form method="post" action="{{ url_for('tareas.tarea_cerrar', tid=t.id) }}" data-confirmar="¿Cerrar la tarea «{{ t.titulo }}»?"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Cerrar tarea</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('tareas.tarea_reabrir', tid=t.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Reabrir</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% endmacro %}
+  <div class="tareas">
+    {% for t in abiertas %}{{ fila(t) }}{% else %}<p class="muted">No hay tareas abiertas.</p>{% endfor %}
+  </div>
+  {% if cerradas %}
+  <details class="tareas-cerradas"><summary>Cerradas ({{ cerradas | length }})</summary>
+    <div class="tareas">{% for t in cerradas %}{{ fila(t) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+  <div class="acciones"><a class="btn sec" href="{{ url_for('tareas.tarea_nueva', pid=p.id) }}">Crear una tarea</a></div>
+</div>

@@ -45,10 +45,16 @@ class InformeError(Exception):
     pass
 
 
+def _candidatas():
+    windows = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    linux = "/usr/share/fonts/truetype/liberation"
+    return ((os.path.join(windows, "segoeui.ttf"), os.path.join(windows, "segoeuib.ttf")),
+            (os.path.join(windows, "arial.ttf"), os.path.join(windows, "arialbd.ttf")),
+            (os.path.join(linux, "LiberationSans-Regular.ttf"), os.path.join(linux, "LiberationSans-Bold.ttf")))
+
+
 def _fuentes():
-    carpeta = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
-    for normal, negrita in (("segoeui.ttf", "segoeuib.ttf"), ("arial.ttf", "arialbd.ttf")):
-        a, b = os.path.join(carpeta, normal), os.path.join(carpeta, negrita)
+    for a, b in _candidatas():
         if os.path.exists(a) and os.path.exists(b):
             try:
                 pdfmetrics.registerFont(TTFont("Informe", a))

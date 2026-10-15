@@ -704,3 +704,23 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
     window.addEventListener("pagehide", volcar);
   });
 })();
+
+(function () {
+  const asunto = document.querySelector("select[data-tarea-asunto]");
+  const sector = document.querySelector("select[data-tarea-sector]");
+  const resp = document.querySelector("select[data-tarea-responsable]");
+  if (!asunto || !sector || !resp) return;
+  const opciones = [...resp.options].filter(o => o.value);
+  const filtrar = () => {
+    opciones.forEach(o => { o.hidden = !!sector.value && !(o.dataset.sectores || "").split(",").includes(sector.value); });
+    if (resp.selectedOptions[0] && resp.selectedOptions[0].hidden) resp.value = "";
+  };
+  sector.addEventListener("change", filtrar);
+  asunto.addEventListener("change", () => {
+    const o = asunto.selectedOptions[0];
+    if (!o || !o.dataset.responsable) return;
+    sector.value = "";
+    filtrar();
+    resp.value = o.dataset.responsable;
+  });
+})();

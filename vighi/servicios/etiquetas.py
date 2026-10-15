@@ -74,6 +74,18 @@ def etiquetas_cantidad(cantidad):
     return int(cantidad) if (cantidad or "").isdigit() else (1 if cantidad else 0)
 
 
+def estudios_para_etiquetar(ids):
+    filas = {}
+    for i in range(0, len(ids), 80):
+        grupo = ids[i:i + 80]
+        filas.update({f["id"]: f for f in db.q(
+            f"""SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, u.iniciales AS resp, l.codigo AS lote_codigo
+                FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
+                LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
+                WHERE e.id IN ({','.join('?' * len(grupo))})""", grupo)})
+    return filas
+
+
 def tecnicas_por_estudio():
     out = {}
     for r in db.q("SELECT estudio_id, numero, cassettes FROM tecnicas ORDER BY id"):

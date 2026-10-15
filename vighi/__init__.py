@@ -5,9 +5,9 @@ from flask import Flask
 
 from vighi.core import db, fechas, sesion
 from vighi.features import (auth, coberturas, envios, estudios, etiquetas, facturacion, imagenes, informes, listados, lotes, plantillas, protocolos, sistema,
-                            tablero, ubicaciones, usuarios)
+                            tablero, tareas, ubicaciones, usuarios)
 
-BLUEPRINTS = (sistema, auth, tablero, protocolos, estudios, informes, imagenes, lotes, etiquetas, plantillas, usuarios, facturacion, coberturas, listados, envios, ubicaciones)
+BLUEPRINTS = (sistema, auth, tablero, protocolos, estudios, informes, imagenes, lotes, etiquetas, plantillas, usuarios, facturacion, coberturas, listados, envios, ubicaciones, tareas)
 FILTROS = (("fh", fechas.fecha_hora), ("larga", fechas.fecha_larga), ("edad", fechas.edad), ("dh", fechas.fecha_hora_dt), ("f", fechas.fecha),
            ("peso", fechas.peso), ("peso0", fechas.peso_entero))
 

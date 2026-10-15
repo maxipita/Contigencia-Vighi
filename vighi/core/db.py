@@ -109,6 +109,10 @@ CREATE TABLE IF NOT EXISTS tacos_organo (
     organo VARCHAR(80) NOT NULL, tipo_lote VARCHAR(20) NOT NULL, tacos INTEGER NOT NULL,
     PRIMARY KEY (organo, tipo_lote)
 );
+CREATE TABLE IF NOT EXISTS tarea_tipos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titulo VARCHAR(80) NOT NULL UNIQUE, responsable_id INTEGER REFERENCES usuarios(id), cierre VARCHAR(30)
+);
 CREATE TABLE IF NOT EXISTS listas (nombre VARCHAR(30) NOT NULL, orden INTEGER, valor VARCHAR(80));
 CREATE TABLE IF NOT EXISTS auditoria (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,7 +120,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
     accion VARCHAR(40) NOT NULL, detalle TEXT
 );
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
-CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY, nombre VARCHAR(150) NOT NULL, email VARCHAR(150));
+CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre VARCHAR(150) NOT NULL, email VARCHAR(150));
 CREATE TABLE IF NOT EXISTS bloqueos (nombre VARCHAR(40) PRIMARY KEY, vence REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS ediciones (
     protocolo_id INTEGER PRIMARY KEY REFERENCES protocolos(id),
@@ -144,6 +148,20 @@ CREATE TABLE IF NOT EXISTS comentarios (
     texto TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_comentarios_protocolo ON comentarios(protocolo_id);
+CREATE TABLE IF NOT EXISTS tareas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    titulo VARCHAR(80) NOT NULL,
+    descripcion TEXT,
+    urgencia VARCHAR(10) NOT NULL DEFAULT 'regular',
+    prioridad VARCHAR(10) NOT NULL DEFAULT 'media',
+    responsable_id INTEGER REFERENCES usuarios(id),
+    estado VARCHAR(10) NOT NULL DEFAULT 'abierta',
+    cierre VARCHAR(30),
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL,
+    cerrada_por INTEGER REFERENCES usuarios(id), cerrada_en VARCHAR(19), cierre_detalle VARCHAR(100)
+);
+CREATE INDEX IF NOT EXISTS ix_tareas_protocolo ON tareas(protocolo_id);
 CREATE TABLE IF NOT EXISTS imagenes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
@@ -620,6 +638,8 @@ def inicializar():
     if not c.execute("SELECT 1 FROM tacos_organo LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "tacos_organo.json")):
         c.executemany("INSERT INTO tacos_organo (organo, tipo_lote, tacos) VALUES (?,?,?)",
                       [(x["organo"], x["tipo_lote"], x["tacos"]) for x in cargar("tacos_organo.json")])
+    if not c.execute("SELECT 1 FROM tarea_tipos LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "tareas.json")):
+        c.executemany("INSERT INTO tarea_tipos (titulo, cierre) VALUES (?,?)", [(x["titulo"], x["cierre"] or None) for x in cargar("tareas.json")])
     if not c.execute("SELECT 1 FROM listas LIMIT 1").fetchone():
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [(n, i, v) for n, vals in cargar("listas.json").items() for i, v in enumerate(vals)])

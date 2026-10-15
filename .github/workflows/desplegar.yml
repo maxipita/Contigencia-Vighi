@@ -1,0 +1,88 @@
+name: Desplegar a producción
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**", "infra/**", ".vscode/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: produccion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: sa-east-1
+  AWS_ROLE_ARN: arn:aws:iam::964949462278:role/vighi-contingencia-github
+  REPOSITORIO: vighi-contingencia
+  CLUSTER: vighi-contingencia
+  SERVICIO: vighi-contingencia
+  TAG_PRODUCCION: produccion
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TZ: America/Argentina/Buenos_Aires
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: pruebas
+        ports: ["55138:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt pymupdf
+      - run: python tests/correr.py --pg postgresql://postgres@127.0.0.1:55138/pruebas
+
+  desplegar:
+    needs: pruebas
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Imagen
+        run: |
+          set -euo pipefail
+          registro="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com"
+          version="${GITHUB_SHA::12}"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registro"
+          if aws ecr describe-images --repository-name "$REPOSITORIO" --image-ids imageTag="$version" >/dev/null 2>&1; then
+            imagen=(--repository-name "$REPOSITORIO" --image-ids imageTag="$version")
+            tipo="$(aws ecr batch-get-image "${imagen[@]}" --query 'images[0].imageManifestMediaType' --output text)"
+            manifiesto="$(aws ecr batch-get-image "${imagen[@]}" --query 'images[0].imageManifest' --output text)"
+            if ! aws ecr put-image --repository-name "$REPOSITORIO" --image-tag "$TAG_PRODUCCION" --image-manifest "$manifiesto" \
+                --image-manifest-media-type "$tipo" >/dev/null 2>error.txt; then
+              grep -q ImageAlreadyExistsException error.txt || { cat error.txt >&2; exit 1; }
+            fi
+          else
+            docker build -f deploy/Dockerfile -t "$registro/$REPOSITORIO:$version" -t "$registro/$REPOSITORIO:$TAG_PRODUCCION" .
+            docker push "$registro/$REPOSITORIO:$version"
+            docker push "$registro/$REPOSITORIO:$TAG_PRODUCCION"
+          fi
+          echo "Imagen: $version" >> "$GITHUB_STEP_SUMMARY"
+      - name: Desplegar en ECS
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICIO" --force-new-deployment >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICIO"
+          echo "Servicio estable." >> "$GITHUB_STEP_SUMMARY"
