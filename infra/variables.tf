@@ -44,8 +44,8 @@ variable "rds_clase" {
 }
 
 variable "smtp" {
-  type    = map(string)
-  default = {}
+  type    = list(string)
+  default = ["SMTP_HOST", "SMTP_PORT", "SMTP_USUARIO", "SMTP_DESDE", "SMTP_NOMBRE"]
 }
 
 variable "github_sub" {

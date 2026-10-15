@@ -44,7 +44,10 @@ py app.py                                 # servidor real en :8000 (equivale a "
   queda local y fuera de git) e `infra/` guarda el suyo ahí (`use_lockfile`, sin DynamoDB). El dominio `sistemacapvighi.com` se compró a mano en Route 53 y Terraform solo lee su zona (`data`).
   `https://contingencia.sistemacapvighi.com` → ALB (certificado ACM; HTTP y el dominio raíz redirigen) → ECS Fargate ARM64 en subred pública sin NAT (solo acepta al ALB) → RDS PostgreSQL 17
   en subred privada; archivos en el bucket `sistemacapvighi-archivos` (`S3_BUCKET`). `DATABASE_URL` y `CONTINGENCIA_SECRET_KEY` los genera Terraform en SSM (`/vighi-contingencia/...`);
-  `SMTP_CLAVE` se carga a mano (`aws ssm put-parameter --overwrite`, Terraform ignora su valor) y el resto del correo va en la variable `smtp`. Cantidad de tareas: variable `tareas`
+  el correo (`SMTP_*`) también va en SSM: Terraform crea `SMTP_CLAVE` y los parámetros de la lista `smtp` con un valor provisorio y nunca toca su valor (se cargan a mano, por la consola o
+  `aws ssm put-parameter --overwrite`; el repo es público, así que nunca en el código). La app los lee al arrancar: después de cambiar uno, reiniciar el servicio
+  (`aws ecs update-service --force-new-deployment`). `SMTP_SEGURIDAD` y `SMTP_RESPONDER_A` no existen (vacíos = STARTTLS y respuestas a `SMTP_DESDE`): para usarlos, sumar el nombre a
+  `smtp`. Office 365 desactiva por defecto el SMTP con usuario y clave a fines de diciembre de 2026: antes hay que pasar a OAuth 2.0 o que el admin de Microsoft 365 lo rehabilite. Cantidad de tareas: variable `tareas`
   (en el código, no en un `.tfvars`: un `apply` sin ese archivo la volvería a 0). RDS, ALB y los dos buckets tienen protección contra borrado. Terraform no corre en CI: los cambios de
   infraestructura se aplican a mano. **Producción corre en AWS desde el 15/10/2026** (migración única con `migrar_d1_a_pg`, verificada tabla por tabla contra D1): la D1 de
   producción quedó congelada como respaldo y no se vuelve a cargar nada en ella; la PC del laboratorio ya no es el servidor.

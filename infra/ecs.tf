@@ -8,11 +8,11 @@ resource "aws_cloudwatch_log_group" "app" {
 }
 
 locals {
-  entorno = merge({
+  entorno = {
     AWS_REGION         = var.region
     S3_BUCKET          = aws_s3_bucket.archivos.id
     CONTINGENCIA_HTTPS = "1"
-  }, var.smtp)
+  }
 }
 
 resource "aws_ecs_task_definition" "app" {
@@ -46,6 +46,7 @@ resource "aws_ecs_task_definition" "app" {
       }
     }
   }])
+  depends_on = [aws_iam_role_policy.ejecucion_secretos]
 }
 
 resource "aws_ecs_service" "app" {
