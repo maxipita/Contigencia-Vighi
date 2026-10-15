@@ -148,6 +148,20 @@ CREATE TABLE IF NOT EXISTS comentarios (
     texto TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_comentarios_protocolo ON comentarios(protocolo_id);
+CREATE TABLE IF NOT EXISTS tareas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    titulo VARCHAR(80) NOT NULL,
+    descripcion TEXT,
+    urgencia VARCHAR(10) NOT NULL DEFAULT 'regular',
+    prioridad VARCHAR(10) NOT NULL DEFAULT 'media',
+    responsable_id INTEGER REFERENCES usuarios(id),
+    estado VARCHAR(10) NOT NULL DEFAULT 'abierta',
+    cierre VARCHAR(30),
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL,
+    cerrada_por INTEGER REFERENCES usuarios(id), cerrada_en VARCHAR(19), cierre_detalle VARCHAR(100)
+);
+CREATE INDEX IF NOT EXISTS ix_tareas_protocolo ON tareas(protocolo_id);
 CREATE TABLE IF NOT EXISTS imagenes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),

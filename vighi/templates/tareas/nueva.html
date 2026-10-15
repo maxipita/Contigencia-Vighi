@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block titulo %}Nueva tarea · Protocolo {{ p.numero }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Protocolo {{ p.numero }}</div>
+<p><a href="{{ url_for('protocolos.protocolo', pid=p.id) }}#tareas">← Volver al protocolo</a></p>
+<h1>Nueva tarea</h1>
+<div class="tarjeta datos-tarea">
+  <div><span class="muted">Procedencia</span><br><b>{{ p.lugar_recoleccion or '—' }}</b></div>
+  <div><span class="muted">Paciente</span><br><b>{{ (p.apellido or '') ~ (', ' ~ p.nombre if p.nombre else '') or '—' }}</b></div>
+  <div><span class="muted">Médico solicitante</span><br><b>{{ p.medico or '—' }}</b></div>
+  <div><span class="muted">Lugar de entrega</span><br><b>{{ p.lugar_entrega or '—' }}</b></div>
+</div>
+<form method="post" class="tarjeta form-tarea">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="tarea-columnas">
+    <div>
+      <label>Asunto *</label>
+      <select name="tipo" required data-tarea-asunto>
+        <option value="">— Elegí el asunto —</option>
+        {% for t in tipos %}<option value="{{ t.id }}" data-responsable="{{ t.responsable_id or '' }}" {{ 'selected' if form.get('tipo') == t.id | string }}>{{ t.titulo }}</option>{% endfor %}
+      </select>
+      <label style="margin-top:12px">Descripción</label>
+      <textarea name="descripcion" rows="5" maxlength="2000" placeholder="Qué hay que hacer…">{{ form.get('descripcion', '') }}</textarea>
+      <label style="margin-top:12px">Responsable asignado</label>
+      <div class="par-selects">
+        <select data-tarea-sector aria-label="Sector">
+          <option value="">Todos los sectores</option>
+          {% for k, n in sectores.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}
+        </select>
+        <select name="responsable_id" data-tarea-responsable>
+          <option value="">— Sin asignar —</option>
+          {% for u in usuarios %}<option value="{{ u.id }}" data-sectores="{{ u.sectores_lista | join(',') }}" {{ 'selected' if form.get('responsable_id') == u.id | string }}>{{ u.iniciales }}{% if u.nombre and u.nombre != u.iniciales %} · {{ u.nombre }}{% endif %}</option>{% endfor %}
+        </select>
+      </div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" disabled> Notificar por e-mail <span class="muted">(todavía no disponible)</span></label>
+    </div>
+    <div>
+      <label>Tipo</label>
+      <div class="muted" style="margin-bottom:12px">Tarea</div>
+      <label>Urgencia</label>
+      <div class="opciones">{% for k, n in urgencias.items() %}<label class="check"><input type="radio" name="urgencia" value="{{ k }}" {{ 'checked' if form.get('urgencia') == k }}> {{ n }}</label>{% endfor %}</div>
+      <label style="margin-top:12px">Prioridad</label>
+      <div class="opciones">{% for k, n in prioridades.items() %}<label class="check"><input type="radio" name="prioridad" value="{{ k }}" {{ 'checked' if form.get('prioridad') == k }}> {{ n }}</label>{% endfor %}</div>
+    </div>
+  </div>
+  <div class="acciones"><button class="btn">Crear tarea</button><a class="btn sec" href="{{ url_for('protocolos.protocolo', pid=p.id) }}#tareas">Cancelar</a></div>
+</form>
+{% endblock %}

@@ -1,8 +1,10 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from vighi.core import db
-from vighi.core.sesion import requiere_admin, usuario_actual
-from vighi.servicios.tareas import CIERRES, tipos_de_tarea, usuarios_para_tareas
+from vighi.core.sesion import requiere_admin, requiere_login, usuario_actual
+from vighi.dominio.estudios import SECTORES
+from vighi.servicios.protocolos import protocolo_o_404
+from vighi.servicios.tareas import CIERRES, PRIORIDADES, URGENCIAS, crear_tarea, responsable_valido, tipos_de_tarea, usuarios_con_sectores, usuarios_para_tareas, validar_tarea
 
 bp = Blueprint("tareas", __name__)
 
@@ -48,3 +50,69 @@ def tipo_tarea(tid=None):
             flash(f"Tarea «{titulo}» guardada.", "ok")
             return redirect(url_for("tareas.tipos_tarea"))
     return render_template("tareas/tipo.html", t=t, usuarios=usuarios, cierres=CIERRES)
+
+
+def volver_a_tareas(pid):
+    destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolos.protocolo", pid=pid)
+    return redirect(destino.split("#")[0] + "#tareas")
+
+
+@bp.route("/protocolo/<int:pid>/tarea/nueva", methods=["GET", "POST"])
+@requiere_login
+def tarea_nueva(pid):
+    p = protocolo_o_404(pid)
+    form = request.form if request.method == "POST" else {"urgencia": "regular", "prioridad": "media"}
+    if request.method == "POST":
+        t, descripcion, resp, error = validar_tarea(form)
+        if error:
+            flash(error, "error")
+        else:
+            crear_tarea(pid, t, descripcion, form["urgencia"], form["prioridad"], resp, usuario_actual()["id"])
+            flash(f"Tarea «{t['titulo']}» creada.", "ok")
+            return redirect(url_for("protocolos.protocolo", pid=pid) + "#tareas")
+    tipos = tipos_de_tarea()
+    return render_template("tareas/nueva.html", p=p, form=form, tipos=tipos, usuarios=usuarios_con_sectores(), sectores=SECTORES, urgencias=URGENCIAS, prioridades=PRIORIDADES)
+
+
+def tarea_o_404(tid):
+    return db.uno("SELECT * FROM tareas WHERE id=?", (tid,)) or abort(404)
+
+
+@bp.route("/tarea/<int:tid>/responsable", methods=["POST"])
+@requiere_login
+def tarea_responsable(tid):
+    t = tarea_o_404(tid)
+    resp, error = responsable_valido(request.form.get("responsable_id", ""))
+    if error:
+        flash(error, "error")
+    elif t["estado"] != "abierta":
+        flash("La tarea está cerrada: reabrila para cambiar el responsable.", "error")
+    elif resp != t["responsable_id"]:
+        db.ex("UPDATE tareas SET responsable_id=? WHERE id=?", (resp, tid))
+        quien = db.uno("SELECT iniciales FROM usuarios WHERE id=?", (resp,)) if resp else None
+        db.auditar(usuario_actual()["id"], t["protocolo_id"], "tarea_responsable", f"{t['titulo']} → {quien['iniciales'] if quien else 'sin asignar'}")
+        flash("Responsable actualizado.", "ok")
+    return volver_a_tareas(t["protocolo_id"])
+
+
+@bp.route("/tarea/<int:tid>/cerrar", methods=["POST"])
+@requiere_login
+def tarea_cerrar(tid):
+    t = tarea_o_404(tid)
+    if t["estado"] == "abierta":
+        yo = usuario_actual()["id"]
+        db.ex("UPDATE tareas SET estado='cerrada', cerrada_por=?, cerrada_en=?, cierre_detalle=? WHERE id=?", (yo, db.ahora(), "a mano", tid))
+        db.auditar(yo, t["protocolo_id"], "tarea_cerrada", f"{t['titulo']} (a mano)")
+        flash(f"Tarea «{t['titulo']}» cerrada.", "ok")
+    return volver_a_tareas(t["protocolo_id"])
+
+
+@bp.route("/tarea/<int:tid>/reabrir", methods=["POST"])
+@requiere_login
+def tarea_reabrir(tid):
+    t = tarea_o_404(tid)
+    if t["estado"] == "cerrada":
+        db.ex("UPDATE tareas SET estado='abierta', cerrada_por=NULL, cerrada_en=NULL, cierre_detalle=NULL WHERE id=?", (tid,))
+        db.auditar(usuario_actual()["id"], t["protocolo_id"], "tarea_reabierta", t["titulo"])
+        flash(f"Tarea «{t['titulo']}» reabierta.", "ok")
+    return volver_a_tareas(t["protocolo_id"])
