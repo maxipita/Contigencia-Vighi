@@ -2,8 +2,8 @@
 {% block titulo %}Usuario{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Administración</div>
-<h1>{{ 'Editar ' ~ u.iniciales if u else 'Nuevo usuario' }}</h1>
-{% if yo.admin and u and u.activo and u.id != yo.id %}
+<h1>{{ 'Editar ' ~ u.iniciales if u and u.id else 'Nuevo usuario' }}</h1>
+{% if yo.admin and u and u.id and u.activo and u.id != yo.id %}
 <form method="post" action="{{ url_for('auth.ver_como', uid=u.id) }}" class="tarjeta ver-como-tarjeta" style="max-width:820px"
       data-confirmar="¿Ver el sistema como {{ u.iniciales }}? Es solo para mirar; podés volver a tu usuario desde la franja amarilla.">
   <input type="hidden" name="_csrf" value="{{ csrf }}">

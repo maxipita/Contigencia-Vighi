@@ -1,0 +1,19 @@
+{% macro cabecera(ctx, activa) %}
+{% set n = ctx.cob.nombre %}{% set t0 = ctx.opciones[0].id %}
+<div class="eyebrow"><a href="{{ url_for('coberturas.coberturas') }}">Coberturas</a></div>
+<h1>{{ n }}</h1>
+<div class="tabs">
+  <a class="{{ 'activo' if activa == 'datos' }}" href="{{ url_for('coberturas.cobertura', c=n) }}">Datos</a>
+  <a class="{{ 'activo' if activa == 'planes' }}" href="{{ url_for('coberturas.cobertura', c=n, pestana='planes') }}">Planes{% if ctx.cob.planes %} ({{ ctx.cob.planes | length }}){% endif %}</a>
+  <a class="{{ 'activo' if activa == 'tarifas' }}" href="{{ url_for('facturacion.tarifario', c=n, tarifario=t0) }}">Tarifas</a>
+  <a class="{{ 'activo' if activa == 'codigos' }}" href="{{ url_for('facturacion.nomencladores', c=n, tarifario=t0) }}">Códigos</a>
+</div>
+{% endmacro %}
+
+{% macro selector_tarifa(ctx, actual_id, destino) %}
+{% if ctx.opciones | length > 1 %}
+<div class="segmentado" style="margin-bottom:12px">
+  {% for o in ctx.opciones %}<a class="{{ 'activo' if o.id == actual_id }}" href="{{ url_for(destino, c=ctx.cob.nombre, tarifario=o.id) }}">{{ o.rotulo }}</a>{% endfor %}
+</div>
+{% endif %}
+{% endmacro %}

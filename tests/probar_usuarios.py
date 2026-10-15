@@ -29,6 +29,28 @@ with A.app.app_context():
     perfil_alto = db.ex("INSERT INTO perfiles (nombre, permisos) VALUES ('Todo facturación','facturacion,exportar')")
     perfil_bajo = db.ex("INSERT INTO perfiles (nombre, permisos) VALUES ('Solo exportar','exportar')")
 
+print("0) las iniciales no se pueden repetir")
+a0, a0csrf = cliente(admin)
+r = a0.post("/usuarios/nuevo", data={"_csrf": a0csrf, "iniciales": "zzcom", "nombre": "Otra", "activo": "1"}, follow_redirects=True)
+h0 = r.get_data(as_text=True)
+with A.app.app_context():
+    n_zzcom = db.uno("SELECT COUNT(*) AS n FROM usuarios WHERE UPPER(iniciales)='ZZCOM'")["n"]
+chequear("no crea un usuario con iniciales ya usadas, aunque cambien las mayúsculas", n_zzcom == 1 and "ya las usa" in h0 and "Común" in h0, h0[:200])
+r = a0.post("/usuarios/nuevo", data={"_csrf": a0csrf, "iniciales": " zz com ", "nombre": "Otra", "activo": "1"}, follow_redirects=True)
+with A.app.app_context():
+    n_zzcom = db.uno("SELECT COUNT(*) AS n FROM usuarios WHERE UPPER(iniciales)='ZZCOM'")["n"]
+chequear("tampoco con espacios de más", n_zzcom == 1 and "ya las usa" in r.get_data(as_text=True))
+r = a0.post(f"/usuarios/{comun}", data={"_csrf": a0csrf, "iniciales": "ZZGES", "nombre": "Común", "activo": "1"}, follow_redirects=True)
+with A.app.app_context():
+    quedo = db.uno("SELECT iniciales FROM usuarios WHERE id=?", (comun,))["iniciales"]
+chequear("ni cambiando las de un usuario existente a las de otro", quedo == "ZZCOM" and "ya las usa" in r.get_data(as_text=True))
+r = a0.post("/usuarios/nuevo", data={"_csrf": a0csrf, "iniciales": "", "nombre": "Sin iniciales", "activo": "1"}, follow_redirects=True)
+chequear("pide las iniciales si están vacías", "Indicá las iniciales" in r.get_data(as_text=True))
+r = a0.post("/usuarios/nuevo", data={"_csrf": a0csrf, "iniciales": "zzmin", "nombre": "Minúsculas", "activo": "1"}, follow_redirects=True)
+with A.app.app_context():
+    guardado = db.uno("SELECT iniciales FROM usuarios WHERE UPPER(iniciales)='ZZMIN'")
+chequear("las iniciales nuevas se guardan en mayúsculas", guardado is not None and guardado["iniciales"] == "ZZMIN")
+
 print("1) quién entra")
 c, csrf = cliente(comun)
 chequear("sin el permiso no entra", c.get("/usuarios").status_code == 403)

@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS protocolos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero VARCHAR(30) NOT NULL UNIQUE,
     fecha_recoleccion VARCHAR(10),
-    dni VARCHAR(20), cobertura VARCHAR(80), n_afiliado VARCHAR(40),
+    dni VARCHAR(20), cobertura VARCHAR(80), plan VARCHAR(60), n_afiliado VARCHAR(40),
     nombre VARCHAR(80), apellido VARCHAR(80), sexo VARCHAR(10), exento VARCHAR(3),
     fecha_nacimiento VARCHAR(10), email VARCHAR(120), telefono VARCHAR(40),
     medico VARCHAR(150), lugar_recoleccion VARCHAR(120), lugar_entrega VARCHAR(120),
@@ -169,8 +169,15 @@ CREATE TABLE IF NOT EXISTS tarifarios (
     nombre VARCHAR(80) NOT NULL UNIQUE, iva VARCHAR(10) NOT NULL DEFAULT 'exento'
 );
 CREATE TABLE IF NOT EXISTS tarifario_coberturas (
-    cobertura VARCHAR(80) PRIMARY KEY, tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id)
+    cobertura VARCHAR(80) NOT NULL, plan VARCHAR(60) NOT NULL DEFAULT '',
+    tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id),
+    PRIMARY KEY (cobertura, plan)
 );
+CREATE TABLE IF NOT EXISTS tarifario_descripciones (
+    tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id), codigo VARCHAR(20) NOT NULL, descripcion VARCHAR(300) NOT NULL,
+    PRIMARY KEY (tarifario_id, codigo)
+);
+CREATE TABLE IF NOT EXISTS cobertura_pago (cobertura VARCHAR(80) PRIMARY KEY, dias INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS tarifario_valores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tarifario_id INTEGER NOT NULL REFERENCES tarifarios(id), codigo VARCHAR(20) NOT NULL,
@@ -188,7 +195,7 @@ CREATE TABLE IF NOT EXISTS nomenclador_muestras (
 CREATE TABLE IF NOT EXISTS facturas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero VARCHAR(40), estado VARCHAR(10) NOT NULL DEFAULT 'borrador', cobertura VARCHAR(80) NOT NULL,
-    fecha_factura VARCHAR(10), fecha_estimada_cobro VARCHAR(10), fec_tipo VARCHAR(10) NOT NULL DEFAULT 'tentativa', fecha_cobro VARCHAR(10),
+    fecha_factura VARCHAR(10), fecha_estimada_cobro VARCHAR(10), fec_tipo VARCHAR(10) NOT NULL DEFAULT 'tentativa', fecha_cobro VARCHAR(10), cobrado REAL,
     exento REAL NOT NULL DEFAULT 0, gravado REAL NOT NULL DEFAULT 0, iva REAL NOT NULL DEFAULT 0, total REAL NOT NULL DEFAULT 0,
     alicuota REAL NOT NULL DEFAULT 0.21, observaciones TEXT,
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19),
@@ -320,7 +327,7 @@ def cerrar(_=None):
         c.close()
 
 
-REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo")
+REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo", "tarifario_coberturas")
 VIGENCIA_REFERENCIA = 120
 _fijas = {}
 
@@ -450,6 +457,13 @@ def ubicaciones_importar(filas):
     return {"nuevas": len(nuevas), "actualizadas": len(filas) - len(nuevas), "medicos_nuevos": len(faltan), "vinculos": len(vinculos), "destinos": len(destinos)}
 
 
+def planes_por_cobertura():
+    mapa = {}
+    for r in q("SELECT cobertura, plan FROM tarifario_coberturas WHERE plan<>'' ORDER BY cobertura, plan"):
+        mapa.setdefault(r["cobertura"], []).append(r["plan"])
+    return mapa
+
+
 def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
     ex("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
        (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
@@ -481,6 +495,11 @@ def preparar_esquema(c):
         c.execute("INSERT INTO nomenclador_muestras (tarifario_id, tipo, sitio, tipo_muestra, codigo) "
                   "SELECT ?, tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras_vieja", (general,))
         c.execute("DROP TABLE nomenclador_muestras_vieja")
+    if "plan" not in cols("tarifario_coberturas"):
+        c.execute("ALTER TABLE tarifario_coberturas RENAME TO tarifario_coberturas_vieja")
+        c.executescript(SCHEMA)
+        c.execute("INSERT INTO tarifario_coberturas (cobertura, plan, tarifario_id) SELECT cobertura, '', tarifario_id FROM tarifario_coberturas_vieja")
+        c.execute("DROP TABLE tarifario_coberturas_vieja")
     antes_de_informes = "titulo" not in cols("usuarios")
     for tabla, col, definicion in (("usuarios", "perfil_id", "INTEGER REFERENCES perfiles(id)"),
                                    ("usuarios", "permisos_mas", "VARCHAR(500) NOT NULL DEFAULT ''"),
@@ -489,6 +508,7 @@ def preparar_esquema(c):
                                    ("usuarios", "mn", "VARCHAR(20)"),
                                    ("usuarios", "mp", "VARCHAR(20)"),
                                    ("protocolos", "borrador", "INTEGER NOT NULL DEFAULT 0"),
+                                   ("protocolos", "plan", "VARCHAR(60)"),
                                    ("protocolos", "etiqueta_lote_id", "INTEGER"),
                                    ("informes_emitidos", "estudios", "VARCHAR(500)"),
                                    ("protocolos", "firmante_id", "INTEGER"),
@@ -500,6 +520,7 @@ def preparar_esquema(c):
                                    ("templates", "organo", "VARCHAR(80)"),
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),
                                    ("ubicaciones", "nombre", "VARCHAR(200)"),
+                                   ("facturas", "cobrado", "REAL"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):

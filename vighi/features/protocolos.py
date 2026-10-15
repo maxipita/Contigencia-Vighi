@@ -13,7 +13,7 @@ from vighi.servicios.etiquetas import numero_emitido, numero_protocolo
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO, informe_emitido, informe_vigente
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
-from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, edicion_propia, edicion_vigente, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
+from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, dni_valido, edicion_propia, edicion_vigente, error_plan, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
 from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
 
 bp = Blueprint("protocolos", __name__)
@@ -114,7 +114,7 @@ def _protocolo_editar(pid):
             error = "Falta el N° de protocolo."
         elif db.uno("SELECT 1 FROM protocolos WHERE numero=? AND id<>?", (d["numero"], pid)):
             error = f"Ya existe otro protocolo {d['numero']}."
-        error = error or error_ubicaciones(d, p)
+        error = error or error_ubicaciones(d, p) or error_plan(d)
         if error:
             flash(error, "error")
         else:
@@ -172,11 +172,15 @@ def paciente_datos(pid):
         flash("Escribí al menos el apellido o el nombre del paciente.", "error")
         return redirect(url_for("protocolos.paciente", pid=pid))
     protocolos = protocolos_del_paciente(base)
-    ajenos = [x for x in db.q("SELECT id FROM protocolos WHERE dni=?", (d["dni"],)) if x["id"] not in {y["id"] for y in protocolos}] if d["dni"] else []
+    ajenos = [x for x in db.q("SELECT id FROM protocolos WHERE dni=?", (d["dni"],)) if x["id"] not in {y["id"] for y in protocolos}] if dni_valido(d["dni"]) else []
     if ajenos:
         flash("Ya hay otro paciente con ese DNI. Si es la misma persona, corregí el DNI en el protocolo que tiene el error.", "error")
         return redirect(url_for("protocolos.paciente", pid=pid))
     cambios = [k for k in d if d[k] != (base[k] or "")]
+    error = error_plan(d)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("protocolos.paciente", pid=pid))
     if cambios:
         cols = list(d)
         yo = usuario_actual()
@@ -218,8 +222,10 @@ def protocolo_datos(pid):
     if p["borrador"]:
         return redirect(url_for("protocolos.protocolo_editar", pid=pid))
     d = {k: request.form[k].strip() for k in CAMPOS_RAPIDOS if k in request.form}
+    if "cobertura" in d and "plan" not in d:
+        d["plan"] = ""
     cambios = [k for k in d if d[k] != (p[k] or "")]
-    error = error_ubicaciones(d, p)
+    error = error_ubicaciones(d, p) or error_plan(d, p)
     if error:
         flash(error, "error")
         return redirect(url_for("protocolos.protocolo", pid=pid))

@@ -9,15 +9,20 @@ from vighi.servicios.consultas import etiqueta, listas, responsables
 from vighi.servicios.lotes import asignar_lote, lotes_para_formulario, tipos_lote, validar_lote
 
 
-CAMPOS_PROTOCOLO = ["fecha_recoleccion", "dni", "cobertura", "n_afiliado", "nombre", "apellido", "sexo", "exento",
+CAMPOS_PROTOCOLO = ["fecha_recoleccion", "dni", "cobertura", "plan", "n_afiliado", "nombre", "apellido", "sexo", "exento",
                     "fecha_nacimiento", "email", "telefono", "medico", "lugar_recoleccion", "lugar_entrega", "observaciones"]
 CAMPOS_ESTUDIO = ["categoria", "subcategoria", "sitio", "tipo_muestra", "cantidad", "citologia_hormonal", "observaciones",
                   "responsable_id", "tecnicas_especiales"]
-CAMPOS_PACIENTE = ["apellido", "nombre", "fecha_nacimiento", "sexo", "cobertura", "n_afiliado", "exento", "email", "telefono"]
+CAMPOS_PACIENTE = ["apellido", "nombre", "fecha_nacimiento", "sexo", "cobertura", "plan", "n_afiliado", "exento", "email", "telefono"]
+
+
+def dni_valido(dni):
+    texto = (dni or "").strip().replace(".", "").replace(" ", "").replace("-", "")
+    return bool(texto.strip("0"))
 
 
 def sincronizar_paciente(pid, dni, campos=None):
-    if not dni:
+    if not dni_valido(dni):
         return
     p = protocolo_o_404(pid)
     campos = [c for c in CAMPOS_PACIENTE if p[c]] if campos is None else [c for c in campos if c in CAMPOS_PACIENTE]
@@ -121,6 +126,17 @@ def completo(p, estudios):
     return bool(p["apellido"] and p["nombre"] and estudios and all(e["cantidad"] for e in estudios if not e["anulado"]))
 
 
+def error_plan(d, anterior=None):
+    plan = (d.get("plan") or "").strip()
+    if "cobertura" not in d:
+        cobertura = (anterior["cobertura"] if anterior is not None else "") or ""
+    else:
+        cobertura = d.get("cobertura") or ""
+    if plan and plan not in db.planes_por_cobertura().get(cobertura, []):
+        return f"El plan {plan} no corresponde a la cobertura {cobertura or '(sin cobertura)'}."
+    return None
+
+
 VIGENCIA_EDICION = 900
 
 
@@ -161,16 +177,13 @@ def soltar_edicion(pid, usuario_id=None, token=None):
         db.ex("DELETE FROM ediciones WHERE protocolo_id=? AND usuario_id=? AND token=?", (pid, usuario_id, token))
 
 
-CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "medico", "lugar_recoleccion", "lugar_entrega", "fecha_recoleccion"]
+CAMPOS_RAPIDOS = ["apellido", "nombre", "fecha_nacimiento", "cobertura", "plan", "medico", "lugar_recoleccion", "lugar_entrega", "fecha_recoleccion"]
 
 
 def protocolos_del_paciente(base):
-    if base["dni"]:
-        donde, params = "p.dni=?", (base["dni"],)
-    else:
-        donde = "LOWER(p.apellido)=LOWER(?) AND LOWER(COALESCE(p.nombre,''))=LOWER(?) AND COALESCE(p.fecha_nacimiento,'')=?"
-        params = (base["apellido"] or "", base["nombre"] or "", base["fecha_nacimiento"] or "")
-    protocolos = db.q(f"SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE {donde} ORDER BY p.id DESC", params)
+    if not dni_valido(base["dni"]):
+        return [base]
+    protocolos = db.q("SELECT p.*, u.iniciales AS creador FROM protocolos p LEFT JOIN usuarios u ON u.id=p.creado_por WHERE p.dni=? ORDER BY p.id DESC", (base["dni"],))
     return protocolos if any(x["id"] == base["id"] for x in protocolos) else [base]
 
 

@@ -6,8 +6,7 @@
 <h1><svg class="ic ic-titulo"><use href="#i-factura"/></svg> Facturación</h1>
 <div class="acciones" style="margin:0 0 14px">
   <a class="btn" href="{{ url_for('facturacion.facturar') }}"><svg class="ic"><use href="#i-mas"/></svg> Nueva factura</a>
-  <a class="btn sec" href="{{ url_for('facturacion.tarifario') }}">Tarifario</a>
-  <a class="btn sec" href="{{ url_for('facturacion.nomencladores') }}">Nomencladores</a>
+  <a class="btn sec" href="{{ url_for('coberturas.coberturas') }}">Coberturas</a>
 </div>
 
 <form class="filtros" method="get">
@@ -40,7 +39,7 @@
   {% for r in facturas %}
   <tr class="{{ 'bloqueado' if r.estado == 'anulada' }}">
     <td><a href="{{ url_for('facturacion.factura', fid=r.id) }}"><b>{{ r.numero or ('Borrador #' ~ r.id) }}</b></a></td>
-    <td><span class="chip {{ clases[r.estado] }}">{{ estados[r.estado] }}</span>{% if r.estado == 'cobrada' and r.fecha_cobro %}<div class="muted">cobrada el {{ r.fecha_cobro | f }}</div>{% endif %}</td>
+    <td><span class="chip {{ clases[r.estado] }}">{{ estados[r.estado] }}</span>{% if r.estado == 'cobrada' and r.fecha_cobro %}<div class="muted">cobrada el {{ r.fecha_cobro | f }}{% if r.cobrado is not none and (r.total - r.cobrado) | abs >= 0.01 %} · cobrado {{ r.cobrado | peso }}{% endif %}</div>{% endif %}</td>
     <td class="muted">{{ r.fecha_factura | f }}</td>
     <td class="muted">{{ r.fecha_estimada_cobro | f }}</td>
     <td>{{ r.cobertura }}</td>

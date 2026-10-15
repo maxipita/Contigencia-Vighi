@@ -1,20 +1,27 @@
 {% extends "base.html" %}
 {% block titulo %}Nomencladores{% endblock %}
+{% import "coberturas/_cabecera.html" as cab %}
 {% block contenido %}
-<div class="eyebrow">Facturación</div>
-<h1><svg class="ic ic-titulo"><use href="#i-lista"/></svg> Nomencladores</h1>
+{% if cob %}
+{{ cab.cabecera(cob, 'codigos') }}
+{{ cab.selector_tarifa(cob, actual.id, 'facturacion.nomencladores') }}
+{% else %}
+<div class="eyebrow"><a href="{{ url_for('coberturas.coberturas') }}">Coberturas</a></div>
+<h1><svg class="ic ic-titulo"><use href="#i-lista"/></svg> Códigos · tarifa general</h1>
+{% endif %}
 <p class="muted">Cada tarifa (una por cobertura o grupo de coberturas) tiene sus propios códigos: cada tipo de muestra se asocia a un nomenclador, y el importe sale de la
-  <a href="{{ url_for('facturacion.tarifario', tarifario=actual.id) }}">tarifa</a>. Dentro de la tarifa se usa la asignación del sitio exacto; si no, la del tipo de muestra; y si no, la general del tipo
+  <a href="{{ url_for('facturacion.tarifario', tarifario=actual.id, c=cob.cob.nombre if cob else None) }}">tarifa</a>. Dentro de la tarifa se usa la asignación del sitio exacto; si no, la del tipo de muestra; y si no, la general del tipo
   de estudio. Lo que la tarifa no define se toma de <b>{{ general.nombre }}</b>.</p>
 
 <div class="barra-tarifa">
+  {% if not cob %}
   <form method="get" class="filtros" style="margin:0">
     <select name="tarifario" onchange="this.form.submit()" title="Tarifa">
       {% for t in tarifarios %}<option value="{{ t.id }}" {{ 'selected' if t.id == actual.id }}>{{ t.nombre }}</option>{% endfor %}
     </select>
   </form>
+  {% endif %}
   <a class="btn sec" href="{{ url_for('facturacion.nomencladores_planilla', tarifario=actual.id) }}">Descargar planilla de códigos</a>
-  <a class="btn sec" href="{{ url_for('facturacion.tarifario', tarifario=actual.id) }}">Importes de la tarifa</a>
 </div>
 
 <div class="cols">

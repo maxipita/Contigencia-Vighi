@@ -108,7 +108,7 @@
       {% for x in tecnicas %}
       <tr>
         <td>{% for m in miembros %}{% if m.id == x.estudio_id %}{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}) {{ m.etiqueta }}{% endif %}{% endfor %}</td>
-        <td>{{ x.numero }}</td><td>{{ x.fragmentos }}</td>
+        <td>{{ x.numero }}</td><td>{{ 'Varios' if x.fragmentos and x.fragmentos >= FRAGMENTOS_VARIOS else x.fragmentos }}</td>
         <td><span class="chip {{ 'informado' if x.inclusion == 'Inclusión total' else 'flujos' }}">{{ x.inclusion }}</span></td>
         <td>{{ x.tacos if x.tacos is not none else '—' }}</td><td>{{ x.cassettes }}</td>
         <td>{{ x.comentarios or '' }}</td><td class="muted">{{ x.iniciales or '?' }} · {{ x.creado_en | fh }}</td>
@@ -137,7 +137,8 @@
           </select></div>
         <div><label>Tacos</label><input data-tecnica-tacos readonly tabindex="-1" value=""></div>
         <div><label>Nro</label><input name="numero" maxlength="10" data-tecnica-nro autocomplete="off"></div>
-        <div><label>Fragmentos</label><input name="fragmentos" type="number" min="1" max="999" value="1"></div>
+        <div><label>Fragmentos</label>
+          <select name="fragmentos">{% for rotulo, valor in OPCIONES_FRAGMENTOS %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></div>
         <div><label>Inclusión</label>
           <select name="inclusion">{% for i in ['Reserva', 'Inclusión total'] %}<option>{{ i }}</option>{% endfor %}</select></div>
         <div><label>Cassettes</label><input name="cassettes" type="number" min="1" max="999" value="1"></div>

@@ -35,7 +35,7 @@ def usuario(uid=None):
     concedibles = otorgables(yo)
     lista_perfiles = [p for p in perfiles_con_permisos() if yo["admin"] or p["set"] <= concedibles or (u and p["id"] == u["perfil_id"])]
     if request.method == "POST":
-        ini = request.form["iniciales"].strip().upper()
+        ini = "".join(request.form["iniciales"].split()).upper()
         sectores = ",".join(s for s in SECTORES if request.form.get("s_" + s))
         perfil_id = int(request.form["perfil_id"]) if request.form.get("perfil_id", "").isdigit() else None
         previo = {k: ("mas" if k in permisos.lista(u["permisos_mas"]) else "menos" if k in permisos.lista(u["permisos_menos"]) else "") for k in permisos.PERMISOS} if u else {}
@@ -55,10 +55,14 @@ def usuario(uid=None):
                 (1 if request.form.get("admin") else 0) if yo["admin"] else (u["admin"] if u else 0), 1 if request.form.get("activo") else 0, perfil_id,
                 permisos.texto({k for k, v in ajuste.items() if v == "mas"}),
                 permisos.texto({k for k, v in ajuste.items() if v == "menos"}))
-        dup = db.uno("SELECT id FROM usuarios WHERE iniciales=? AND id<>?", (ini, uid or 0))
+        dup = next((x for x in db.q("SELECT id, iniciales, nombre FROM usuarios WHERE id<>?", (uid or 0,))
+                    if "".join((x["iniciales"] or "").split()).upper() == ini), None) if ini else None
         clave = request.form.get("clave", "")
-        if not ini or dup:
-            flash("Iniciales vacías o ya usadas por otra persona.", "error")
+        if not ini:
+            flash("Indicá las iniciales del usuario.", "error")
+        elif dup:
+            flash(f"Las iniciales {ini} ya las usa {dup['nombre'] or dup['iniciales']}. Cada persona tiene que tener iniciales distintas, porque con ellas "
+                  "se marca quién realizó cada paso. Elegí otras.", "error")
         elif clave and len(clave) < 8:
             flash("La clave temporal debe tener al menos 8 caracteres.", "error")
         elif perfil_id and not db.uno("SELECT 1 FROM perfiles WHERE id=?", (perfil_id,)):
@@ -96,7 +100,7 @@ def usuario(uid=None):
             db.auditar(yo["id"], None, "usuario", f"{ini}: {detalle}{' (clave temporal)' if clave else ''}")
             flash(f"Usuario {ini} guardado." + (" Al ingresar va a tener que cambiar la clave." if clave else ""), "ok")
             return redirect(url_for("usuarios.usuarios"))
-        u = {**(dict(u) if u else {}), "iniciales": ini, "nombre": vals[1], "sectores": sectores, "admin": vals[3],
+        u = {**(dict(u) if u else {}), "id": uid, "iniciales": ini, "nombre": vals[1], "sectores": sectores, "admin": vals[3],
              "activo": vals[4], "perfil_id": perfil_id, "permisos_mas": vals[6], "permisos_menos": vals[7],
              "clave_hash": u["clave_hash"] if u else None, "titulo": titulo, "mn": mn, "mp": mp}
     tiene_firma = bool(uid and db.uno("SELECT 1 FROM firmas WHERE usuario_id=?", (uid,)))

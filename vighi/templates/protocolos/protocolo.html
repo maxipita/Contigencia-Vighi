@@ -62,7 +62,7 @@
 {% set campos_paciente %}<div><label>Apellido</label><input name="apellido" value="{{ p.apellido or '' }}"></div>
   <div><label>Nombre</label><input name="nombre" value="{{ p.nombre or '' }}"></div>
   <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>{% endset %}
-{% set campos_cobertura %}<div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>{% endset %}
+{% set campos_cobertura %}<div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>{{ b.campo_plan(p.cobertura, p.plan) }}{% endset %}
 {% set campos_medico %}<div><label>Médico solicitante</label><div class="buscador"><input name="medico" value="{{ p.medico or '' }}" data-medicos autocomplete="off" placeholder="Escribí apellido…"></div></div>{% endset %}
 {% set campos_recoleccion %}<div><label>Lugar recolección</label><div class="buscador"><input name="lugar_recoleccion" value="{{ p.lugar_recoleccion or '' }}" data-ubicaciones autocomplete="off" placeholder="Escribí la ubicación…"></div></div>
   <div><label>Fecha recolección</label><input type="date" name="fecha_recoleccion" value="{{ p.fecha_recoleccion or '' }}"></div>{% endset %}
@@ -75,7 +75,7 @@
       <div class="ver"><a href="{{ url_for('protocolos.paciente', pid=p.id) }}" title="Ficha del paciente"><b>{{ (p.apellido or '') ~ (', ' ~ p.nombre if p.nombre else '') }}</b></a>{% if p.fecha_nacimiento %} <span class="muted">{{ p.fecha_nacimiento | edad }}</span>{% endif %} {{ lapiz() }}</div>
       {% endcall %}
       {% call edicion(campos_cobertura) %}
-      <div class="ver">{{ p.cobertura or 'Sin cobertura' }} {{ lapiz() }}</div>
+      <div class="ver">{{ p.cobertura or 'Sin cobertura' }}{% if p.plan %} <span class="muted">· {{ p.plan }}</span>{% endif %} {{ lapiz() }}</div>
       {% endcall %}
       {% if not p.fecha_recoleccion %}<div class="lt">Falta la fecha de recolección</div>{% endif %}
       {% if p.borrador %}<div><a class="lapiz" href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}"><svg class="ic"><use href="#i-lapiz"/></svg>completar datos</a></div>{% endif %}</div>

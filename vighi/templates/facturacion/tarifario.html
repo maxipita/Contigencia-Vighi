@@ -1,21 +1,29 @@
 {% extends "base.html" %}
 {% block titulo %}Tarifario{% endblock %}
+{% import "coberturas/_cabecera.html" as cab %}
 {% block contenido %}
-<div class="eyebrow">Facturación</div>
-<h1><svg class="ic ic-titulo"><use href="#i-dolar"/></svg> Tarifario</h1>
+{% if cob %}
+{{ cab.cabecera(cob, 'tarifas') }}
+{{ cab.selector_tarifa(cob, actual.id, 'facturacion.tarifario') }}
+{% else %}
+<div class="eyebrow"><a href="{{ url_for('coberturas.coberturas') }}">Coberturas</a></div>
+<h1><svg class="ic ic-titulo"><use href="#i-dolar"/></svg> Tarifa general</h1>
+{% endif %}
 
 <div class="barra-tarifa">
+  {% if not cob %}
   <form method="get" class="filtros" style="margin:0">
     <input type="hidden" name="ver" value="{{ ver }}">
     <select name="tarifario" onchange="this.form.submit()" title="Tarifa">
       {% for t in tarifarios %}<option value="{{ t.id }}" {{ 'selected' if t.id == actual.id }}>{{ t.nombre }}</option>{% endfor %}
     </select>
   </form>
+  {% endif %}
   <div class="segmentado">
-    <a class="{{ 'activo' if ver == 'vigentes' }}" href="{{ url_for('facturacion.tarifario', tarifario=actual.id, ver='vigentes') }}">Vigentes</a>
-    <a class="{{ 'activo' if ver == 'todas' }}" href="{{ url_for('facturacion.tarifario', tarifario=actual.id, ver='todas') }}">Todas</a>
+    <a class="{{ 'activo' if ver == 'vigentes' }}" href="{{ url_for('facturacion.tarifario', tarifario=actual.id, ver='vigentes', c=cob.cob.nombre if cob else None) }}">Vigentes</a>
+    <a class="{{ 'activo' if ver == 'todas' }}" href="{{ url_for('facturacion.tarifario', tarifario=actual.id, ver='todas', c=cob.cob.nombre if cob else None) }}">Todas</a>
   </div>
-  <a class="btn sec" href="{{ url_for('facturacion.nomencladores') }}">Nomencladores y muestras</a>
+  {% if not cob %}<a class="btn sec" href="{{ url_for('facturacion.nomencladores', tarifario=actual.id) }}">Códigos por tipo de muestra</a>{% endif %}
 </div>
 
 <div class="cols">
@@ -46,13 +54,14 @@
     </form>
   </details>
 
+  {% if n_ceros %}<div class="aviso">{{ n_ceros }} importe(s) en cero en {{ actual.nombre }}: esos estudios no se facturan hasta que se cargue el valor.</div>{% endif %}
   <table>
     <tr><th>Nomenclador</th><th>Descripción</th><th class="num">Tarifa</th><th>Vigente desde</th><th></th></tr>
     {% for r in filas %}
-    <tr class="{{ 'bloqueado' if r.vigente_desde > hoy }}">
+    <tr class="{{ 'bloqueado' if r.vigente_desde > hoy }}{{ ' importe-cero' if r.importe == 0 }}">
       <td>{{ r.codigo }}</td>
-      <td>{{ r.descripcion or '' }}</td>
-      <td class="num"><b>{{ r.importe | peso }}</b></td>
+      <td>{{ r.descripcion or '' }}{% if r.propia %} <span class="muted" title="Descripción propia de esta tarifa">· propia</span>{% endif %}</td>
+      <td class="num"><b>{{ r.importe | peso }}</b>{% if r.importe == 0 %} <span class="chip-cero">Sin importe</span>{% endif %}</td>
       <td>{{ r.vigente_desde | f }}</td>
       <td>
         <details class="modificar">
@@ -63,6 +72,12 @@
             <input name="importe" value="{{ dos(r.importe) }}" size="12" class="num" required>
             <input type="date" name="vigente_desde" value="{{ hoy }}">
             <button class="btn">Guardar</button>
+          </form>
+          <form method="post" class="acciones">
+            <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="descripcion_valor">
+            <input type="hidden" name="tarifario" value="{{ actual.id }}"><input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="codigo" value="{{ r.codigo }}">
+            <input name="descripcion" value="{{ r.descripcion or '' }}" size="40" placeholder="Descripción en esta tarifa" autocomplete="off">
+            <button class="btn sec">Guardar descripción</button>
           </form>
           {% if ver == 'todas' %}
           <form method="post" class="acciones" data-confirmar="¿Borrar este importe ({{ r.codigo }} desde {{ r.vigente_desde | f }})?">
@@ -81,28 +96,33 @@
 </div>
 
 <div>
+  {% if not cob %}
   <div class="tarjeta">
     <h2>{{ actual.nombre }}</h2>
+    {% if actual.id == general.id %}
     <form method="post">
       <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="guardar_tarifario">
       <input type="hidden" name="tarifario" value="{{ actual.id }}"><input type="hidden" name="ver" value="{{ ver }}">
-      <label>IVA de esta tarifa</label>
+      <label>IVA de la tarifa general</label>
       <select name="iva">{% for k, n in tipos_iva.items() %}<option value="{{ k }}" {{ 'selected' if actual.iva == k }}>{{ n }}</option>{% endfor %}</select>
-      {% if actual.id == general.id %}
-      <p class="muted">Es la tarifa general: la usan todas las coberturas que no tienen una propia, y completa los nomencladores que a otra tarifa le falten.</p>
-      {% else %}
-      <label style="margin-top:12px">Coberturas que usan esta tarifa</label>
-      <div class="coberturas-tarifa">
-        {% for c in coberturas %}
-        <label class="check"><input type="checkbox" name="coberturas" value="{{ c }}" {{ 'checked' if asignadas.get(c) == actual.id }}>
-          {{ c }}{% if asignadas.get(c) and asignadas.get(c) != actual.id %} <span class="muted">(hoy en {{ nombres[asignadas[c]] }})</span>{% endif %}</label>
-        {% endfor %}
-      </div>
-      {% endif %}
+      <p class="muted">La usan todas las coberturas que no tienen una propia, y completa los nomencladores que a otra tarifa le falten.</p>
       <div class="acciones"><button class="btn">Guardar</button></div>
     </form>
+    {% else %}
+    <p>IVA: <b>{{ tipos_iva.get(actual.iva, actual.iva) }}</b></p>
+    {% if usada_por %}
+    <p class="muted" style="margin-bottom:4px">La usan:</p>
+    <ul class="sin-vinetas">
+      {% for u in usada_por %}<li><a href="{{ url_for('coberturas.cobertura', c=u.cobertura) }}">{{ u.cobertura }}</a>{% if u.plan %} <span class="muted">· plan {{ u.plan }}</span>{% endif %}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted">Ninguna cobertura usa esta tarifa todavía.</p>{% endif %}
+    <p class="muted">El IVA, el plazo de cobro, los planes y la tarifa de cada cobertura se editan en la cobertura.</p>
+    {% endif %}
   </div>
 
+  {% endif %}
+
+  {% if not cob %}
   <div class="tarjeta">
     <h2>Nueva tarifa</h2>
     <form method="post">
@@ -113,6 +133,8 @@
       <div class="acciones"><button class="btn sec">Crear</button></div>
     </form>
   </div>
+
+  {% endif %}
 
   <div class="tarjeta">
     <h2>Importar importes</h2>

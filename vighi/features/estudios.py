@@ -8,7 +8,7 @@ from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
 from vighi.servicios.catalogo import muestras_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado
-from vighi.servicios.fichas import INCLUSIONES, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, guardar_seccion, habilitada, macro_editable, motivo_no_listo, sumar_cassettes
+from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSIONES, OPCIONES_FRAGMENTOS, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
@@ -135,7 +135,7 @@ def estudio(eid):
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
-    return render_template("estudios/estudio.html", tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudios/estudio.html", FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
@@ -185,7 +185,7 @@ def tecnica_nueva(eid):
     miembro = db.uno("SELECT id FROM estudios WHERE id=? AND protocolo_id=? AND tipo=? AND anulado=0",
                      (request.form.get("estudio_id", "") if request.form.get("estudio_id", "").isdigit() else 0, e["protocolo_id"], e["tipo"]))
     inclusion = request.form.get("inclusion", "")
-    fragmentos, cassettes = entero_positivo(request.form.get("fragmentos")), entero_positivo(request.form.get("cassettes"))
+    fragmentos, cassettes = fragmentos_de(request.form.get("fragmentos")), entero_positivo(request.form.get("cassettes"))
     numero = request.form.get("numero", "").strip()[:10]
     if not miembro:
         flash("Elegí el estudio de la técnica.", "error")
@@ -199,7 +199,7 @@ def tecnica_nueva(eid):
                  VALUES (?,?,?,?,?,?,?,?,?)""", (miembro["id"], numero, fragmentos, inclusion, tacos, cassettes,
                                                   request.form.get("comentarios", "").strip()[:300], usuario_actual()["id"], db.ahora()))
         sumar_cassettes(e)
-        db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica", f"{numero}: {inclusion}, {fragmentos} fragm., {cassettes} cassette(s)", miembro["id"])
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica", f"{numero}: {inclusion}, {rotulo_fragmentos(fragmentos).lower()} fragm., {cassettes} cassette(s)", miembro["id"])
         flash("Técnica agregada.", "ok")
     return redirect(destino)
 

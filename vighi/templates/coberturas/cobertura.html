@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "coberturas/_cabecera.html" as cab %}
+{% block titulo %}{{ c.cob.nombre }} · Cobertura{% endblock %}
+{% block contenido %}
+{{ cab.cabecera(c, pestana) }}
+{% set d = c.cob %}
+
+{% if pestana == 'planes' %}
+<div class="tarjeta">
+  <h2>Planes</h2>
+  <p class="muted" style="margin-top:0">Un plan es una variante de la cobertura con su propio precio. El protocolo guarda el plan del afiliado y la factura toma el importe de la tarifa del plan; lo que el plan no define se toma de la tarifa de la cobertura.</p>
+  {% if d.planes %}
+  <table>
+    <tr><th>Plan</th><th>Tarifa</th><th class="num">Importes</th><th></th></tr>
+    {% for p in d.planes %}
+    <tr>
+      <td><b>{{ p.plan }}</b></td>
+      <td>{{ p.nombre }}</td>
+      <td class="num">{{ p.importes }}</td>
+      <td class="acciones">
+        <a class="btn mini-btn sec" href="{{ url_for('facturacion.tarifario', c=d.nombre, tarifario=p.tarifa_id) }}">Importes</a>
+        <form method="post" data-confirmar="¿Quitar el plan {{ p.plan }} de {{ d.nombre }}?" style="display:inline">
+          <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="plan_quitar"><input type="hidden" name="c" value="{{ d.nombre }}">
+          <input type="hidden" name="plan" value="{{ p.plan }}"><button class="lapiz">Quitar</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Esta cobertura no tiene planes.</p>{% endif %}
+  <form method="post" class="en-linea" style="margin-top:12px">
+    <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="plan_agregar"><input type="hidden" name="c" value="{{ d.nombre }}">
+    <input name="plan" required autocomplete="off" placeholder="Nombre del plan (por ejemplo CENTROS)">
+    <button class="btn sec">Agregar plan</button>
+  </form>
+</div>
+{% else %}
+<div class="cols">
+  <div class="tarjeta">
+    <h2>Datos de facturación</h2>
+    <form method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="guardar"><input type="hidden" name="c" value="{{ d.nombre }}">
+      <div class="grilla">
+        <div><label>IVA</label>
+          <select name="iva">{% for k, n in tipos_iva.items() %}<option value="{{ k }}" {{ 'selected' if d.iva == k }}>{{ n }}</option>{% endfor %}</select></div>
+        <div><label>Plazo de cobro (días)</label>
+          <input name="dias" value="{{ d.dias if d.dias is not none else '' }}" inputmode="numeric" size="5" autocomplete="off" placeholder="30"></div>
+        <div class="ancho"><label>Tarifa que usa</label>
+          <select name="tarifa">
+            <option value="{{ general.id }}" {{ 'selected' if not d.propia }}>{{ general.nombre }} (sin tarifa propia)</option>
+            {% for t in tarifas if t.id != general.id %}<option value="{{ t.id }}" {{ 'selected' if d.propia and d.tarifa.id == t.id }}>{{ t.nombre }}</option>{% endfor %}
+          </select></div>
+      </div>
+      {% if not d.propia %}<p class="muted">Hoy usa la tarifa general. Si cambiás el IVA se le crea una tarifa propia.</p>{% endif %}
+      {% if d.compartida %}<p class="muted">Esta tarifa la comparten {{ d.compartida }} cobertura(s) más: un cambio de IVA les alcanza a todas.</p>{% endif %}
+      <p class="muted">Con el plazo cargado, al emitir una factura sin fecha estimada de cobro se propone la fecha de factura + esos días.</p>
+      <div class="acciones"><button class="btn">Guardar</button></div>
+    </form>
+  </div>
+
+  <div class="tarjeta">
+    <h2>Resumen</h2>
+    <p><b>Tarifa:</b> {{ d.tarifa.nombre if d.tarifa else '—' }}{% if d.propia %}, con {{ d.importes }} importes{% if d.ceros %} (<span class="chip-cero">{{ d.ceros }} sin importe</span>){% endif %}{% endif %}.</p>
+    <p><b>Planes:</b> {% if d.planes %}{% for p in d.planes %}{{ p.plan }}{{ ', ' if not loop.last }}{% endfor %}{% else %}ninguno{% endif %}.</p>
+    <p><b>Protocolos:</b> {{ protocolos }} con esta cobertura.</p>
+    <div class="acciones">
+      <a class="btn" href="{{ url_for('facturacion.tarifario', c=d.nombre, tarifario=c.opciones[0].id) }}">Tarifas</a>
+      <a class="btn sec" href="{{ url_for('facturacion.nomencladores', c=d.nombre, tarifario=c.opciones[0].id) }}">Códigos</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
