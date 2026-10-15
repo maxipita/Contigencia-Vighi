@@ -48,9 +48,9 @@ variable "smtp" {
   default = {}
 }
 
-variable "github_repo" {
+variable "github_sub" {
   type    = string
-  default = "maxipita/Contigencia-Vighi"
+  default = "repo:maxipita@259085329/Contigencia-Vighi@1398084935"
 }
 
 locals {
