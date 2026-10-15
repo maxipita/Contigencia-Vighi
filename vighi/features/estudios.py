@@ -12,6 +12,7 @@ from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios,
 from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
+from vighi.servicios.tareas import cerrar_por_etapa
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, opciones_de_edicion, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
 
 bp = Blueprint("estudios", __name__)
@@ -383,6 +384,8 @@ def marcar_listo(eid, etapa):
         db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa] + (f" (en {len(miembros)} estudios {tipo.nombre.lower()})" if len(miembros) > 1 else ""), eid)
         flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']}"
               + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
+        if cerrar_por_etapa(e["protocolo_id"], etapa, NOMBRE_ETAPA[etapa], yo["id"]):
+            flash("Se cerraron las tareas que esperaban esta etapa.", "ok")
         if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]):
             db.ex("UPDATE protocolos SET firmante_id=? WHERE id=?", (yo["id"], e["protocolo_id"]))
             db.auditar(yo["id"], e["protocolo_id"], "firmante", f"{yo['iniciales']} firmará el informe", eid)

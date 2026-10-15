@@ -7,6 +7,7 @@ from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, Variante
 from vighi.servicios.consultas import cargar_estudios, etiqueta
 from vighi.servicios.fichas import motivo_no_listo
 from vighi.servicios.lotes import asignar_lote, crear_lote, lote_del_protocolo, lote_o_404, orden_numero, plan_avance, plan_avance_de, primer_estudio, tipos_lote
+from vighi.servicios.tareas import sentencias_de_cierre
 from vighi.servicios.tacos import tacos_de_lote, tacos_por
 
 bp = Blueprint("lotes", __name__)
@@ -83,6 +84,7 @@ def lote_avanzar(lote_id):
         sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES " + ",".join(["(?,?,?,?,?,?)"] * len(grupo)),
                            tuple(v for f in grupo for v in (ahora_, yo["id"], f[0]["protocolo_id"], f[0]["id"], "listo",
                                                             f"{NOMBRE_ETAPA[etapa]} (lote {l['codigo']})"))))
+    sentencias += sentencias_de_cierre([f[0]["protocolo_id"] for f in plan["flujos"]], etapa, f"{NOMBRE_ETAPA[etapa]} (lote {l['codigo']})", yo["id"])
     try:
         db.lote_ex(sentencias)
     except db.IntegrityError:

@@ -61,3 +61,31 @@ def crear_tarea(pid, t, descripcion, urgencia, prioridad, resp, yo):
     quien = db.uno("SELECT iniciales FROM usuarios WHERE id=?", (resp,)) if resp else None
     db.auditar(yo, pid, "tarea_nueva", f"{t['titulo']} ({URGENCIAS[urgencia]}, {PRIORIDADES[prioridad]}) → {quien['iniciales'] if quien else 'sin asignar'}")
     return tid
+
+
+def sentencias_de_cierre(protocolos, clave, detalle, yo):
+    protocolos = list(dict.fromkeys(protocolos))
+    abiertas = []
+    for i in range(0, len(protocolos), 80):
+        grupo = protocolos[i:i + 80]
+        abiertas += db.q(f"SELECT id, protocolo_id, titulo FROM tareas WHERE estado='abierta' AND cierre=? AND protocolo_id IN ({','.join('?' * len(grupo))})", (clave, *grupo))
+    if not abiertas:
+        return []
+    ahora = db.ahora()
+    sentencias = []
+    for i in range(0, len(abiertas), 80):
+        grupo = abiertas[i:i + 80]
+        sentencias.append((f"UPDATE tareas SET estado='cerrada', cerrada_por=?, cerrada_en=?, cierre_detalle=? WHERE id IN ({','.join('?' * len(grupo))})",
+                           (yo, ahora, detalle[:100], *(t["id"] for t in grupo))))
+    for i in range(0, len(abiertas), 16):
+        grupo = abiertas[i:i + 16]
+        sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES " + ",".join(["(?,?,?,?,?,?)"] * len(grupo)),
+                           tuple(v for t in grupo for v in (ahora, yo, t["protocolo_id"], None, "tarea_cerrada", f"{t['titulo']} ({detalle})"))))
+    return sentencias
+
+
+def cerrar_por_etapa(protocolo_id, etapa, detalle, yo):
+    sentencias = sentencias_de_cierre([protocolo_id], etapa, detalle, yo)
+    if sentencias:
+        db.lote_ex(sentencias)
+    return sentencias

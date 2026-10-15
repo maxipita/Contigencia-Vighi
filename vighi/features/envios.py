@@ -11,6 +11,7 @@ from vighi.servicios.entrega import (ROLES_ENVIO, SQL_ENVIOS, centro, datos_del_
                                      lugares_de_envio, malignidad_por_flujo, medico_de, textos_envio)
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO
 from vighi.servicios.protocolos import SQL_PROTOCOLO, protocolo_o_404
+from vighi.servicios.tareas import ENTREGA, sentencias_de_cierre
 
 bp = Blueprint("envios", __name__)
 
@@ -73,6 +74,8 @@ def envio_enviar(pid):
     sentencias.append((SQL_INSERTAR_AUDITORIA, (ahora_, yo["id"], pid, None, "informe_envio",
                                                 f"Informe enviado por e-mail a {', '.join(bien)}" + (f" · falló: {', '.join(r[0] for r in mal)}" if mal else "") if bien
                                                 else f"No se pudo enviar el informe por e-mail a {', '.join(r[0] for r in mal)}")))
+    if bien:
+        sentencias += sentencias_de_cierre([pid], ENTREGA, "informe enviado", yo["id"])
     db.lote_ex(sentencias)
     if bien:
         guardar_correos_del_formulario(p, yo)
@@ -106,7 +109,8 @@ def envio_correo(pid):
     ahora_ = db.ahora()
     detalle = "Se abrió en el correo propio: el PDF lo adjunta quien envía" if modo == "mailto" else "Borrador (.eml) descargado con el PDF adjunto: lo envía quien lo abre"
     db.lote_ex([(SQL_INSERTAR_ENVIO, (pid, emitido["id"], emitido["version"], "correo", rol, destino, "abierto", detalle, yo["id"], ahora_)) for destino, rol in vistos.items()]
-               + [(SQL_INSERTAR_AUDITORIA, (ahora_, yo["id"], pid, None, "informe_envio", f"Se preparó el envío por correo propio a {', '.join(vistos)}"))])
+               + [(SQL_INSERTAR_AUDITORIA, (ahora_, yo["id"], pid, None, "informe_envio", f"Se preparó el envío por correo propio a {', '.join(vistos)}"))]
+              + sentencias_de_cierre([pid], ENTREGA, "informe preparado para enviar", yo["id"]))
     if modo == "mailto":
         destinos = list(vistos)
         campo = "to=" if len(destinos) == 1 else "bcc="
@@ -131,7 +135,8 @@ def envio_whatsapp(pid):
     rol = request.form.get("rol") if request.form.get("rol") in ROLES_ENVIO else "otro"
     texto = " ".join(request.form.get("texto", "").split())[:700]
     db.lote_ex([(SQL_INSERTAR_ENVIO, (pid, emitido["id"], emitido["version"], "whatsapp", rol, "+" + numero, "abierto", "Se abrió WhatsApp: el PDF lo adjunta quien envía", yo["id"], db.ahora())),
-                (SQL_INSERTAR_AUDITORIA, (db.ahora(), yo["id"], pid, None, "informe_envio", f"Se abrió WhatsApp para enviar el informe a +{numero}"))])
+                (SQL_INSERTAR_AUDITORIA, (db.ahora(), yo["id"], pid, None, "informe_envio", f"Se abrió WhatsApp para enviar el informe a +{numero}"))]
+              + sentencias_de_cierre([pid], ENTREGA, "informe preparado para enviar", yo["id"]))
     return jsonify(enlace=f"https://wa.me/{numero}" + (f"?text={quote(texto)}" if texto else ""))
 
 
