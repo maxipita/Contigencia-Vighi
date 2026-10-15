@@ -165,8 +165,6 @@ window.ETIQUETAS = {{ datos|tojson }};
 <script>
 (function () {
     var $ = function (id) { return document.getElementById(id); };
-    var QR = 'data:image/png;base64,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';
-
     function esc(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
@@ -215,10 +213,6 @@ window.ETIQUETAS = {{ datos|tojson }};
             '</div>' +
         '</td>';
     }
-    function bpQr(ancho) {
-        return '<td style="width: ' + ancho + 'px; height: 74px; vertical-align: middle;">' +
-            '<img style="display:block; width:70px; height:70px; margin:0 auto;" src="' + QR + '" width="70" height="70" alt="QR Vighi"></td>';
-    }
     var QRS = {}, QR_PEDIDOS = {};
     function bpQrProtocolo(ancho, proto) {
         var src = QRS[proto];
@@ -249,7 +243,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             var proto = '#' + numero(d.inicio + i);
             html += '<div style="margin-top:20px;"></div>' +
                 '<table class="table-etiqueta" border="1"><tbody><tr>' +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQr(85) +
+                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQrProtocolo(85, numero(d.inicio + i)) +
                 bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
                 '</tr></tbody></table>';
         }
