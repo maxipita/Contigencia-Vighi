@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block titulo %}Órdenes escaneadas{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Ingreso</div>
+<h1>Órdenes escaneadas</h1>
+<p class="muted">Subí los escaneos (PDF o imágenes, de a varios). El sistema lee el número de protocolo de cada hoja, primero por el QR de la etiqueta y, si no lo encuentra, leyendo el número impreso, y adjunta la orden al protocolo. Lo que no puede identificar queda abajo para asignarlo a mano.</p>
+{% if not lectores.qr or not lectores.pdf or not lectores.ocr %}
+<div class="aviso-orden">
+  {% if not lectores.qr %}<div>Falta instalar la lectura de QR (zxing-cpp).</div>{% endif %}
+  {% if not lectores.pdf %}<div>Falta instalar la lectura de PDF (pypdfium2).</div>{% endif %}
+  {% if not lectores.ocr %}<div>Falta instalar la lectura del número impreso (rapidocr-onnxruntime): solo se lee por QR.</div>{% endif %}
+  <div class="muted">Se instalan con <code>python -m pip install -r requirements.txt</code> y reiniciando el sistema.</div>
+</div>
+{% endif %}
+{% if puede('protocolo_editar') %}
+<div class="tarjeta" id="subida-ordenes" data-ordenes-subida data-csrf="{{ csrf }}" data-url="{{ url_for('ordenes.api_ordenes_subir') }}">
+  <h2>Subir escaneos</h2>
+  <label class="zona-soltar" data-zona>
+    <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff" multiple hidden data-archivos>
+    <b>Arrastrá los archivos acá</b> o hacé clic para elegirlos
+  </label>
+  <ul class="resultados-orden" data-resultados></ul>
+  <div class="acciones" data-fin hidden><a class="btn sec" href="{{ url_for('ordenes.ordenes') }}">Actualizar la lista</a></div>
+</div>
+{% endif %}
+
+<div class="tarjeta" id="pendientes">
+  <h2>Sin identificar{% if pendientes %} <span class="muted">({{ pendientes | length }})</span>{% endif %}</h2>
+  {% for o in pendientes %}
+  <div class="orden-pendiente">
+    <a href="{{ url_for('ordenes.orden_ver', oid=o.id) }}" data-visor title="{{ o.nombre }}"><img src="{{ url_for('ordenes.orden_mini', oid=o.id) }}" loading="lazy" alt="Orden"></a>
+    <div>
+      <b>{{ o.nombre }}</b>{% if o.pagina > 1 %} <span class="muted">· página {{ o.pagina }}</span>{% endif %}
+      <div class="muted">{{ o.motivo or 'Sin identificar' }} · {{ o.iniciales or '?' }} · {{ o.creado_en | fh }}</div>
+      {% if puede('protocolo_editar') %}
+      <form method="post" action="{{ url_for('ordenes.orden_asignar', oid=o.id) }}" class="asignar-orden">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <input name="numero" placeholder="N° de protocolo (C000123)" value="{{ o.leido or '' }}" autocomplete="off" required>
+        <button class="btn">Asignar</button>
+      </form>
+      <form method="post" action="{{ url_for('ordenes.orden_borrar', oid=o.id) }}" data-confirmar="¿Borrar esta orden?">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="enlace">Borrar</button></form>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}<p class="muted">No hay órdenes sin identificar.</p>{% endfor %}
+</div>
+
+<div class="tarjeta">
+  <h2>Últimas adjuntadas</h2>
+  {% if recientes %}
+  <table>
+    <tr><th>Protocolo</th><th>Archivo</th><th>Cómo se identificó</th><th>Quién</th><th>Cuándo</th></tr>
+    {% for o in recientes %}
+    <tr>
+      <td><a href="{{ url_for('protocolos.protocolo', pid=o.protocolo_id) }}#ordenes"><b>{{ o.numero }}</b></a></td>
+      <td>{{ o.nombre }}{% if o.pagina > 1 %} <span class="muted">· p. {{ o.pagina }}</span>{% endif %}</td>
+      <td>{{ {'qr': 'QR', 'ocr': 'Número impreso', 'manual': 'A mano', 'continuacion': 'Continuación de la hoja anterior'}.get(o.metodo, o.metodo or '') }}</td>
+      <td>{{ o.iniciales or '?' }}</td><td class="muted">{{ o.creado_en | fh }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Todavía no se adjuntó ninguna orden.</p>{% endif %}
+</div>
+{% endblock %}

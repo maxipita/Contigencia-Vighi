@@ -12,6 +12,7 @@ from vighi.servicios.etiquetas import numero_emitido, numero_protocolo
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO, informe_emitido, informe_vigente
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
+from vighi.servicios.ordenes import SQL_ORDENES, ordenes_de
 from vighi.servicios.tareas import SQL_TAREAS, SQL_USUARIOS_SECTORES, tareas_de, usuarios_con_sectores
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, dni_valido, edicion_propia, edicion_vigente, error_plan, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
 from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
@@ -258,7 +259,7 @@ def buscar_protocolo():
 @requiere_login
 def protocolo(pid):
     db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)),
-                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,)), (SQL_TAREAS, (pid,)), (SQL_USUARIOS_SECTORES, ())] + consultas_estudios("e.protocolo_id=?", (pid,), True))
+                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,)), (SQL_TAREAS, (pid,)), (SQL_USUARIOS_SECTORES, ()), (SQL_ORDENES, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
     p = protocolo_o_404(pid)
     historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
@@ -266,7 +267,7 @@ def protocolo(pid):
     for x in estudios:
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
-    return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), tareas=tareas_de(pid), usuarios_tarea=usuarios_con_sectores(),
+    return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), tareas=tareas_de(pid), ordenes=ordenes_de(pid), usuarios_tarea=usuarios_con_sectores(),
                            ubicaciones=ubicaciones_del_protocolo(p), flujos_malignidad=malignidad_por_flujo(estudios), malignidades=mensajeria.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),

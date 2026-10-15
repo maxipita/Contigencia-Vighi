@@ -158,7 +158,7 @@
 
 <script>
 window.CSRF = {{ csrf|tojson }};
-window.URLS = {"confirmar": {{ url_for('etiquetas.api_etiquetas_confirmar')|tojson }}, "estado": {{ url_for('etiquetas.api_etiquetas_estado')|tojson }},
+window.URLS = {"confirmar": {{ url_for('etiquetas.api_etiquetas_confirmar')|tojson }}, "estado": {{ url_for('etiquetas.api_etiquetas_estado')|tojson }}, "qrs": {{ url_for('etiquetas.api_etiquetas_qr')|tojson }},
                "completar": {{ url_for('tablero.completar')|tojson }}};
 window.ETIQUETAS = {{ datos|tojson }};
 </script>
@@ -219,6 +219,29 @@ window.ETIQUETAS = {{ datos|tojson }};
         return '<td style="width: ' + ancho + 'px; height: 74px; vertical-align: middle;">' +
             '<img style="display:block; width:70px; height:70px; margin:0 auto;" src="' + QR + '" width="70" height="70" alt="QR Vighi"></td>';
     }
+    var QRS = {}, QR_PEDIDOS = {};
+    function bpQrProtocolo(ancho, proto) {
+        var src = QRS[proto];
+        return '<td style="width: ' + ancho + 'px; height: 74px; vertical-align: middle;">' +
+            (src ? '<img style="display:block; width:70px; height:70px; margin:0 auto;" src="' + src + '" width="70" height="70" alt="QR ' + esc(proto) + '">' :
+                   '<div style="width:70px; height:70px; margin:0 auto;"></div>') + '</td>';
+    }
+    function qrsFaltantes(d) {
+        var f = [];
+        for (var i = 0; i < d.n; i++) if (!QRS[numero(d.inicio + i)]) f.push(i);
+        return f;
+    }
+    function pedirQrs(d) {
+        var f = qrsFaltantes(d);
+        if (!f.length) return;
+        var desde = d.inicio + f[0], cuantos = f[f.length - 1] - f[0] + 1, clave = desde + '-' + cuantos;
+        if (QR_PEDIDOS[clave]) return;
+        QR_PEDIDOS[clave] = true;
+        fetch(window.URLS.qrs + '?inicio=' + desde + '&n=' + cuantos, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            for (var k in j) QRS[k] = j[k];
+            generar();
+        }).catch(function () { delete QR_PEDIDOS[clave]; });
+    }
     function renderBp(d) {
         var html = '';
         var linea2 = (d.lote === 'PAPS') ? d.cito : d.lote;
@@ -227,7 +250,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             html += '<div style="margin-top:20px;"></div>' +
                 '<table class="table-etiqueta" border="1"><tbody><tr>' +
                 bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQr(85) +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQr(70) +
+                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
                 '</tr></tbody></table>';
         }
         return html;
@@ -564,6 +587,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         lienzo.innerHTML = RENDER[t](d);
 
         if (t === 'bp') {
+            pedirQrs(d);
             var ultimo = d.inicio + d.n - 1;
             $('nota').textContent = d.n ? 'De ' + numero(d.inicio) + ' a ' + numero(ultimo) + ' (' + d.n + ' protocolos, ' + (d.n * 2) + ' etiquetas).' : '';
         } else {
@@ -623,7 +647,11 @@ window.ETIQUETAS = {{ datos|tojson }};
     });
     $('confirmar').addEventListener('click', confirmar);
     $('nueva').addEventListener('click', nuevaGeneracion);
-    $('imprimir').addEventListener('click', function () { if (loteActual) window.print(); });
+    $('imprimir').addEventListener('click', function () {
+        if (!loteActual) return;
+        if (tipoActual() === 'bp' && qrsFaltantes(armarDatos()).length) { aviso('Se están cargando los códigos QR de cada protocolo: esperá unos segundos y volvé a imprimir.', 'err'); return; }
+        window.print();
+    });
     $('histTabla').addEventListener('click', function (e) {
         var id = e.target.getAttribute && e.target.getAttribute('data-reimprimir');
         if (id) verLote(parseInt(id, 10));

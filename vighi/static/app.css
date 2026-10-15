@@ -588,3 +588,15 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .tabla-tareas tr.cerrada td { opacity: .7; }
 .tabla-tareas .tarea-texto { white-space: pre-wrap; font-size: 12px; margin-top: 2px; }
 .tabla-tareas .edicion { margin: 0; }
+.zona-soltar { display: block; padding: 28px 16px; text-align: center; border: 2px dashed var(--borde); border-radius: 8px; cursor: pointer; color: var(--pizarra); }
+.zona-soltar.encima, .zona-soltar:hover { border-color: var(--acento); background: var(--superficie); }
+.resultados-orden { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.resultados-orden .ok { color: #2a7a4b; }
+.resultados-orden .aviso { color: #8a5a00; }
+.resultados-orden .error { color: #b42318; }
+.aviso-orden { margin: 8px 0 16px; padding: 10px 14px; border-left: 3px solid #d99a00; background: #fff8e6; border-radius: 6px; font-size: 13px; }
+.orden-pendiente { display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--borde); }
+.orden-pendiente:first-of-type { border-top: 0; }
+.orden-pendiente img { width: 110px; border: 1px solid var(--borde); border-radius: 4px; }
+.asignar-orden { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+.asignar-orden input { max-width: 240px; }

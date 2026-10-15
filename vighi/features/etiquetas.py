@@ -7,7 +7,7 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO
-from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, etiquetas_cantidad, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
+from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, etiquetas_cantidad, qrs_protocolos, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
 from vighi.servicios.lotes import tipos_lote
 
 bp = Blueprint("etiquetas", __name__)
@@ -39,6 +39,16 @@ def etiquetas():
 @requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
 def api_etiquetas_estado():
     return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos()})
+
+
+@bp.route("/api/etiquetas/qr")
+@requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
+def api_etiquetas_qr():
+    inicio = _entero(request.args.get("inicio"), 1, MAX_PROTOCOLO)
+    n = _entero(request.args.get("n"), 1, 1000)
+    if not inicio or not n or inicio + n - 1 > MAX_PROTOCOLO:
+        return jsonify({}), 400
+    return jsonify(qrs_protocolos(inicio, n))
 
 
 @bp.route("/api/etiquetas/confirmar", methods=["POST"])

@@ -37,11 +37,12 @@
       </div>
       {% endif %}
       <div class="desplegable">
-        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados', 'perfiles', 'perfil', 'listados', 'templates_admin', 'tarifario', 'nomencladores', 'coberturas', 'cobertura', 'tipos_tarea', 'tipo_tarea', 'configuraciones') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados', 'perfiles', 'perfil', 'listados', 'templates_admin', 'tarifario', 'nomencladores', 'coberturas', 'cobertura', 'tipos_tarea', 'tipo_tarea', 'configuraciones', 'ordenes') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
           <a href="{{ url_for('sistema.configuraciones') }}"><svg class="ic"><use href="#i-config"/></svg> Configuraciones</a>
           {% if puede('exportar') %}<a href="{{ url_for('tablero.exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>{% endif %}
           <a href="{{ url_for('ubicaciones.ubicaciones_lista') }}"><svg class="ic"><use href="#i-ubicacion"/></svg> Ubicaciones</a>
+          <a href="{{ url_for('ordenes.ordenes') }}"><svg class="ic"><use href="#i-informe"/></svg> Órdenes escaneadas</a>
         </div>
       </div>
     </nav>

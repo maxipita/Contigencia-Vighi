@@ -724,3 +724,55 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
     resp.value = o.dataset.responsable;
   });
 })();
+
+(function () {
+  const caja = document.querySelector("[data-ordenes-subida]");
+  if (!caja) return;
+  const entrada = caja.querySelector("[data-archivos]"), zona = caja.querySelector("[data-zona]");
+  const lista = caja.querySelector("[data-resultados]"), fin = caja.querySelector("[data-fin]");
+  const csrf = caja.dataset.csrf;
+  const texto = { qr: "por QR", ocr: "por el número impreso", manual: "a mano", continuacion: "continuación de la hoja anterior" };
+  let ocupado = false;
+  const fila = (nombre) => {
+    const li = document.createElement("li");
+    li.innerHTML = '<b></b> <span class="muted">en cola…</span>';
+    li.querySelector("b").textContent = nombre;
+    lista.append(li);
+    return li;
+  };
+  async function subir(archivo) {
+    const li = fila(archivo.name), estado = li.querySelector("span");
+    estado.textContent = "leyendo…";
+    const datos = new FormData();
+    datos.append("archivo", archivo);
+    try {
+      const r = await fetch(caja.dataset.url, { method: "POST", body: datos, headers: { "X-CSRF": csrf, "Accept": "application/json" } });
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || "no se pudo subir");
+      const bien = d.paginas.filter(p => p.estado === "adjunta"), pend = d.paginas.filter(p => p.estado === "pendiente"), rep = d.paginas.filter(p => p.estado === "repetida");
+      const partes = [];
+      if (bien.length) partes.push(bien.map(p => p.numero + " (" + (texto[p.metodo] || p.metodo) + ")").join(", "));
+      if (pend.length) partes.push(pend.length + " sin identificar");
+      if (rep.length) partes.push(rep.length + " ya estaba(n) cargada(s)");
+      estado.textContent = "✔ " + partes.join(" · ");
+      estado.className = pend.length ? "aviso" : "ok";
+    } catch (e) {
+      estado.textContent = "✖ " + (e.message || "sin conexión");
+      estado.className = "error";
+    }
+  }
+  async function procesar(archivos) {
+    if (ocupado) return;
+    ocupado = true;
+    fin.hidden = true;
+    for (const a of archivos) await subir(a);
+    ocupado = false;
+    fin.hidden = false;
+    entrada.value = "";
+  }
+  entrada.addEventListener("change", () => procesar([...entrada.files]));
+  zona.addEventListener("click", e => { if (e.target !== entrada) { e.preventDefault(); entrada.click(); } });
+  ["dragover", "dragenter"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.add("encima"); }));
+  ["dragleave", "drop"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.remove("encima"); }));
+  zona.addEventListener("drop", e => procesar([...e.dataTransfer.files]));
+})();
