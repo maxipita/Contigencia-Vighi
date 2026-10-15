@@ -4,7 +4,9 @@ import time
 from flask import abort, redirect, request, url_for
 
 from vighi.core import db
+from vighi.core.sesion import puede
 from vighi.dominio.estudios import REGISTRO, validar_combinacion
+from vighi.servicios.catalogo import muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import etiqueta, listas, responsables
 from vighi.servicios.lotes import asignar_lote, lotes_para_formulario, tipos_lote, validar_lote
 
@@ -185,3 +187,15 @@ def comentarios_de(pid):
 def volver_a_comentarios(pid):
     destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else url_for("protocolos.protocolo", pid=pid)
     return redirect(destino.split("#")[0] + "#comentarios")
+
+
+def opciones_de_edicion(estudios):
+    vacio = {"muestras": {}, "sitios": {}, "responsables": {}, "lote": {}}
+    activos = [x for x in estudios if not x["anulado"]]
+    if not activos or not puede("protocolo_editar"):
+        return vacio
+    primero = min(activos, key=lambda x: x["id"])
+    return {"muestras": {x["id"]: muestras_posibles(x) for x in activos},
+            "sitios": {x["id"]: sitios_posibles(x) for x in activos},
+            "responsables": {t: responsables(t) for t in {x["tipo"] for x in activos}},
+            "lote": {"estudio": primero["id"], "abiertos": lotes_para_formulario(primero["tipo"], primero["lote_id"]), "nuevos": tipos_lote(primero["tipo"])}}

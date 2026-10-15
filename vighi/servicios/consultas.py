@@ -13,9 +13,12 @@ def listas():
     return out
 
 
+SQL_RESPONSABLES = "SELECT id, iniciales, nombre, sectores FROM usuarios WHERE activo=1 ORDER BY iniciales"
+
+
 def responsables(tipo):
     sector = REGISTRO[tipo].sector_responsable
-    return [u for u in db.q("SELECT id, iniciales, nombre, sectores FROM usuarios WHERE activo=1 ORDER BY iniciales")
+    return [u for u in db.q(SQL_RESPONSABLES)
             if sector in (u["sectores"] or "").split(",")]
 
 

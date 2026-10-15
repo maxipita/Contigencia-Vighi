@@ -3,17 +3,17 @@ import re
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from vighi.core import db
+from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO, TIPOS, validar_combinacion
 from vighi.servicios import mensajeria
-from vighi.servicios.catalogo import muestras_posibles
-from vighi.servicios.consultas import cargar_estudios, consultas_estudios, flujos_de, listas
+from vighi.servicios.consultas import SQL_RESPONSABLES, cargar_estudios, consultas_estudios, flujos_de, listas
 from vighi.servicios.entrega import malignidad_por_flujo
 from vighi.servicios.etiquetas import numero_emitido, numero_protocolo
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO, informe_emitido, informe_vigente
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
-from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
-from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, edicion_propia, edicion_vigente, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
+from vighi.servicios.lotes import SQL_LOTES_ABIERTOS, asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, ubicar_en_lote, validar_lote
+from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, edicion_propia, edicion_vigente, estudios_del_formulario, leer_protocolo, opciones_de_edicion, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
 from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
 
 bp = Blueprint("protocolos", __name__)
@@ -252,7 +252,8 @@ def buscar_protocolo():
 @requiere_login
 def protocolo(pid):
     db.precargar([(SQL_PROTOCOLO, (pid,)), (SQL_HISTORIAL_PROTOCOLO, (pid,)), (SQL_INFORME_EMITIDO, (pid,)),
-                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True))
+                   (SQL_COMENTARIOS, (pid,)), (SQL_IMAGENES, (pid,))] + consultas_estudios("e.protocolo_id=?", (pid,), True)
+                  + ([(SQL_RESPONSABLES, ()), (SQL_LOTES_ABIERTOS, (hoy(),))] if puede("protocolo_editar") else []))
     p = protocolo_o_404(pid)
     historial = db.q(SQL_HISTORIAL_PROTOCOLO, (pid,))
     estudios = cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)
@@ -261,7 +262,7 @@ def protocolo(pid):
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
     return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid),
-                           muestras={x["id"]: muestras_posibles(x) for x in estudios if not x["anulado"]} if puede("protocolo_editar") and not p["borrador"] else {},
+                           ed=opciones_de_edicion(estudios) if not p["borrador"] else opciones_de_edicion([]),
                            ubicaciones=ubicaciones_del_protocolo(p), flujos_malignidad=malignidad_por_flujo(estudios), malignidades=mensajeria.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
