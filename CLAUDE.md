@@ -42,6 +42,11 @@ py app.py                                 # servidor real en :8000 (equivale a "
   Liberation Sans para los PDF; corre con un usuario sin privilegios).
 - **AWS (`infra/`, Terraform, perfil `terraform-vighi-contingencia`, sa-east-1):** `infra/bootstrap/` crea una sola vez el bucket del estado (`sistemacapvighi-tfstate`; el estado del bootstrap
   queda local y fuera de git) e `infra/` guarda el suyo ahí (`use_lockfile`, sin DynamoDB). El dominio `sistemacapvighi.com` se compró a mano en Route 53 y Terraform solo lee su zona (`data`).
+  `https://contingencia.sistemacapvighi.com` → ALB (certificado ACM; HTTP y el dominio raíz redirigen) → ECS Fargate ARM64 en subred pública sin NAT (solo acepta al ALB) → RDS PostgreSQL 17
+  en subred privada; archivos en el bucket `sistemacapvighi-archivos` (`S3_BUCKET`). `DATABASE_URL` y `CONTINGENCIA_SECRET_KEY` los genera Terraform en SSM (`/vighi-contingencia/...`);
+  `SMTP_CLAVE` se carga a mano (`aws ssm put-parameter --overwrite`, Terraform ignora su valor) y el resto del correo va en la variable `smtp`. Cantidad de tareas: variable `tareas`
+  (en el código, no en un `.tfvars`: un `apply` sin ese archivo la volvería a 0). RDS, ALB y los dos buckets tienen protección contra borrado. Terraform no corre en CI: los cambios de
+  infraestructura se aplican a mano.
 - `py -m vighi.herramientas.preparar_semillas` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
   concreta** (ver constantes al inicio del script): no corre en otra máquina sin ajustarlas.
 
@@ -301,3 +306,8 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
 
 Rama `main` (origen); cada uno trabaja en su rama (`mpita`, `tiagob`) y se integra en `main`. El nombre de la carpeta, `Contigencia-Vighi`, tiene una
 errata; no la renombres sin avisar.
+
+**Un push a `main` despliega a producción** (`.github/workflows/desplegar.yml`): corre la batería contra D1 y PostgreSQL 17 y, si pasa, arma la imagen ARM64, la sube a ECR con el
+commit como tag (inmutable) y como `produccion` (el único tag que se puede mover; es el que usa la tarea) y fuerza un deploy de ECS (rolling; si la tarea nueva no queda sana, ECS vuelve
+a la anterior). No despliegan los cambios que solo tocan `*.md`, `docs/` o `infra/`. GitHub entra a AWS por OIDC con el rol `vighi-contingencia-github`, que solo acepta la rama `main`
+de este repositorio y solo puede subir imágenes y reiniciar el servicio. Para volver a una versión anterior: *Re-run* del workflow de ese commit (re-etiqueta su imagen sin rearmarla) o `git revert`.
