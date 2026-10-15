@@ -420,11 +420,13 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
   const form = estudio.closest("form");
   const tacos = form.querySelector("[data-tecnica-tacos]");
   const nro = form.querySelector("[data-tecnica-nro]");
+  const inclusion = form.querySelector("[data-tecnica-inclusion]");
   function aplicar() {
     const op = estudio.selectedOptions[0];
     if (!op) return;
     tacos.value = op.dataset.tacos || "";
     nro.value = op.dataset.nro || "";
+    if (inclusion) inclusion.value = op.dataset.inclusion || inclusion.options[0].value;
   }
   estudio.addEventListener("change", aplicar);
   aplicar();

@@ -25,6 +25,9 @@ def chequear(n, ok):
 pasos = [p[0] for p in dom_estudios.REGISTRO['BP'].flujo(False)]
 e = F.con.execute("SELECT id, protocolo_id FROM estudios WHERE tipo='BP' AND anulado=0 ORDER BY id LIMIT 1").fetchone()
 eid, pid = e['id'], e['protocolo_id']
+F.con.execute("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, tipo_muestra, cantidad, responsable_id, lote_id, creado_por, creado_en) "
+                "SELECT protocolo_id, tipo, categoria, subcategoria, sitio, tipo_muestra, cantidad, responsable_id, lote_id, creado_por, creado_en FROM estudios WHERE id=?", (eid,))
+F.con.commit()
 miembros = F.con.execute("SELECT id FROM estudios WHERE protocolo_id=? AND tipo='BP' AND anulado=0 ORDER BY id", (pid,)).fetchall()
 print('miembros del flujo:', [m['id'] for m in miembros])
 F.con.execute('DELETE FROM etapas WHERE estudio_id IN (SELECT id FROM estudios WHERE protocolo_id=?)', (pid,))
@@ -54,6 +57,20 @@ print('  tacos guardados:', r[0]['tacos'])
 chequear('suma cassettes en la macro', F.con.execute('SELECT cassettes FROM macro WHERE estudio_id=?', (eid,)).fetchone()['cassettes'] == 2)
 chequear('audita', F.con.execute("SELECT 1 FROM auditoria WHERE accion='tecnica'").fetchone() is not None)
 
+print('inclusion por defecto segun el lote')
+F.con.execute("INSERT INTO lotes (codigo, tipo_lote, fecha, numero) VALUES ('ENDO-TEST.1', 'ENDO', '2026-10-15', 1)")
+F.con.execute("UPDATE estudios SET lote_id=(SELECT id FROM lotes WHERE codigo='ENDO-TEST.1') WHERE protocolo_id=?", (pid,))
+F.con.commit()
+pag = c.get(f'/estudio/{eid}').get_data(as_text=True)
+sel = pag.split('data-tecnica-inclusion')[1].split('</select>')[0]
+chequear('en un lote ENDO la inclusion propuesta es Inclusion total', '<option selected>Inclusi' in sel)
+chequear('la opcion del estudio trae su inclusion por defecto', 'data-inclusion="Inclusi' in pag)
+F.con.execute("UPDATE lotes SET tipo_lote='ONCO' WHERE codigo='ENDO-TEST.1'")
+F.con.commit()
+pag = c.get(f'/estudio/{eid}').get_data(as_text=True)
+sel = pag.split('data-tecnica-inclusion')[1].split('</select>')[0]
+chequear('en otro lote queda Reserva', 'selected' not in sel and 'data-inclusion=""' in pag)
+
 print('fragmentos: 1, 2, 3 o varios')
 pag = c.get(f'/estudio/{eid}').get_data(as_text=True)
 chequear('el formulario ofrece 1, 2, 3 y Varios', all(f'<option value="{v}">{r}' in pag for v, r in (('1', '1<'), ('2', '2<'), ('3', '3<'), ('4', 'Varios'))))
@@ -79,8 +96,17 @@ chequear('seguía 1 técnica', F.con.execute('SELECT COUNT(*) AS n FROM tecnicas
 if len(miembros) > 1:
     h = post(f'/estudio/{eid}/listo/macroscopia')
     chequear('con otro estudio sin técnica sigue sin dejar', 'Faltan las técnicas' in h)
-    for m in miembros[1:]:
+    pag = c.get(f'/estudio/{eid}').get_data(as_text=True)
+    chequear('avisa de qué muestras falta la técnica', 'Falta la t' in pag and 'Se propone la siguiente' in pag)
+    sel = pag.split('data-tecnica-estudio')[1].split('</select>')[0]
+    chequear('ofrece directamente la muestra siguiente sin técnica', f'value="{miembros[1]["id"]}"' in sel and sel.split(f'value="{miembros[1]["id"]}"')[1].split('</option>')[0].count('selected') == 1
+             and 'selected' not in sel.split(f'value="{eid}"')[1].split('</option>')[0])
+    h = post(f'/estudio/{eid}/tecnicas', estudio_id=str(miembros[1]['id']), inclusion='Inclusión total', fragmentos='1', cassettes='1', numero='B')
+    chequear('al cargar la última muestra avisa que están todas', 'todas las muestras' in h)
+    for m in miembros[2:]:
         post(f'/estudio/{eid}/tecnicas', estudio_id=str(m['id']), inclusion='Inclusión total', fragmentos='1', cassettes='1', numero='B')
+    pag = c.get(f'/estudio/{eid}').get_data(as_text=True)
+    chequear('con todas cargadas lo dice', 'Ya est' in pag and 'todas las muestras' in pag)
 
 h = post(f'/estudio/{eid}/listo/macroscopia')
 chequear('con técnicas de todos deja completar', F.con.execute("SELECT 1 FROM etapas WHERE etapa='macroscopia' AND estudio_id=?", (eid,)).fetchone() is not None)

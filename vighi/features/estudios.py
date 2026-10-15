@@ -9,7 +9,7 @@ from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
 from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
-from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
+from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, opciones_de_edicion, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
@@ -221,7 +221,7 @@ def estudio(eid):
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
-    return render_template("estudios/estudio.html", FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudios/estudio.html", INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
@@ -293,7 +293,13 @@ def tecnica_nueva(eid):
                                                   request.form.get("comentarios", "").strip()[:300], usuario_actual()["id"], db.ahora()))
         sumar_cassettes(e)
         db.auditar(usuario_actual()["id"], e["protocolo_id"], "tecnica", f"{numero}: {inclusion}, {rotulo_fragmentos(fragmentos).lower()} fragm., {cassettes} cassette(s)", miembro["id"])
-        flash("Técnica agregada.", "ok")
+        miembros = miembros_flujo(e)
+        faltan = estudios_sin_tecnicas(miembros)
+        if faltan and len(miembros) > 1:
+            letra = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[[m["id"] for m in miembros].index(faltan[0]["id"]) % 26]
+            flash(f"Técnica agregada. Sigue la de {letra}) {etiqueta(faltan[0])}.", "ok")
+        else:
+            flash("Técnica agregada." + (" Ya están las técnicas de todas las muestras." if len(miembros) > 1 else ""), "ok")
     return redirect(destino)
 
 
