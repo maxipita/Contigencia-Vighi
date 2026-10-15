@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titulo %}Tareas{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Seguimiento</div>
+<h1>Tareas</h1>
+<form method="get" class="filtros-tareas">
+  <div><label>Responsable</label>
+    <select name="resp" onchange="this.form.submit()">
+      <option value="{{ yo.id }}" {{ 'selected' if responsable == yo.id | string }}>Yo ({{ yo.iniciales }})</option>
+      <option value="todos" {{ 'selected' if responsable == 'todos' }}>Todos</option>
+      <option value="sin" {{ 'selected' if responsable == 'sin' }}>Sin asignar</option>
+      {% for u in usuarios_tarea if u.id != yo.id %}<option value="{{ u.id }}" {{ 'selected' if responsable == u.id | string }}>{{ u.iniciales }}{% if u.nombre and u.nombre != u.iniciales %} · {{ u.nombre }}{% endif %}</option>{% endfor %}
+    </select></div>
+  <div><label>Estado</label>
+    <select name="estado" onchange="this.form.submit()">{% for k, n in estados.items() %}<option value="{{ k }}" {{ 'selected' if estado == k }}>{{ n }}</option>{% endfor %}</select></div>
+  <noscript><button class="btn">Filtrar</button></noscript>
+</form>
+{% if tareas | length >= 300 %}<p class="muted">Se muestran las primeras 300 tareas; filtrá para ver el resto.</p>{% endif %}
+<table class="tabla-tareas">
+  <tr><th>Protocolo</th><th>Paciente</th><th>Tarea</th><th>Responsable</th><th>Creada</th><th></th></tr>
+  {% for t in tareas %}
+  <tr class="{{ 'cerrada' if t.estado == 'cerrada' }}">
+    <td><a href="{{ url_for('protocolos.protocolo', pid=t.protocolo_id) }}#tareas"><b>{{ t.numero }}</b></a></td>
+    <td>{{ (t.apellido or '') ~ (', ' ~ t.pac_nombre if t.pac_nombre else '') or '—' }}</td>
+    <td>
+      <b>{{ t.titulo }}</b>
+      {% if t.urgencia == 'urgente' %}<span class="chip urgente">Urgente</span>{% endif %}
+      <span class="chip prio-{{ t.prioridad }}">{{ t.prioridad | capitalize }}</span>
+      {% if t.estado == 'cerrada' %}<span class="chip">Cerrada</span>{% endif %}
+      {% if t.descripcion %}<div class="muted tarea-texto">{{ t.descripcion }}</div>{% endif %}
+    </td>
+    <td>
+      <form method="post" action="{{ url_for('tareas.tarea_responsable', tid=t.id) }}" class="edicion">
+        <input type="hidden" name="_csrf" value="{{ csrf }}">
+        <div class="ver">{{ t.resp_iniciales or 'Sin asignar' }}{% if t.estado == 'abierta' %} <button type="button" class="lapiz" data-editar title="Cambiar responsable"><svg class="ic"><use href="#i-lapiz"/></svg>cambiar</button>{% endif %}</div>
+        {% if t.estado == 'abierta' %}<div class="editar">
+          <select name="responsable_id"><option value="">— Sin asignar —</option>
+            {% for u in usuarios_tarea %}<option value="{{ u.id }}" {{ 'selected' if u.id == t.responsable_id }}>{{ u.iniciales }}{% if u.nombre and u.nombre != u.iniciales %} · {{ u.nombre }}{% endif %}</option>{% endfor %}
+          </select>
+          <div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div>
+        </div>{% endif %}
+      </form>
+    </td>
+    <td class="muted">{{ t.creador or '?' }} · {{ t.creado_en | fh }}{% if t.estado == 'cerrada' %}<br>Cerrada: {{ t.cerrador or 'el sistema' }} · {{ t.cerrada_en | fh }}{% endif %}</td>
+    <td>
+      {% if t.estado == 'abierta' %}
+      <form method="post" action="{{ url_for('tareas.tarea_cerrar', tid=t.id) }}" data-confirmar="¿Cerrar la tarea «{{ t.titulo }}»?"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Cerrar</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('tareas.tarea_reabrir', tid=t.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Reabrir</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No hay tareas para este filtro.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

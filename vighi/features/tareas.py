@@ -4,7 +4,7 @@ from vighi.core import db
 from vighi.core.sesion import requiere_admin, requiere_login, usuario_actual
 from vighi.dominio.estudios import SECTORES
 from vighi.servicios.protocolos import protocolo_o_404
-from vighi.servicios.tareas import CIERRES, PRIORIDADES, URGENCIAS, crear_tarea, responsable_valido, tipos_de_tarea, usuarios_con_sectores, usuarios_para_tareas, validar_tarea
+from vighi.servicios.tareas import CIERRES, ESTADOS_LISTA, PRIORIDADES, URGENCIAS, crear_tarea, listar_tareas, responsable_valido, tipos_de_tarea, usuarios_con_sectores, usuarios_para_tareas, validar_tarea
 
 bp = Blueprint("tareas", __name__)
 
@@ -116,3 +116,15 @@ def tarea_reabrir(tid):
         db.auditar(usuario_actual()["id"], t["protocolo_id"], "tarea_reabierta", t["titulo"])
         flash(f"Tarea «{t['titulo']}» reabierta.", "ok")
     return volver_a_tareas(t["protocolo_id"])
+
+
+@bp.route("/tareas")
+@requiere_login
+def mis_tareas():
+    yo = usuario_actual()
+    responsable = request.args.get("resp") or str(yo["id"])
+    if responsable not in ("todos", "sin") and not responsable.isdigit():
+        responsable = str(yo["id"])
+    estado = request.args.get("estado") if request.args.get("estado") in ESTADOS_LISTA else "abiertas"
+    return render_template("tareas/lista.html", tareas=listar_tareas(responsable, estado), responsable=responsable, estado=estado, estados=ESTADOS_LISTA,
+                           usuarios_tarea=usuarios_con_sectores())

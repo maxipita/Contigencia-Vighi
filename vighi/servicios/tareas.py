@@ -89,3 +89,25 @@ def cerrar_por_etapa(protocolo_id, etapa, detalle, yo):
     if sentencias:
         db.lote_ex(sentencias)
     return sentencias
+
+
+ESTADOS_LISTA = {"abiertas": "Abiertas", "cerradas": "Cerradas", "todas": "Todas"}
+
+
+def listar_tareas(responsable, estado):
+    condiciones, params = [], []
+    if estado == "abiertas":
+        condiciones.append("t.estado='abierta'")
+    elif estado == "cerradas":
+        condiciones.append("t.estado='cerrada'")
+    if responsable == "sin":
+        condiciones.append("t.responsable_id IS NULL")
+    elif responsable.isdigit():
+        condiciones.append("t.responsable_id=?")
+        params.append(int(responsable))
+    donde = ("WHERE " + " AND ".join(condiciones)) if condiciones else ""
+    return db.q(f"""SELECT t.*, p.numero, p.apellido, p.nombre AS pac_nombre, r.iniciales AS resp_iniciales, r.nombre AS resp_nombre, c.iniciales AS creador, x.iniciales AS cerrador
+                    FROM tareas t JOIN protocolos p ON p.id=t.protocolo_id LEFT JOIN usuarios r ON r.id=t.responsable_id
+                    LEFT JOIN usuarios c ON c.id=t.creado_por LEFT JOIN usuarios x ON x.id=t.cerrada_por {donde}
+                    ORDER BY CASE t.estado WHEN 'abierta' THEN 0 ELSE 1 END, CASE t.urgencia WHEN 'urgente' THEN 0 ELSE 1 END,
+                             CASE t.prioridad WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END, t.id LIMIT 300""", params)

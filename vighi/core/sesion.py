@@ -12,11 +12,12 @@ from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, TIPOS
 SQL_USUARIO = """SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
                       LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.id=? AND u.activo=1"""
 SQL_BORRADORES = "SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1"
+SQL_MIS_TAREAS = "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN urgencia='urgente' THEN 1 ELSE 0 END), 0) AS urgentes FROM tareas WHERE estado='abierta' AND responsable_id=?"
 
 
 def adelantar_lecturas():
     if session.get("uid") and request.endpoint != "static":
-        db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ())])
+        db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ()), (SQL_MIS_TAREAS, (session["uid"],))])
 
 
 def usuario_actual():
@@ -105,13 +106,14 @@ def modo_vista():
 def globales():
     u = usuario_actual()
     pendientes = db.uno(SQL_BORRADORES)["n"] if u else 0
+    mis_tareas = db.uno(SQL_MIS_TAREAS, (u["id"],)) if u else None
     vista = None
     if u and session.get("real_uid"):
         real = db.uno("SELECT id, iniciales, nombre FROM usuarios WHERE id=? AND activo=1 AND admin=1", (session["real_uid"],))
         if real:
             vista = {"admin": real, "otros": db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 AND id<>? ORDER BY iniciales", (real["id"],))}
     return {"vista_como": vista, "yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS, "nombre_base": db.nombre_base(),
+            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS, "nombre_base": db.nombre_base(),
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 

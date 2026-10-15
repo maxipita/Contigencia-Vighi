@@ -582,3 +582,9 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .acceso:hover { background: var(--superficie); border-color: var(--acento); }
 .acceso .ic { flex: none; color: var(--acento); }
 .acceso small { display: block; color: var(--pizarra); font-size: 12px; }
+.menu .cuenta.urgente { background: #c0392b; }
+.filtros-tareas { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 8px 0 14px; }
+.tabla-tareas td { vertical-align: top; }
+.tabla-tareas tr.cerrada td { opacity: .7; }
+.tabla-tareas .tarea-texto { white-space: pre-wrap; font-size: 12px; margin-top: 2px; }
+.tabla-tareas .edicion { margin: 0; }
