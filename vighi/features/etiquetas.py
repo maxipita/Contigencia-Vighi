@@ -7,7 +7,7 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO
-from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, etiquetas_cantidad, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
+from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, etiquetas_cantidad, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
 from vighi.servicios.lotes import tipos_lote
 
 bp = Blueprint("etiquetas", __name__)
@@ -90,11 +90,7 @@ def api_etiquetas_confirmar():
         if not isinstance(ids, list) or not ids or len(ids) > 500 or len(set(ids)) != len(ids) or \
                 not all(isinstance(i, int) for i in ids):
             return error("Marcá al menos un protocolo para etiquetar.")
-        filas = {f["id"]: f for f in db.q(
-            f"""SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, u.iniciales AS resp, l.codigo AS lote_codigo
-                FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
-                LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
-                WHERE e.id IN ({','.join('?' * len(ids))})""", ids)}
+        filas = estudios_para_etiquetar(ids)
         items = []
         tecnicas = tecnicas_por_estudio() if tipo == "lab" else {}
         for i in ids:

@@ -85,4 +85,17 @@ with A.app.app_context():
 t = c.get('/etiquetas').get_data(as_text=True)
 chequear('el lote viejo conserva sus patos y verLote los usa por posición (elec.pato[...] = patos[i])', "elec.pato[p.key] = (b.params.patos || [])[i] || ''" in t)
 
+print('6) confirmar muchos protocolos de una vez (más de 100 parámetros en D1)')
+with A.app.app_context():
+    muchos = []
+    for k in range(130):
+        q = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, creado_por, creado_en) VALUES (?,?,?,?,?,?)", (f'C0009{k:02d}', '2026-10-01', 'Mu', 'Cho', admin, db.ahora()))
+        muchos.append(db.ex("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, tipo_muestra, cantidad, responsable_id, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (q, 'BP', 'Biopsias', 'Ginecológica', 'Endometrio', 'Biopsia', '1', ids['med'], admin, db.ahora())))
+r = c.post('/api/etiquetas/confirmar', json={'tipo': 'lab', 'items': muchos, 'params': {}}, headers={'X-CSRF': tk})
+j = r.get_json(silent=True)
+chequear('130 protocolos se confirman sin pasar el límite de parámetros', r.status_code == 200 and j and j.get('ok'), r.get_data(as_text=True)[:200])
+with A.app.app_context():
+    chequear('y todos quedan marcados como etiquetados', db.uno("SELECT COUNT(*) AS n FROM estudios WHERE lab_etiquetado_en IS NOT NULL AND id IN (%s)" % ','.join(map(str, muchos[:80])))['n'] == 80)
+
 print(chr(10) + 'FALLAS:', fallas if fallas else 'ninguna')
