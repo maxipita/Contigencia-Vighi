@@ -1,5 +1,9 @@
 {% macro opciones(lista, actual) %}<option value="" hidden>Seleccionar…</option>{% if actual and actual|string not in lista|map('string') %}<option selected>{{ actual }}</option>{% endif %}{% for o in lista %}<option {{ 'selected' if o|string == actual|string }}>{{ o }}</option>{% endfor %}{% endmacro %}
 
+{% macro campo_plan(cobertura, actual) %}{% set mapa = planes_por_cobertura() %}
+<div class="campo-plan"{% if not mapa.get(cobertura or '') %} hidden{% endif %}><label>Plan</label>
+  <select name="plan" data-planes='{{ mapa | tojson }}'><option value="">—</option>{% for pl in mapa.get(cobertura or '', []) %}<option {{ 'selected' if pl == actual }}>{{ pl }}</option>{% endfor %}</select></div>{% endmacro %}
+
 {% macro bloque(tipo, i, e, quitar=True) %}
 {% set t = REGISTRO[tipo] %}
 {% set p = 'e-' ~ i ~ '-' %}

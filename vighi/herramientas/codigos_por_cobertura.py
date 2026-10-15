@@ -9,7 +9,7 @@ from vighi.servicios.facturas import importar_asignaciones, planilla_de_tarifa
 
 
 def tarifa_de(cobertura):
-    filas = db.q("SELECT c.cobertura, t.id, t.nombre FROM tarifario_coberturas c JOIN tarifarios t ON t.id=c.tarifario_id")
+    filas = db.q("SELECT c.cobertura, t.id, t.nombre FROM tarifario_coberturas c JOIN tarifarios t ON t.id=c.tarifario_id WHERE c.plan=''")
     for f in filas:
         if sin_acentos(f["cobertura"]) == sin_acentos(cobertura):
             return f["id"], f["nombre"]

@@ -36,7 +36,7 @@
       </div>
       {% endif %}
       <div class="desplegable">
-        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados', 'perfiles', 'perfil', 'listados', 'templates_admin', 'tarifario', 'nomencladores', 'tipos_tarea', 'tipo_tarea') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <button class="it {{ 'activo' if ep in ('usuarios', 'usuario', 'feriados', 'perfiles', 'perfil', 'listados', 'templates_admin', 'tarifario', 'nomencladores', 'coberturas', 'cobertura', 'tipos_tarea', 'tipo_tarea') }}" type="button" data-abre aria-haspopup="true" title="Más opciones"><svg class="ic"><use href="#i-puntos"/></svg><span class="t">Más</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
           {% if puede('exportar') %}<a href="{{ url_for('tablero.exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>{% endif %}
           <a href="{{ url_for('ubicaciones.ubicaciones_lista') }}"><svg class="ic"><use href="#i-ubicacion"/></svg> Ubicaciones</a>
@@ -49,8 +49,7 @@
           <a href="{{ url_for('plantillas.templates_admin') }}"><svg class="ic"><use href="#i-informe"/></svg> Templates</a>
           <a href="{{ url_for('tareas.tipos_tarea') }}"><svg class="ic"><use href="#i-lista"/></svg> Tareas</a>
           <a href="{{ url_for('envios.correo') }}"><svg class="ic"><use href="#i-mail"/></svg> Correo</a>{% endif %}
-          {% if puede('facturacion') %}<a href="{{ url_for('facturacion.tarifario') }}"><svg class="ic"><use href="#i-completar"/></svg> Tarifario</a>
-          <a href="{{ url_for('facturacion.nomencladores') }}"><svg class="ic"><use href="#i-completar"/></svg> Nomencladores</a>{% endif %}
+          {% if puede('facturacion') %}<a href="{{ url_for('coberturas.coberturas') }}"><svg class="ic"><use href="#i-completar"/></svg> Coberturas</a>{% endif %}
           {% if puede('feriados') %}<a href="{{ url_for('usuarios.feriados') }}"><svg class="ic"><use href="#i-calendario"/></svg> Feriados</a>{% endif %}
           {% endif %}
         </div>

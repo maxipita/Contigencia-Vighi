@@ -544,6 +544,14 @@ details.modificar .acciones { margin-top: 6px; }
 .zona-eliminar { border-color: #e2b4ad; }
 .zona-eliminar h2 { color: #a3281b; }
 .zona-eliminar p { margin-top: 0; }
+tr.importe-cero td { background: #fff4e5; }
+tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
+.chip-cero { display: inline-block; padding: 1px 8px; border-radius: 999px; background: #e08a00; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.campo-plan[hidden] { display: none; }
+.sin-vinetas { list-style: none; margin: 0 0 12px; padding: 0; }
+.sin-vinetas li { padding: 2px 0; }
+.totales-fact .dif-cobro b { color: #b3261e; }
+
 .autoestado { font-size: 12px; color: var(--pizarra); }
 .autoestado.ok { color: var(--ok, #2a7a4b); }
 .autoestado.error { color: #b42318; }

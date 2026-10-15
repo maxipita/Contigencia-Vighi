@@ -79,6 +79,22 @@ SQL_TECNICAS = """SELECT t.id, t.estudio_id, t.numero, t.fragmentos, t.inclusion
                   FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id LEFT JOIN usuarios u ON u.id=t.usuario_id
                   WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 ORDER BY t.id"""
 INCLUSIONES = ("Reserva", "Inclusión total")
+FRAGMENTOS_VARIOS = 4
+OPCIONES_FRAGMENTOS = (("1", 1), ("2", 2), ("3", 3), ("Varios (más de 3)", FRAGMENTOS_VARIOS))
+
+
+def fragmentos_de(valor):
+    texto = (valor or "").strip().lower()
+    if texto.startswith("varios"):
+        return FRAGMENTOS_VARIOS
+    n = entero_positivo(texto)
+    return None if not n else min(n, FRAGMENTOS_VARIOS)
+
+
+def rotulo_fragmentos(n):
+    if n is None:
+        return ""
+    return "Varios" if n >= FRAGMENTOS_VARIOS else str(n)
 
 
 def estudios_sin_tecnicas(miembros):

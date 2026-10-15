@@ -11,6 +11,7 @@
   {% if f.emitida_en %} · emitida por {{ f.emisor or '?' }}{% endif %}
   {% if f.fecha_estimada_cobro %} · FEC (estimada) {{ f.fecha_estimada_cobro | f }}{% endif %}
   {% if f.fecha_cobro %} · cobrada el {{ f.fecha_cobro | f }} por {{ f.cobrador or '?' }}{% endif %}
+  {% if f.estado == 'cobrada' and f.cobrado is not none %} · cobrado {{ f.cobrado | peso }}{% endif %}
   {% if f.estado == 'anulada' %} · anulada {{ f.anulada_en | fh }} por {{ f.anulador or '?' }}: {{ f.anulada_motivo }}{% endif %}</p>
 
 <div class="cols cols-factura">
@@ -49,6 +50,10 @@
       {% for k, n in [("exento","Exento"),("gravado","Gravado"),("iva","IVA (" ~ (f.alicuota * 100) | round(1) ~ "%)"),("total","Total")] %}
       <div><span>{{ n }}</span><b>{{ f[k] | peso }}</b></div>
       {% endfor %}
+      {% if f.estado == 'cobrada' and f.cobrado is not none %}
+      <div><span>Cobrado</span><b>{{ f.cobrado | peso }}</b></div>
+      <div class="{{ 'dif-cobro' if (f.total - f.cobrado) | abs >= 0.01 }}"><span>Diferencia</span><b>{{ (f.total - f.cobrado) | round(2) | peso }}</b></div>
+      {% endif %}
     </div>
     {% if editable %}
     <label style="margin-top:12px">Observaciones</label>
@@ -94,7 +99,26 @@
     <form method="post" action="{{ url_for('facturacion.factura_cobrar', fid=f.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <label>Fecha en que se cobró</label><input type="date" name="fecha_cobro" value="{{ hoy }}">
+      <label style="margin-top:8px">Importe cobrado</label>
+      <input name="monto" value="{{ dos(f.total) }}" autocomplete="off" inputmode="decimal" class="num">
+      <p class="muted">Viene con el total de la factura; si se cobró otro importe, corregilo y queda registrada la diferencia.</p>
       <div class="acciones"><button class="btn">Marcar como cobrada</button></div>
+    </form>
+  </div>
+  {% elif f.estado == 'cobrada' %}
+  <div class="tarjeta">
+    <h2>Cobro</h2>
+    <form method="post" action="{{ url_for('facturacion.factura_cobrar', fid=f.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label>Fecha en que se cobró</label><input type="date" name="fecha_cobro" value="{{ f.fecha_cobro or hoy }}">
+      <label style="margin-top:8px">Importe cobrado</label>
+      <input name="monto" value="{{ dos(f.cobrado if f.cobrado is not none else f.total) }}" autocomplete="off" inputmode="decimal" class="num">
+      <div class="acciones"><button class="btn sec">Corregir cobro</button></div>
+    </form>
+    <form method="post" action="{{ url_for('facturacion.factura_desmarcar_cobro', fid=f.id) }}" class="acciones"
+          data-confirmar="¿Desmarcar el cobro? La factura vuelve a figurar como emitida y pendiente de cobro.">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button class="btn peligro">Desmarcar cobro</button>
     </form>
   </div>
   {% endif %}

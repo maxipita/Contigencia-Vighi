@@ -54,13 +54,23 @@ def contexto():
     for r in db.q("SELECT tarifario_id, tipo, sitio, tipo_muestra, codigo FROM nomenclador_muestras"):
         muestras[(r["tarifario_id"], r["tipo"], sin_acentos(r["sitio"]), sin_acentos(r["tipo_muestra"]))] = r["codigo"]
     return {"tarifarios": tarifarios, "general": general, "valores": valores, "muestras": muestras,
-            "por_cobertura": {sin_acentos(r["cobertura"]): r["tarifario_id"] for r in db.q("SELECT cobertura, tarifario_id FROM tarifario_coberturas")},
+            "por_cobertura": {(sin_acentos(r["cobertura"]), sin_acentos(r["plan"])): r["tarifario_id"]
+                              for r in db.q("SELECT cobertura, plan, tarifario_id FROM tarifario_coberturas")},
+            "descripciones": {(r["tarifario_id"], r["codigo"]): r["descripcion"] for r in db.q("SELECT tarifario_id, codigo, descripcion FROM tarifario_descripciones")},
+            "pago": {sin_acentos(r["cobertura"]): r["dias"] for r in db.q("SELECT cobertura, dias FROM cobertura_pago")},
             "nomencladores": {r["codigo"]: r["descripcion"] for r in db.q("SELECT codigo, descripcion FROM nomencladores")}}
+
+
+def cadena_de(ctx, cobertura, plan=""):
+    c, p = sin_acentos(cobertura), sin_acentos(plan)
+    candidatos = (ctx["por_cobertura"].get((c, p)) if p else None, ctx["por_cobertura"].get((c, "")), ctx["general"])
+    return tuple(dict.fromkeys(t for t in candidatos if t is not None))
 
 
 def codigo_de(ctx, tarifario_id, tipo, sitio, tipo_muestra):
     s, m = sin_acentos(sitio), sin_acentos(tipo_muestra)
-    for t in dict.fromkeys((tarifario_id, ctx["general"])):
+    cadena = tuple(tarifario_id) if isinstance(tarifario_id, (tuple, list)) else (tarifario_id,)
+    for t in dict.fromkeys(cadena + (ctx["general"],)):
         for clave in ((t, tipo, s, m), (t, tipo, "", m), (t, tipo, s, ""), (t, tipo, "", "")):
             if clave in ctx["muestras"]:
                 return ctx["muestras"][clave]
@@ -75,18 +85,19 @@ def importe_vigente(ctx, tarifario_id, codigo, fecha):
     return vigente
 
 
-def resolver(ctx, cobertura, tipo, sitio, tipo_muestra, fecha):
-    tid = ctx["por_cobertura"].get(sin_acentos(cobertura), ctx["general"])
-    codigo = codigo_de(ctx, tid, tipo, sitio, tipo_muestra)
+def resolver(ctx, cobertura, tipo, sitio, tipo_muestra, fecha, plan=""):
+    cadena = cadena_de(ctx, cobertura, plan)
+    codigo = codigo_de(ctx, cadena, tipo, sitio, tipo_muestra)
     if not codigo:
         return {"ok": False, "motivo": "sin nomenclador para este tipo de muestra"}
-    importe = importe_vigente(ctx, tid, codigo, fecha)
-    if importe is None and tid != ctx["general"]:
-        importe = importe_vigente(ctx, ctx["general"], codigo, fecha)
+    importe = next((v for v in (importe_vigente(ctx, t, codigo, fecha) for t in cadena) if v is not None), None)
     if importe is None:
         return {"ok": False, "codigo": codigo, "motivo": f"sin importe vigente para {codigo}"}
-    tarifario = ctx["tarifarios"].get(tid)
-    return {"ok": True, "codigo": codigo, "descripcion": ctx["nomencladores"].get(codigo, ""), "importe": importe,
+    if importe == 0:
+        return {"ok": False, "codigo": codigo, "motivo": f"importe en cero para {codigo}"}
+    tarifario = ctx["tarifarios"].get(cadena[0]) if cadena else None
+    descripcion = next((ctx["descripciones"][(t, codigo)] for t in cadena if ctx["descripciones"].get((t, codigo))), ctx["nomencladores"].get(codigo, ""))
+    return {"ok": True, "codigo": codigo, "descripcion": descripcion, "importe": importe,
             "iva": tarifario["iva"] if tarifario else "exento", "tarifario": tarifario["nombre"] if tarifario else ""}
 
 

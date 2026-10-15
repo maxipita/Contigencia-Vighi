@@ -11,7 +11,7 @@
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <div class="ver">
       <div class="datos-fila">
-        {% for etiqueta, valor in [("Apellido", p.apellido), ("Nombre", p.nombre), ("DNI", p.dni), ("Nacimiento", p.fecha_nacimiento | f), ("Sexo", p.sexo), ("Cobertura", p.cobertura),
+        {% for etiqueta, valor in [("Apellido", p.apellido), ("Nombre", p.nombre), ("DNI", p.dni), ("Nacimiento", p.fecha_nacimiento | f), ("Sexo", p.sexo), ("Cobertura", p.cobertura), ("Plan", p.plan),
             ("N° afiliado", p.n_afiliado), ("Exento", p.exento), ("E-mail", p.email), ("Teléfono", p.telefono)] %}
         {% if valor %}<div class="dato"><div class="muted">{{ etiqueta }}</div><div>{{ valor }}</div></div>{% endif %}
         {% endfor %}
@@ -30,6 +30,7 @@
         <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ p.fecha_nacimiento or '' }}"></div>
         <div><label>Sexo</label><select name="sexo">{{ b.opciones(listas.sexo, p.sexo or '') }}</select></div>
         <div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, p.cobertura or '') }}</select></div>
+        {{ b.campo_plan(p.cobertura, p.plan) }}
         <div><label>N° afiliado</label><input name="n_afiliado" value="{{ p.n_afiliado or '' }}"></div>
         <div><label>Exento</label><select name="exento">{{ b.opciones(['Si', 'No'], p.exento or '') }}</select></div>
         <div><label>E-mail</label><input type="email" name="email" value="{{ p.email or '' }}"></div>

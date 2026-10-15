@@ -24,7 +24,7 @@ def items_de_factura(fid):
 
 
 def facturacion_buscar(f):
-    proto = {r["id"]: r for r in db.q("SELECT id, cobertura, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
+    proto = {r["id"]: r for r in db.q("SELECT id, cobertura, plan, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
     facturados = facturacion.ids_facturados()
     ctx = facturacion.contexto()
     q = f["q"].strip().lower()
@@ -54,6 +54,8 @@ def facturacion_buscar(f):
             continue
         if cobertura and sin_acentos(p["cobertura"]) != cobertura:
             continue
+        if f.get("plan") and (p["plan"] or "") != f["plan"]:
+            continue
         fecha_e = facturacion.fecha_de_estudio(e)
         if f["desde"] and fecha_e < f["desde"]:
             continue
@@ -67,14 +69,14 @@ def facturacion_buscar(f):
             continue
         if q and q not in " ".join(str(x or "") for x in (e["numero"], e["apellido"], e["nombre"], e["dni"], p["n_afiliado"])).lower():
             continue
-        tarifa = facturacion.resolver(ctx, p["cobertura"], e["tipo"], e["sitio"], e["tipo_muestra"], fecha_e or hoy())
+        tarifa = facturacion.resolver(ctx, p["cobertura"], e["tipo"], e["sitio"], e["tipo_muestra"], fecha_e or hoy(), p["plan"] or "")
         iva = facturacion.iva_de(tarifa, p["exento"])
         if f["iva"] and iva != f["iva"]:
             continue
         cantidad = facturacion.cantidad_de(e["cantidad"])
         out.append({"id": e["id"], "protocolo_id": e["protocolo_id"], "numero": e["numero"], "fecha": fecha_e, "tipo": e["tipo"],
                     "paciente": (e["apellido"] or "") + (", " + e["nombre"] if e["nombre"] else ""), "afiliado": p["n_afiliado"] or "",
-                    "cobertura": p["cobertura"] or "", "etiqueta": e["etiqueta"], "informado": informado, "factura_id": ya, "tarifa": tarifa["ok"],
+                    "cobertura": p["cobertura"] or "", "plan": p["plan"] or "", "etiqueta": e["etiqueta"], "informado": informado, "factura_id": ya, "tarifa": tarifa["ok"],
                     "motivo": tarifa.get("motivo", ""), "codigo": tarifa.get("codigo", ""), "cantidad": cantidad,
                     "unitario": tarifa.get("importe"), "iva": iva,
                     "importe": facturacion.importe_linea(cantidad, tarifa["importe"]) if tarifa["ok"] else None})

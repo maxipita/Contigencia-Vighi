@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Coberturas{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Facturación</div>
+<h1><svg class="ic ic-titulo"><use href="#i-dolar"/></svg> Coberturas</h1>
+<p class="muted">Cada cobertura tiene su IVA, su plazo de cobro, su tarifa y, si corresponde, sus planes. Entrá a una para editarla.</p>
+
+<div class="tarjeta">
+  <h2>Tarifa general</h2>
+  <p class="muted" style="margin-top:0">Son los importes y códigos por defecto: los usa toda cobertura que no tiene una tarifa propia y completa lo que a otra le falte.</p>
+  <div class="acciones">
+    <a class="btn" href="{{ url_for('facturacion.tarifario') }}">Importes</a>
+    <a class="btn sec" href="{{ url_for('facturacion.nomencladores') }}">Códigos por tipo de muestra</a>
+  </div>
+</div>
+
+<form method="get" class="filtros">
+  <input type="search" name="q" value="{{ q }}" placeholder="Buscar cobertura…" autocomplete="off">
+  <button class="btn sec">Buscar</button>
+</form>
+
+<table>
+  <tr><th>Cobertura</th><th>Tarifa</th><th>IVA</th><th>Plazo de cobro</th><th>Planes</th><th class="num">Importes</th><th></th></tr>
+  {% for c in filas %}
+  <tr>
+    <td><a href="{{ url_for('coberturas.cobertura', c=c.nombre) }}"><b>{{ c.nombre }}</b></a></td>
+    <td>{% if c.propia %}{{ c.tarifa.nombre }}{% else %}<span class="muted">Tarifa general</span>{% endif %}</td>
+    <td>{{ tipos_iva.get(c.iva, c.iva) }}</td>
+    <td>{% if c.dias is not none %}{{ c.dias }} días{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% for p in c.planes %}<span class="chip flujos">{{ p.plan }}</span> {% else %}<span class="muted">—</span>{% endfor %}</td>
+    <td class="num">{% if c.propia %}{{ c.importes }}{% if c.ceros %} <span class="chip-cero" title="Importes en cero">{{ c.ceros }} sin importe</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td><a class="btn mini-btn sec" href="{{ url_for('coberturas.cobertura', c=c.nombre) }}">Editar</a></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">No hay coberturas que coincidan.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

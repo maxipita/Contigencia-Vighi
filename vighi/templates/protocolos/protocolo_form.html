@@ -29,6 +29,7 @@
       <div><label>Sexo</label><select name="sexo">{{ b.opciones(listas.sexo, v('sexo')) }}</select></div>
       <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ v('fecha_nacimiento') }}"></div>
       <div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, v('cobertura')) }}</select></div>
+      {{ b.campo_plan(v('cobertura'), v('plan')) }}
       <div><label>N° afiliado</label><input name="n_afiliado" value="{{ v('n_afiliado') }}"></div>
       <div><label>Exento</label><select name="exento">{{ b.opciones(['Si', 'No'], v('exento')) }}</select></div>
       <div><label>E-mail</label><input type="email" name="email" value="{{ v('email') }}"></div>

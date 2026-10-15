@@ -624,6 +624,28 @@ document.querySelectorAll("[data-alternar-anulados]").forEach((b) => {
   });
 });
 
+document.querySelectorAll("select[data-planes]").forEach((sel) => {
+  const formulario = sel.closest("form");
+  const cobertura = formulario && formulario.querySelector("select[name=cobertura]");
+  if (!cobertura) return;
+  const mapa = JSON.parse(sel.dataset.planes || "{}");
+  const envoltorio = sel.closest(".campo-plan");
+  cobertura.addEventListener("change", () => {
+    const planes = mapa[cobertura.value] || [];
+    sel.innerHTML = "";
+    const vacio = document.createElement("option");
+    vacio.value = "";
+    vacio.textContent = "—";
+    sel.append(vacio);
+    planes.forEach((p) => {
+      const o = document.createElement("option");
+      o.textContent = p;
+      sel.append(o);
+    });
+    if (envoltorio) envoltorio.hidden = !planes.length;
+  });
+});
+
 (function () {
   const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado"];
   document.querySelectorAll("form[data-autoguardar]").forEach((form) => {

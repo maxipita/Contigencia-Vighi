@@ -18,7 +18,10 @@
         {% for c in coberturas %}<option {{ 'selected' if f.cobertura == c }}>{{ c }}</option>{% endfor %}
       </select></div>
     <div class="campo ancho-campo"><label>Plan</label>
-      <select name="plan" disabled title="Todavía no se carga el plan del afiliado en los protocolos"><option value="">[ n/d ]</option></select></div>
+      <select name="plan">
+        <option value="">[ Todos ]</option>
+        {% for p in planes %}<option {{ 'selected' if f.plan == p }}>{{ p }}</option>{% endfor %}
+      </select></div>
     <div class="campo ancho-campo"><label>Procedencia</label>
       <select name="procedencia">
         <option value="">[ Todas ]</option>
@@ -75,7 +78,7 @@
 {% if buscado %}
 <form method="post" data-facturar>
   <input type="hidden" name="_csrf" value="{{ csrf }}">
-  {% for k in ['desde','hasta','cobertura','procedencia','iva','flujo','zona','clase','informados','facturados','prioridad','q'] %}<input type="hidden" name="{{ k }}" value="{{ f[k] }}">{% endfor %}
+  {% for k in ['desde','hasta','cobertura','plan','procedencia','iva','flujo','zona','clase','informados','facturados','prioridad','q'] %}<input type="hidden" name="{{ k }}" value="{{ f[k] }}">{% endfor %}
   <div class="tarjeta">
     <table class="tabla-facturar">
       <tr>
@@ -91,7 +94,7 @@
         <td class="muted">{{ r.fecha | f }}</td>
         <td>{{ r.paciente }}</td>
         <td class="muted">{{ r.afiliado }}</td>
-        <td>{{ r.cobertura or '—' }}</td>
+        <td>{{ r.cobertura or '—' }}{% if r.plan %} <span class="muted">· {{ r.plan }}</span>{% endif %}</td>
         <td><a href="{{ url_for('estudios.estudio', eid=r.id) }}">{{ r.etiqueta }}</a></td>
         <td>{{ r.codigo }}</td>
         <td class="num">{{ r.cantidad }}</td>
@@ -114,8 +117,7 @@
     <button class="btn">Generar factura (borrador)</button>
     <span class="muted" id="fact-resumen">Marcá los estudios que querés incluir.</span>
   </div>
-  <p class="muted">Los estudios sin nomenclador o sin importe vigente no se pueden marcar: asociá el tipo de muestra en <a href="{{ url_for('facturacion.nomencladores') }}">Nomencladores</a>
-    o cargá el importe en el <a href="{{ url_for('facturacion.tarifario') }}">tarifario</a>.</p>
+  <p class="muted">Los estudios sin nomenclador o sin importe vigente no se pueden marcar: asociá el tipo de muestra o cargá el importe desde la cobertura, en <a href="{{ url_for('coberturas.coberturas') }}">Coberturas</a> (pestañas Códigos y Tarifas).</p>
   {% endif %}
 </form>
 {% endif %}
