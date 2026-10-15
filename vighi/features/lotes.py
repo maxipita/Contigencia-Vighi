@@ -98,7 +98,7 @@ def lote_avanzar(lote_id):
 @requiere_login
 def lote(lote_id):
     l = lote_o_404(lote_id)
-    del_lote = cargar_estudios("e.lote_id=?", (lote_id,), borradores=True)
+    del_lote = [x for x in cargar_estudios("e.lote_id=?", (lote_id,), borradores=True) if not x["anulado"]]
     del_lote.sort(key=lambda x: (orden_numero(x["numero"]), x["id"]))
     primeros = {r["id"] for r in db.q("SELECT MIN(id) AS id FROM estudios WHERE anulado=0 GROUP BY protocolo_id")}
     sin_lote = [x for x in cargar_estudios("e.lote_id IS NULL AND e.anulado=0")
@@ -189,9 +189,10 @@ def lote_observaciones(lote_id):
 @requiere_permiso("lotes_cerrar")
 def lote_eliminar(lote_id):
     l = lote_o_404(lote_id)
-    if db.uno("SELECT 1 FROM estudios WHERE lote_id=?", (lote_id,)):
+    if db.uno("SELECT 1 FROM estudios WHERE lote_id=? AND anulado=0", (lote_id,)):
         flash("Solo se puede eliminar un lote vacío.", "error")
         return redirect(url_for("lotes.lote", lote_id=lote_id))
+    db.ex("UPDATE estudios SET lote_id=NULL WHERE lote_id=?", (lote_id,))
     db.ex("DELETE FROM lotes WHERE id=?", (lote_id,))
     db.auditar(usuario_actual()["id"], None, "eliminar_lote", l["codigo"])
     flash(f"Lote {l['codigo']} eliminado.", "ok")

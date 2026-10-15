@@ -181,18 +181,22 @@
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <fieldset class="seccion" {{ 'disabled' if not edita_macro[0] }}>
       <h3>Agregar una técnica</h3>
+      {% set pendientes = miembros | selectattr('id', 'in', sin_tecnicas) | list %}
+      {% set elegido = pendientes[0].id if pendientes else e.id %}
+      {% if miembros | length > 1 %}<p class="muted" style="margin-top:0">{% if pendientes %}Falta la técnica de: {% for m in pendientes %}<b>{{ m.etiqueta }}</b>{{ ', ' if not loop.last }}{% endfor %}. Se propone la siguiente.{% else %}Ya están las técnicas de todas las muestras.{% endif %}</p>{% endif %}
       <div class="grilla">
         <div class="ancho"><label>Estudio</label>
           <select name="estudio_id" data-tecnica-estudio>
-            {% for m in miembros %}<option value="{{ m.id }}" data-nro="{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}" data-tacos="{{ m.tacos if m.tacos is not none else '' }}"
-              {{ 'selected' if m.id == e.id }}>{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}) {{ m.etiqueta }}</option>{% endfor %}
+            {% for m in miembros %}<option value="{{ m.id }}" data-nro="{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}" data-tacos="{{ m.tacos if m.tacos is not none else '' }}" data-inclusion="{{ INCLUSION_POR_LOTE.get(m.tipo_lote, '') }}"
+              {{ 'selected' if m.id == elegido }}>{{ 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[loop.index0 % 26] }}) {{ m.etiqueta }}{{ ' ✔' if m.id not in sin_tecnicas }}</option>{% endfor %}
           </select></div>
         <div><label>Tacos</label><input data-tecnica-tacos readonly tabindex="-1" value=""></div>
         <div><label>Nro</label><input name="numero" maxlength="10" data-tecnica-nro autocomplete="off"></div>
         <div><label>Fragmentos</label>
           <select name="fragmentos">{% for rotulo, valor in OPCIONES_FRAGMENTOS %}<option value="{{ valor }}">{{ rotulo }}</option>{% endfor %}</select></div>
         <div><label>Inclusión</label>
-          <select name="inclusion">{% for i in ['Reserva', 'Inclusión total'] %}<option>{{ i }}</option>{% endfor %}</select></div>
+          {% set incl_por_defecto = INCLUSION_POR_LOTE.get((miembros | selectattr('id', 'equalto', elegido) | list | first).tipo_lote, '') %}
+          <select name="inclusion" data-tecnica-inclusion>{% for i in ['Reserva', 'Inclusión total'] %}<option {{ 'selected' if i == incl_por_defecto }}>{{ i }}</option>{% endfor %}</select></div>
         <div><label>Cassettes</label><input name="cassettes" type="number" min="1" max="999" value="1"></div>
         <div class="ancho"><label>Comentarios</label><input name="comentarios" maxlength="300" autocomplete="off" placeholder="Comentarios…"></div>
       </div>

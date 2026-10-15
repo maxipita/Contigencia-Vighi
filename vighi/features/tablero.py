@@ -10,6 +10,7 @@ from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
 from vighi.servicios.consultas import cargar_estudios
+from vighi.servicios.lotes import orden_numero
 from vighi.servicios.protocolos import ediciones_en_curso
 
 bp = Blueprint("tablero", __name__)
@@ -93,6 +94,7 @@ def tablero():
             "semaforo": max((e["semaforo"] for e in vista), key=lambda s: trazabilidad.GRAVEDAD[s or ""]),
             "vence": min(vencen) if vencen else None,
             "creado_en": min(e["creado_en"] for e in g)})
+    filas.sort(key=lambda r: (orden_numero(r["numero"])[0].upper() == "C", orden_numero(r["numero"]), r["protocolo_id"]), reverse=True)
     por_semaforo = {k: sum(1 for r in filas if r["semaforo"] == k) for k in SEMAFOROS}
     if f["semaforo"]:
         filas = [r for r in filas if r["semaforo"] == f["semaforo"]]
