@@ -56,6 +56,7 @@ def enviar(ruta, **datos):
 
 h = c.get(f"/estudio/{e1}").get_data(as_text=True)
 chequear("cada dato tiene su lápiz", all(f"/estudio/{e1}/{x}" in h for x in ("sitio", "muestra", "cantidad", "responsable", "lote")))
+chequear("la tarjeta del estudio está arriba de la trazabilidad", 0 < h.index(f"/estudio/{e1}/cantidad") < h.index("<h2>Trazabilidad</h2>"))
 chequear("el lote solo se cambia desde el primer estudio", f"/estudio/{e2}/lote" not in c.get(f"/estudio/{e2}").get_data(as_text=True) and f"/estudio/{e2}/sitio" in c.get(f"/estudio/{e2}").get_data(as_text=True))
 hp = c.get(f"/protocolo/{pid}").get_data(as_text=True)
 chequear("la ficha del protocolo no ofrece cambiar nada (para no tocar por error)", f"/estudio/{e1}/sitio" not in hp and f"/estudio/{e1}/cantidad" not in hp and f"/estudio/{e1}/muestra" not in hp and "data-editar" in hp)

@@ -54,6 +54,57 @@
 {% if e.borrador %}<div class="aviso">Protocolo a completar: faltan los datos del paciente y la cantidad.
   <a href="{{ url_for('protocolos.protocolo_editar', pid=e.protocolo_id) }}">Completar datos</a>.</div>{% endif %}
 
+<div class="tarjeta" id="datos-estudio">
+    <h2>{{ 'Estudios del flujo' if miembros | length > 1 else 'Estudio' }}</h2>
+    {% for m in miembros %}
+    <div class="miembro{{ ' bloqueado' if m.anulado }}">
+      {% if miembros | length > 1 %}<div class="dato"><b><u>{{ m.etiqueta }}</u></b></div>{% endif %}
+      {% set editable_ = ed.muestras.get(m.id) %}
+      <div class="datos-estudio">
+      {% set lote_html %}{% if m.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=m.lote_id) }}">{{ m.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}{% endset %}
+      {% if ed.lote.estudio == m.id %}
+        {% set campo %}<label>Lote del protocolo</label><select name="lote_id"><option value="">— Sin lote —</option>
+          {% if ed.lote.abiertos %}<optgroup label="Lotes abiertos de hoy">{% for l in ed.lote.abiertos %}<option value="{{ l.id }}" {{ 'selected' if l.id == m.lote_id }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}</optgroup>{% endif %}
+          <optgroup label="Crear lote nuevo de hoy">{% for tl in ed.lote.nuevos %}<option value="nuevo:{{ tl }}">+ Nuevo lote {{ tl }}</option>{% endfor %}</optgroup></select>{% endset %}
+        {% call edicion_estudio('estudios.estudio_lote', m.id, campo) %}<div class="dato ver"><b>Lote</b> {{ lote_html }} {{ lapiz() }}</div>{% endcall %}
+      {% else %}<div class="dato"><b>Lote</b> {{ lote_html }}</div>{% endif %}
+      {% if m.categoria %}<div class="dato"><b>Categoría</b> {{ m.categoria }}</div>{% endif %}
+      {% if ed.sitios.get(m.id) %}
+        {% set campo %}<label>Sitio (órgano)</label><select name="sitio">{% for x in ed.sitios[m.id] %}<option {{ 'selected' if x == m.sitio }}>{{ x }}</option>{% endfor %}</select>{% endset %}
+        {% call edicion_estudio('estudios.estudio_sitio', m.id, campo) %}<div class="dato ver"><b>Muestra</b> {{ m.subcategoria or '' }} / {{ m.sitio or '' }} {{ lapiz() }}</div>{% endcall %}
+      {% else %}<div class="dato"><b>Muestra</b> {{ m.subcategoria or '' }} / {{ m.sitio or '' }}</div>{% endif %}
+      {% if editable_ %}
+        {% set campo %}<label>Tipo de muestra</label><select name="tipo_muestra">{% for x in ed.muestras[m.id] %}<option {{ 'selected' if x == m.tipo_muestra }}>{{ x }}</option>{% endfor %}</select>{% endset %}
+        {% call edicion_estudio('estudios.estudio_muestra', m.id, campo) %}<div class="dato ver"><b>Tipo de muestra</b> {{ m.tipo_muestra or 'sin tipo' }} {{ lapiz() }}</div>{% endcall %}
+        {% set campo %}<label>Cantidad ({{ tipo.etiqueta_cantidad }})</label><select name="cantidad">{% for x in tipo.cantidades %}<option {{ 'selected' if x == m.cantidad }}>{{ x }}</option>{% endfor %}</select>{% endset %}
+        {% call edicion_estudio('estudios.estudio_cantidad', m.id, campo) %}<div class="dato ver"><b>Cantidad</b> {{ m.cantidad or '—' }} {{ lapiz() }}{% if m.tacos is not none %} <span class="muted">· {{ m.tacos }} taco(s)</span>{% endif %}</div>{% endcall %}
+      {% else %}
+        {% for rotulo, valor in [("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad)] %}{% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}{% endfor %}
+      {% endif %}
+      {% for rotulo, valor in [("Técnicas especiales", m.tecnicas_especiales), ("Citología hormonal", m.citologia_hormonal)] %}
+        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
+      {% endfor %}
+      {% if editable_ %}
+        {% set campo %}<label>{{ tipo.etiqueta_responsable }}</label><select name="responsable_id">{% for r in ed.responsables[m.tipo] %}<option value="{{ r.id }}" {{ 'selected' if r.id == m.responsable_id }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} · {{ r.nombre }}{% endif %}</option>{% endfor %}</select>{% endset %}
+        {% call edicion_estudio('estudios.estudio_responsable', m.id, campo) %}<div class="dato ver"><b>{{ tipo.etiqueta_responsable }}</b> {{ m.responsable or '—' }} {{ lapiz() }}</div>{% endcall %}
+      {% elif m.responsable %}<div class="dato"><b>{{ tipo.etiqueta_responsable }}</b> {{ m.responsable }}</div>{% endif %}
+      {% for rotulo, valor in [("Observaciones", m.observaciones), ("Anulado por", m.motivo_anulacion)] %}
+        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
+      {% endfor %}
+      </div>
+      <div class="acciones">
+        {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudios.estudio_editar', eid=m.id) }}">Editar estudio</a>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <div class="datos-estudio">
+    {% for rotulo, valor in [("Médico solicitante", e.medico), ("Cobertura", e.cobertura)] %}
+      {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
+    {% endfor %}
+    </div>
+    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolos.protocolo', pid=e.protocolo_id) }}">Ver protocolo</a></div>
+</div>
+
 <div class="tarjeta">
   <h2>Trazabilidad</h2>
   <div class="traza-enc">
@@ -225,53 +276,6 @@
 </div>
 
 <div>
-  <div class="tarjeta">
-    <h2>{{ 'Estudios del flujo' if miembros | length > 1 else 'Estudio' }}</h2>
-    {% for m in miembros %}
-    <div class="miembro{{ ' bloqueado' if m.anulado }}">
-      {% if miembros | length > 1 %}<div class="dato"><b><u>{{ m.etiqueta }}</u></b></div>{% endif %}
-      {% set editable_ = ed.muestras.get(m.id) %}
-      {% set lote_html %}{% if m.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=m.lote_id) }}">{{ m.lote }}</a>{% else %}<span class="muted">sin lote</span>{% endif %}{% endset %}
-      {% if ed.lote.estudio == m.id %}
-        {% set campo %}<label>Lote del protocolo</label><select name="lote_id"><option value="">— Sin lote —</option>
-          {% if ed.lote.abiertos %}<optgroup label="Lotes abiertos de hoy">{% for l in ed.lote.abiertos %}<option value="{{ l.id }}" {{ 'selected' if l.id == m.lote_id }}>{{ l.codigo }}{{ ' (cerrado)' if l.cerrado }}</option>{% endfor %}</optgroup>{% endif %}
-          <optgroup label="Crear lote nuevo de hoy">{% for tl in ed.lote.nuevos %}<option value="nuevo:{{ tl }}">+ Nuevo lote {{ tl }}</option>{% endfor %}</optgroup></select>{% endset %}
-        {% call edicion_estudio('estudios.estudio_lote', m.id, campo) %}<div class="dato ver"><b>Lote</b> {{ lote_html }} {{ lapiz() }}</div>{% endcall %}
-      {% else %}<div class="dato"><b>Lote</b> {{ lote_html }}</div>{% endif %}
-      {% if m.categoria %}<div class="dato"><b>Categoría</b> {{ m.categoria }}</div>{% endif %}
-      {% if ed.sitios.get(m.id) %}
-        {% set campo %}<label>Sitio (órgano)</label><select name="sitio">{% for x in ed.sitios[m.id] %}<option {{ 'selected' if x == m.sitio }}>{{ x }}</option>{% endfor %}</select>{% endset %}
-        {% call edicion_estudio('estudios.estudio_sitio', m.id, campo) %}<div class="dato ver"><b>Muestra</b> {{ m.subcategoria or '' }} / {{ m.sitio or '' }} {{ lapiz() }}</div>{% endcall %}
-      {% else %}<div class="dato"><b>Muestra</b> {{ m.subcategoria or '' }} / {{ m.sitio or '' }}</div>{% endif %}
-      {% if editable_ %}
-        {% set campo %}<label>Tipo de muestra</label><select name="tipo_muestra">{% for x in ed.muestras[m.id] %}<option {{ 'selected' if x == m.tipo_muestra }}>{{ x }}</option>{% endfor %}</select>{% endset %}
-        {% call edicion_estudio('estudios.estudio_muestra', m.id, campo) %}<div class="dato ver"><b>Tipo de muestra</b> {{ m.tipo_muestra or 'sin tipo' }} {{ lapiz() }}</div>{% endcall %}
-        {% set campo %}<label>Cantidad ({{ tipo.etiqueta_cantidad }})</label><select name="cantidad">{% for x in tipo.cantidades %}<option {{ 'selected' if x == m.cantidad }}>{{ x }}</option>{% endfor %}</select>{% endset %}
-        {% call edicion_estudio('estudios.estudio_cantidad', m.id, campo) %}<div class="dato ver"><b>Cantidad</b> {{ m.cantidad or '—' }} {{ lapiz() }}{% if m.tacos is not none %} <span class="muted">· {{ m.tacos }} taco(s)</span>{% endif %}</div>{% endcall %}
-      {% else %}
-        {% for rotulo, valor in [("Tipo de muestra", m.tipo_muestra), ("Cantidad", m.cantidad)] %}{% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}{% endfor %}
-      {% endif %}
-      {% for rotulo, valor in [("Técnicas especiales", m.tecnicas_especiales), ("Citología hormonal", m.citologia_hormonal)] %}
-        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
-      {% endfor %}
-      {% if editable_ %}
-        {% set campo %}<label>{{ tipo.etiqueta_responsable }}</label><select name="responsable_id">{% for r in ed.responsables[m.tipo] %}<option value="{{ r.id }}" {{ 'selected' if r.id == m.responsable_id }}>{{ r.iniciales }}{% if r.nombre and r.nombre != r.iniciales %} · {{ r.nombre }}{% endif %}</option>{% endfor %}</select>{% endset %}
-        {% call edicion_estudio('estudios.estudio_responsable', m.id, campo) %}<div class="dato ver"><b>{{ tipo.etiqueta_responsable }}</b> {{ m.responsable or '—' }} {{ lapiz() }}</div>{% endcall %}
-      {% elif m.responsable %}<div class="dato"><b>{{ tipo.etiqueta_responsable }}</b> {{ m.responsable }}</div>{% endif %}
-      {% for rotulo, valor in [("Observaciones", m.observaciones), ("Anulado por", m.motivo_anulacion)] %}
-        {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
-      {% endfor %}
-      <div class="acciones">
-        {% if puede('protocolo_editar') %}<a class="btn sec" href="{{ url_for('estudios.estudio_editar', eid=m.id) }}">Editar estudio</a>{% endif %}
-      </div>
-    </div>
-    {% endfor %}
-    {% for rotulo, valor in [("Médico solicitante", e.medico), ("Cobertura", e.cobertura)] %}
-      {% if valor %}<div class="dato"><b>{{ rotulo }}</b> {{ valor }}</div>{% endif %}
-    {% endfor %}
-    <div class="acciones"><a class="btn sec" href="{{ url_for('protocolos.protocolo', pid=e.protocolo_id) }}">Ver protocolo</a></div>
-  </div>
-
   {% with pid=e.protocolo_id %}{% include "compartidos/_imagenes.html" %}{% include "compartidos/_comentarios.html" %}{% endwith %}
 
   <div class="tarjeta">
