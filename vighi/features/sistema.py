@@ -1,6 +1,7 @@
-from flask import Blueprint, flash, redirect, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from vighi.core import d1, db
+from vighi.core.sesion import requiere_login
 
 bp = Blueprint("sistema", __name__)
 
@@ -9,6 +10,12 @@ bp = Blueprint("sistema", __name__)
 def salud():
     db.uno("SELECT 1 AS ok")
     return "ok", 200, {"Cache-Control": "no-store"}
+
+
+@bp.route("/configuraciones")
+@requiere_login
+def configuraciones():
+    return render_template("sistema/configuraciones.html")
 
 
 @bp.app_errorhandler(413)
