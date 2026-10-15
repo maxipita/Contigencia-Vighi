@@ -775,4 +775,22 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
   ["dragover", "dragenter"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.add("encima"); }));
   ["dragleave", "drop"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.remove("encima"); }));
   zona.addEventListener("drop", e => procesar([...e.dataTransfer.files]));
+
+  const todos = document.querySelector("[data-marcar-protocolos]");
+  const cuenta = document.querySelector("[data-cuenta-marcados]");
+  const cajas = () => [...document.querySelectorAll("input[data-protocolo]")];
+  const contar = () => {
+    if (cuenta) cuenta.textContent = cajas().filter((c) => c.checked).length + " marcado(s)";
+  };
+  if (todos) todos.addEventListener("change", () => { cajas().forEach((c) => { c.checked = todos.checked; }); contar(); });
+  document.addEventListener("change", (ev) => { if (ev.target.matches("input[data-protocolo]")) contar(); });
+  const form = document.querySelector("[data-confirmar-mover]");
+  if (form) form.addEventListener("submit", (ev) => {
+    const n = cajas().filter((c) => c.checked).length;
+    const destino = form.querySelector("select[name=destino]");
+    const rotulo = destino.selectedOptions[0] ? destino.selectedOptions[0].textContent.trim() : "";
+    if (!n) { ev.preventDefault(); alert("Marcá al menos un protocolo para mover."); return; }
+    if (!confirm("¿Mover " + n + " protocolo(s) al lote " + rotulo + "?")) ev.preventDefault();
+  });
+  contar();
 })();

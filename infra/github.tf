@@ -53,6 +53,21 @@ data "aws_iam_policy_document" "github" {
     actions   = ["ecs:UpdateService", "ecs:DescribeServices"]
     resources = ["${replace(aws_ecs_cluster.principal.arn, ":cluster/", ":service/")}/${var.proyecto}"]
   }
+  statement {
+    sid       = "ListarTareas"
+    actions   = ["ecs:ListTasks"]
+    resources = ["*"]
+    condition {
+      test     = "ArnEquals"
+      variable = "ecs:cluster"
+      values   = [aws_ecs_cluster.principal.arn]
+    }
+  }
+  statement {
+    sid       = "VerTareas"
+    actions   = ["ecs:DescribeTasks"]
+    resources = ["${replace(aws_ecs_cluster.principal.arn, ":cluster/", ":task/")}/*"]
+  }
 }
 
 resource "aws_iam_role_policy" "github" {

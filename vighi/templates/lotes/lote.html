@@ -35,9 +35,10 @@
 </div>
 
   <table>
-    <tr><th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Tacos</th><th>Estado</th><th class="no-imprimir"></th></tr>
+    <tr>{% if not l.cerrado and puede('lotes_armar') and estudios %}<th class="no-imprimir"><input type="checkbox" data-marcar-protocolos title="Marcar todos"></th>{% endif %}<th>#</th><th>Protocolo</th><th>Estudio</th><th>Paciente</th><th>Muestra</th><th>Tacos</th><th>Estado</th><th class="no-imprimir"></th></tr>
     {% for c in estudios %}
     <tr class="{{ 'bloqueado' if c.anulado }}">
+      {% if not l.cerrado and puede('lotes_armar') %}<td class="no-imprimir">{% if loop.first or estudios[loop.index0 - 1].protocolo_id != c.protocolo_id %}<input type="checkbox" name="eids" value="{{ c.id }}" form="form-mover" data-protocolo>{% endif %}</td>{% endif %}
       <td class="muted">{{ loop.index }}</td>
       <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}{% if c.borrador %} <a class="mini" href="{{ url_for('protocolos.protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
       <td><a href="{{ url_for('estudios.estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
@@ -51,7 +52,7 @@
       {% endif %}</td>
     </tr>
     {% else %}
-    <tr><td colspan="8" class="muted">El lote todavía no tiene estudios.</td></tr>
+    <tr><td colspan="9" class="muted">El lote todavía no tiene estudios.</td></tr>
     {% endfor %}
   </table>
   {% if l.observaciones %}<p><b>Observaciones:</b> {{ l.observaciones }}</p>{% endif %}
@@ -70,6 +71,20 @@
       <input name="protocolo" autocomplete="off">
       <p class="muted">El lote es del protocolo (lo marca su primer flujo): entran todos sus estudios. Si ya estaba en otro lote, se mueve a este.</p>
       <div class="acciones"><button class="btn">Agregar</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if not l.cerrado and puede('lotes_armar') and estudios and destinos %}
+  <div class="tarjeta">
+    <h2>Mover protocolos</h2>
+    <form method="post" id="form-mover" action="{{ url_for('lotes.lote_mover', lote_id=l.id) }}" data-confirmar-mover>
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <p class="muted" style="margin-top:0">Marcá protocolos en la tabla y elegí a qué lote van. Entran todos sus estudios; el lote de destino tiene que servir a su primer flujo.</p>
+      <label>Lote de destino</label>
+      <select name="destino" required><option value="" hidden>Seleccionar…</option>
+        {% for d in destinos %}<option value="{{ d.id }}">{{ d.codigo }} · {{ d.fecha | f }}</option>{% endfor %}</select>
+      <div class="acciones"><button class="btn">Mover los marcados</button><span class="muted" data-cuenta-marcados></span></div>
     </form>
   </div>
   {% endif %}

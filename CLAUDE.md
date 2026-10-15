@@ -178,6 +178,7 @@ El código no lleva comentarios ni docstrings: lo que hay que saber para tocarlo
   Pendiente de optimizar: `cargar_estudios` lee las tablas `etapas` y `estudios` completas en cada pantalla, y D1 cobra por filas leídas.
 - **Respaldos:** los hace Cloudflare (*Time Travel*); el sistema no copia nada localmente.
 - **Pasar a MySQL:** habría que cambiar solo `vighi/core/db.py`: la conexión, los placeholders (`?` → `%s`), los tipos del esquema y el bloqueo de `etiquetas_confirmar` (hoy la tabla `bloqueos`).
+- **Lotes con otra fecha y movimiento en conjunto:** `POST /lotes/nuevo` acepta `fecha` (por defecto, la que se está viendo en `/lotes`; `crear_lote(tipo, usuario, fecha)` numera por prefijo `TIPO-MMDD` para no chocar entre años). En la pantalla del lote, `POST /lotes/<id>/mover` (`lote_mover`, permiso `lotes_armar`) lleva los protocolos marcados —con todos sus estudios— a otro lote abierto cuyo tipo sirva a su primer flujo; un solo lote de sentencias, historial `lote` por protocolo y aviso si el destino pasa la capacidad de tacos.
 - **Lotes:** el código es `TIPO-MMDD.N` y se arma igual en `app.crear_lote` y en `db._lote_abierto`: si se toca uno, tocar el otro. `tipos_lote_fijos()` suma a los de la
   base los que exige cada estudio (así una base anterior a un tipo nuevo, como HPM, no necesita migración). `orden_numero` ordena los números de protocolo como personas
   (C000009 antes que C000010). `etiquetas_confirmar` devuelve `{id, lote}` o `{error: "choque" | "existentes"}`; `borradores` es
@@ -311,6 +312,6 @@ errata; no la renombres sin avisar.
 
 **Un push a `main` despliega a producción** (`.github/workflows/desplegar.yml`): corre la batería contra D1 y PostgreSQL 17 y, si pasa, arma la imagen ARM64, la sube a ECR con el
 commit como tag (inmutable) y como `produccion` (el único tag que se puede mover; es el que usa la tarea) y fuerza un deploy de ECS (rolling; si la tarea nueva no queda sana, ECS vuelve
-a la anterior). No despliegan los cambios que solo tocan `*.md`, `docs/` o `infra/`. GitHub entra a AWS por OIDC con el rol `vighi-contingencia-github`, que solo acepta la rama `main`
+a la anterior). Al final compara la imagen en servicio con la recién subida: si ECS volvió a la anterior, el workflow falla (sin ese paso quedaría en verde, porque el servicio vuelve a estar estable). No despliegan los cambios que solo tocan `*.md`, `docs/` o `infra/`. GitHub entra a AWS por OIDC con el rol `vighi-contingencia-github`, que solo acepta la rama `main`
 de este repositorio y solo puede subir imágenes y reiniciar el servicio. El repo usa el `sub` **inmutable** de GitHub (`repo:dueño@id/repo@id`, variable `github_sub`), no `repo:dueño/repo`:
 lo da `gh api repos/maxipita/Contigencia-Vighi/actions/oidc/customization/sub`. Para volver a una versión anterior: *Re-run* del workflow de ese commit (re-etiqueta su imagen sin rearmarla) o `git revert`.

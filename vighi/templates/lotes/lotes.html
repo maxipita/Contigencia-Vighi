@@ -23,7 +23,7 @@
 </div>
 
 <div>
-  {% if es_hoy and puede('lotes_armar') %}
+  {% if puede('lotes_armar') %}
   <div class="tarjeta">
     <h2>Nuevo lote</h2>
     <form method="post" action="{{ url_for('lotes.nuevo_lote') }}">
@@ -32,7 +32,9 @@
       <select name="tipo_lote" required><option value="" hidden>Seleccionar…</option>
         {% for grupo, tipos in grupos_lote if tipos %}<optgroup label="{{ grupo }}">
           {% for t in tipos %}<option>{{ t }}</option>{% endfor %}</optgroup>{% endfor %}</select>
-      <p class="muted">Se crea con la fecha de hoy y el número que sigue (ej. ONCO-{{ fecha_sel[5:7] }}{{ fecha_sel[8:10] }}.1, .2…).
+      <label style="margin-top:8px">Fecha del lote</label>
+      <input type="date" name="fecha" value="{{ fecha_sel }}" required>
+      <p class="muted">Se crea con esa fecha (por defecto, el día que estás viendo) y el número que sigue (ej. ONCO-{{ fecha_sel[5:7] }}{{ fecha_sel[8:10] }}.1, .2…).
         Los lotes de PAP llevan las iniciales del citotécnico.</p>
       <div class="acciones"><button class="btn">Crear lote</button></div>
     </form>

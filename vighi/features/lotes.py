@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from vighi.core import db
@@ -11,6 +13,14 @@ from vighi.servicios.tareas import sentencias_de_cierre
 from vighi.servicios.tacos import tacos_de_lote, tacos_por
 
 bp = Blueprint("lotes", __name__)
+
+
+def fecha_valida(texto):
+    try:
+        date.fromisoformat(texto)
+        return True
+    except ValueError:
+        return False
 
 
 @bp.route("/lotes")
@@ -32,11 +42,15 @@ def lotes():
 @requiere_permiso("lotes_armar")
 def nuevo_lote():
     tipo_lote = request.form.get("tipo_lote", "")
+    fecha = request.form.get("fecha", "").strip() or hoy()
     if tipo_lote not in tipos_lote():
         flash("Elegí el tipo de lote.", "error")
+        return redirect(url_for("lotes.lotes", fecha=fecha if fecha_valida(fecha) else None))
+    if not fecha_valida(fecha):
+        flash("La fecha del lote no es válida.", "error")
         return redirect(url_for("lotes.lotes"))
-    lote = crear_lote(tipo_lote, usuario_actual()["id"])
-    flash(f"Lote {lote['codigo']} creado.", "ok")
+    lote = crear_lote(tipo_lote, usuario_actual()["id"], fecha)
+    flash(f"Lote {lote['codigo']} creado con fecha {fecha[8:]}/{fecha[5:7]}/{fecha[:4]}.", "ok")
     return redirect(url_for("lotes.lote", lote_id=lote["id"]))
 
 
@@ -106,7 +120,10 @@ def lote(lote_id):
     en_bp = l["tipo_lote"] in REGISTRO["BP"].lotes
     tacos_total, sin_dato = tacos_de_lote(lote_id) if en_bp else (0, 0)
     avance, sin_avance = plan_avance_de(del_lote)
-    return render_template("lotes/lote.html", avance=avance, sin_avance=sin_avance, l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
+    compatibles = {t for x in del_lote for t in tipos_lote(x["tipo"])}
+    destinos = [d for d in db.q("SELECT id, codigo, tipo_lote, fecha FROM lotes WHERE cerrado=0 AND id<>? ORDER BY fecha DESC, tipo_lote, numero LIMIT 120", (lote_id,))
+                if d["tipo_lote"] in compatibles]
+    return render_template("lotes/lote.html", destinos=destinos, avance=avance, sin_avance=sin_avance, l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
                            tacos_total=tacos_total, sin_dato=sin_dato,
                            etiquetas_lab=(l["tipo_lote"] in tipos_lote("BP") or l["tipo_lote"] in tipos_lote("PAP"))
                            and any(not x["anulado"] and not x["borrador"] for x in del_lote))
@@ -145,6 +162,56 @@ def lote_agregar(lote_id):
         if total > capacidad:
             flash(f"Atención: el lote {l['codigo']} queda en {total}/{capacidad} tacos.", "error")
     return redirect(url_for("lotes.lote", lote_id=lote_id))
+
+
+@bp.route("/lotes/<int:lote_id>/mover", methods=["POST"])
+@requiere_permiso("lotes_armar")
+def lote_mover(lote_id):
+    yo = usuario_actual()
+    origen = lote_o_404(lote_id)
+    destino_id = request.form.get("destino", "")
+    destino = db.uno("SELECT * FROM lotes WHERE id=?", (int(destino_id),)) if destino_id.isdigit() else None
+    marcados = {int(x) for x in request.form.getlist("eids") if x.isdigit()}
+    volver = url_for("lotes.lote", lote_id=lote_id)
+    if not destino:
+        flash("Elegí el lote de destino.", "error")
+    elif destino["id"] == lote_id:
+        flash("El lote de destino es el mismo.", "error")
+    elif origen["cerrado"] or destino["cerrado"]:
+        flash("Un lote cerrado no admite movimientos: reabrilo primero.", "error")
+    elif not marcados:
+        flash("Marcá al menos un protocolo para mover.", "error")
+    else:
+        filas = db.q("""SELECT e.id, e.protocolo_id, e.tipo, p.numero FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
+                        WHERE e.lote_id=? AND e.anulado=0 ORDER BY e.id""", (lote_id,))
+        protocolos = {}
+        for r in filas:
+            protocolos.setdefault(r["protocolo_id"], []).append(r)
+        elegidos = [pid for pid, g in protocolos.items() if any(x["id"] in marcados for x in g)]
+        movidos, problemas, sentencias = [], [], []
+        ahora_ = db.ahora()
+        for pid in elegidos:
+            primero = min(protocolos[pid], key=lambda x: x["id"])
+            if destino["tipo_lote"] not in tipos_lote(primero["tipo"]):
+                problemas.append(f"{primero['numero']} no va en un lote {destino['tipo_lote']}")
+                continue
+            movidos.append(primero["numero"])
+            sentencias += [("UPDATE estudios SET lote_id=? WHERE protocolo_id=? AND anulado=0", (destino["id"], pid)),
+                           ("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, accion, detalle) VALUES (?,?,?,?,?)",
+                            (ahora_, yo["id"], pid, "lote", f"{origen['codigo']} → {destino['codigo']}"))]
+        for i in range(0, len(sentencias), 40):
+            db.lote_ex(sentencias[i:i + 40])
+        if movidos:
+            flash(f"{len(movidos)} protocolo(s) movidos de {origen['codigo']} a {destino['codigo']}.", "ok")
+            capacidad = REGISTRO["BP"].tacos_por_lote
+            total = tacos_de_lote(destino["id"])[0] if destino["tipo_lote"] in REGISTRO["BP"].lotes else 0
+            if total > capacidad:
+                flash(f"Atención: el lote {destino['codigo']} queda en {total}/{capacidad} tacos.", "error")
+        if problemas:
+            flash("No se movieron: " + " · ".join(problemas[:6]) + ".", "error")
+        if not movidos and not problemas:
+            flash("Los protocolos marcados ya no están en este lote.", "error")
+    return redirect(volver)
 
 
 @bp.route("/lotes/<int:lote_id>/quitar/<int:eid>", methods=["POST"])
