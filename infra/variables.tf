@@ -25,7 +25,7 @@ variable "subdominio" {
 
 variable "tareas" {
   type    = number
-  default = 0
+  default = 1
 }
 
 variable "cpu" {

@@ -51,7 +51,7 @@ data "aws_iam_policy_document" "github" {
   statement {
     sid       = "Desplegar"
     actions   = ["ecs:UpdateService", "ecs:DescribeServices"]
-    resources = [aws_ecs_service.app.id]
+    resources = ["${replace(aws_ecs_cluster.principal.arn, ":cluster/", ":service/")}/${var.proyecto}"]
   }
 }
 

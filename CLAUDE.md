@@ -46,7 +46,8 @@ py app.py                                 # servidor real en :8000 (equivale a "
   en subred privada; archivos en el bucket `sistemacapvighi-archivos` (`S3_BUCKET`). `DATABASE_URL` y `CONTINGENCIA_SECRET_KEY` los genera Terraform en SSM (`/vighi-contingencia/...`);
   `SMTP_CLAVE` se carga a mano (`aws ssm put-parameter --overwrite`, Terraform ignora su valor) y el resto del correo va en la variable `smtp`. Cantidad de tareas: variable `tareas`
   (en el código, no en un `.tfvars`: un `apply` sin ese archivo la volvería a 0). RDS, ALB y los dos buckets tienen protección contra borrado. Terraform no corre en CI: los cambios de
-  infraestructura se aplican a mano.
+  infraestructura se aplican a mano. **Producción corre en AWS desde el 15/10/2026** (migración única con `migrar_d1_a_pg`, verificada tabla por tabla contra D1): la D1 de
+  producción quedó congelada como respaldo y no se vuelve a cargar nada en ella; la PC del laboratorio ya no es el servidor.
 - `py -m vighi.herramientas.preparar_semillas` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
   concreta** (ver constantes al inicio del script): no corre en otra máquina sin ajustarlas.
 
