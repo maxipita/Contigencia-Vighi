@@ -38,7 +38,10 @@ py app.py                                 # servidor real en :8000 (equivale a "
 - **Migración D1 → PostgreSQL (`py -m vighi.herramientas.migrar_d1_a_pg`):** solo lee D1; crea el esquema en PostgreSQL, copia todas las tablas (incluidas las heredadas que ya no usa el sistema: `envios`,
   `ubicacion_*`), mueve los archivos a `almacen`, reinicia las secuencias y verifica cantidades y huellas SHA-256 de cada archivo. Se niega a correr si el destino ya tiene datos. `--contar`
   solo cuenta, `--si` no pregunta. Variables de despliegue: `CONTINGENCIA_SECRET_KEY` (firma de sesiones, obligatoria con más de una instancia), `CONTINGENCIA_HTTPS=1` (cookie segura y
-  encabezados del proxy), `/salud` (chequeo de estado sin login). Hay `Dockerfile` (puerto 8080) para App Runner.
+  encabezados del proxy), `/salud` (chequeo de estado sin login). `deploy/Dockerfile` (puerto 8080; `TZ` de Argentina porque la app usa `datetime.now()` para auditoría, plazos y semáforo;
+  Liberation Sans para los PDF; corre con un usuario sin privilegios).
+- **AWS (`infra/`, Terraform, perfil `terraform-vighi-contingencia`, sa-east-1):** `infra/bootstrap/` crea una sola vez el bucket del estado (`sistemacapvighi-tfstate`; el estado del bootstrap
+  queda local y fuera de git) e `infra/` guarda el suyo ahí (`use_lockfile`, sin DynamoDB). El dominio `sistemacapvighi.com` se compró a mano en Route 53 y Terraform solo lee su zona (`data`).
 - `py -m vighi.herramientas.preparar_semillas` regenera `seed/*.json` leyendo Excel y CSV con **rutas fijas de OneDrive de una PC
   concreta** (ver constantes al inicio del script): no corre en otra máquina sin ajustarlas.
 
@@ -53,7 +56,8 @@ py tests/correr.py --solo facturacion                # solo las que contienen es
 ```
 
 `probar_arquitectura.py` verifica las capas (los módulos de `features` no se importan entre sí, `core` no depende de `servicios` ni `features`, etc.). Una prueba nueva es un archivo
-`probar_<tema>.py` que imprime `  OK   ...` / `  FALLA ...` y termina con `FALLAS: ninguna`; `correr.py` lo detecta solo.
+`probar_<tema>.py` que imprime `  OK   ...` / `  FALLA ...` y termina con `FALLAS: ninguna`; `correr.py` lo detecta solo. Las pruebas de PDF usan PyMuPDF (`fitz`), que no está en
+`requirements.txt`. `probar_migracion_pg.py` no usa `--pg`: tiene su propia URL fija (`127.0.0.1:55138`, usuario `postgres` sin clave).
 
 ## Arquitectura
 
@@ -102,7 +106,7 @@ py tests/correr.py --solo facturacion                # solo las que contienen es
   reemplaza para no acumular archivos; guarda quién lo generó y quién firma), lo audita (`informe_pdf`, una línea por generación: ahí queda la
   constancia histórica) y redirige a `GET /informe/<id>.pdf`, que sirve lo guardado sin rearmarlo. La firma (imagen PNG)
   vive en la tabla `firmas` y título / MN / MP en `usuarios` (se cargan en Usuarios; nunca en el repositorio ni en `static/`). Usa la
-  fuente Segoe UI o Arial de Windows para los símbolos; sin ellas cae a Helvetica. Los datos del centro (pie) están en `informes.CENTRO`.
+  fuente Segoe UI o Arial de Windows y, en Linux (la imagen Docker), Liberation Sans; sin ellas cae a Helvetica. Los datos del centro (pie) están en `informes.CENTRO`.
 - **Visual** (`vighi/static/app.css`, `templates/base.html`): colores y tipografías de la web nueva (`NUEVAWEB/susana-vighi-web`,
   `src/styles.css`; sus valores OKLCH están pasados a hex en `:root`) y armado de pantallas de la maqueta del sistema
   (`SistemaVighi/Sistema-de-Gestion-Laboratorio-Vighi`): barra superior violeta que es el menú principal (íconos, botón "Ingresar", listas desplegables; en pantallas angostas

@@ -8,3 +8,7 @@ tests/
 docs/
 *.pdf
 *.xlsx
+.env
+infra/
+.terraform/
+*.tfstate*
