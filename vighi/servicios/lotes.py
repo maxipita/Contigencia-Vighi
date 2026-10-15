@@ -40,11 +40,12 @@ def tipos_lote(tipo=None):
     return fijos + [i for i in cito if i not in fijos]
 
 
-def crear_lote(tipo_lote, usuario_id):
-    f = hoy()
+def crear_lote(tipo_lote, usuario_id, fecha=None):
+    f = fecha or hoy()
+    prefijo = f"{tipo_lote}-{f[5:7]}{f[8:10]}"
     for _ in range(5):
-        n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (tipo_lote, f))["m"] or 0) + 1
-        codigo = f"{tipo_lote}-{f[5:7]}{f[8:10]}.{n}"
+        n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND (fecha=? OR codigo LIKE ?)", (tipo_lote, f, prefijo + ".%"))["m"] or 0) + 1
+        codigo = f"{prefijo}.{n}"
         try:
             lid = db.ex("INSERT INTO lotes (codigo, tipo_lote, fecha, numero, creado_por, creado_en) VALUES (?,?,?,?,?,?)",
                         (codigo, tipo_lote, f, n, usuario_id, db.ahora()))
