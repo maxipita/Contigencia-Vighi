@@ -63,10 +63,10 @@ h = c.get(f'/estudio/{eid}').get_data(as_text=True)
 chequear('la ficha muestra las técnicas del estudio', 'Técnicas especiales' in h and 'PAS; Azul alcian' in h)
 chequear('micro muestra las pedidas, sin poder elegir otras', 'name="tecnicas_especiales"' not in h and 'data-chips="tec_esp"' not in h and 'chip-sel on">PAS<' in h and 'chip-sel on">Azul alcian<' in h)
 
-F.con.execute('DELETE FROM micro WHERE estudio_id=?', (eid,))
-F.con.execute("INSERT INTO micro (estudio_id, solicita_ihq) VALUES (?, 1)", (eid,))
+F.con.execute('DELETE FROM micro WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)', (eid,))
+F.con.execute("INSERT INTO micro (flujo_id, solicita_ihq) VALUES ((SELECT flujo_id FROM estudios WHERE id=?), 1)", (eid,))
 h = c.get(f'/estudio/{eid}').get_data(as_text=True)
-chequear('con IHQ solicitada hay botones de marcadores', 'data-chips="ihq_marc"' in h and 'data-valor="Ki-67"' in h)
+chequear('con IHQ solicitada se sugieren los marcadores del listado al escribir', 'id="lista-ihq-marcadores"' in h and '<option value="Ki-67">' in h and 'data-lista-ihq' in h)
 
 F.con.execute("DELETE FROM listas WHERE nombre='tecnicas_especiales'")
 db._fijas.clear()

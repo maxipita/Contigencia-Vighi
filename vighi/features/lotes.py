@@ -69,14 +69,14 @@ def lote_avanzar(lote_id):
         flash(error, "error")
         return redirect(destino)
     etapa = plan["etapa"]
-    db.precargar([(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,)) for t in ("macro", "micro", "ihq")]
+    sql_seccion = "SELECT m.* FROM {} m WHERE m.flujo_id IN (SELECT e.flujo_id FROM estudios e WHERE e.lote_id=?)"
+    db.precargar([(sql_seccion.format(t), (lote_id,)) for t in ("macro", "micro", "ihq")]
                  + [("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))])
-    por_tabla = {t: {r["estudio_id"]: r for r in db.q(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,))}
-                 for t in ("macro", "micro", "ihq")}
+    por_tabla = {t: {r["flujo_id"]: r for r in db.q(sql_seccion.format(t), (lote_id,))} for t in ("macro", "micro", "ihq")}
     con_tecnicas = {r["estudio_id"] for r in db.q("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))}
     problemas = []
     for flujo in plan["flujos"]:
-        cabecera = min(m["id"] for m in flujo)
+        cabecera = flujo[0]["flujo_id"]
         primero = flujo[0]
         sin = [m for m in flujo if m["id"] not in con_tecnicas] if etapa == "macroscopia" and "macro" in REGISTRO[primero["tipo"]].secciones else []
         motivo = motivo_no_listo(yo, primero["tipo"], etapa, primero["proxima"], Variante(primero["solicita_ihq"], primero["decal"]),
@@ -88,11 +88,12 @@ def lote_avanzar(lote_id):
         return redirect(destino)
     ahora_ = db.ahora()
     estudios = [m for f in plan["flujos"] for m in f]
+    flujos_ids = list(dict.fromkeys(f[0]["flujo_id"] for f in plan["flujos"]))
     sentencias = []
-    for i in range(0, len(estudios), 25):
-        grupo = estudios[i:i + 25]
-        sentencias.append(("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES " + ",".join(["(?,?,?,?)"] * len(grupo)),
-                           tuple(v for m in grupo for v in (m["id"], etapa, yo["id"], ahora_))))
+    for i in range(0, len(flujos_ids), 25):
+        grupo = flujos_ids[i:i + 25]
+        sentencias.append(("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES " + ",".join(["(?,?,?,?)"] * len(grupo)),
+                           tuple(v for fid in grupo for v in (fid, etapa, yo["id"], ahora_))))
     for i in range(0, len(plan["flujos"]), 16):
         grupo = plan["flujos"][i:i + 16]
         sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES " + ",".join(["(?,?,?,?,?,?)"] * len(grupo)),

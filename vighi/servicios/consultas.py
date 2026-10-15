@@ -22,9 +22,11 @@ def responsables(tipo):
             if sector in (u["sectores"] or "").split(",")]
 
 
-SQL_ETAPAS = "SELECT estudio_id, etapa, fecha_hora FROM etapas"
-SQL_CON_IHQ = "SELECT e.protocolo_id, e.tipo FROM micro m JOIN estudios e ON e.id=m.estudio_id WHERE m.solicita_ihq=1 AND e.anulado=0"
-SQL_CON_DECAL = "SELECT e.protocolo_id, e.tipo FROM macro m JOIN estudios e ON e.id=m.estudio_id WHERE m.decal=1 AND e.anulado=0"
+SQL_ETAPAS = "SELECT flujo_id, etapa, fecha_hora FROM etapas"
+SQL_CON_IHQ = ("SELECT f.protocolo_id, f.tipo FROM micro m JOIN flujos f ON f.id=m.flujo_id WHERE m.solicita_ihq=1 "
+               "AND EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=f.id AND e.anulado=0)")
+SQL_CON_DECAL = ("SELECT f.protocolo_id, f.tipo FROM macro m JOIN flujos f ON f.id=m.flujo_id WHERE m.decal=1 "
+                 "AND EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=f.id AND e.anulado=0)")
 SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 
 
@@ -46,8 +48,8 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
     filas = db.q(*consultas[0])
     hechas, fechas = {}, {}
     for r in db.q(SQL_ETAPAS):
-        hechas.setdefault(r["estudio_id"], set()).add(r["etapa"])
-        fechas.setdefault(r["estudio_id"], {})[r["etapa"]] = r["fecha_hora"]
+        hechas.setdefault(r["flujo_id"], set()).add(r["etapa"])
+        fechas.setdefault(r["flujo_id"], {})[r["etapa"]] = r["fecha_hora"]
     con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
     con_decal_ = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
@@ -59,12 +61,12 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         d["solicita_ihq"] = (f["protocolo_id"], f["tipo"]) in con_ihq
         decal = (f["protocolo_id"], f["tipo"]) in con_decal_
         d["decal"] = decal
-        d["estado"], prox = tipo.estado(hechas.get(f["id"], set()), Variante(d["solicita_ihq"], decal), bool(f["anulado"]))
+        d["estado"], prox = tipo.estado(hechas.get(f["flujo_id"], set()), Variante(d["solicita_ihq"], decal), bool(f["anulado"]))
         if f["borrador"]:
             d["estado"] = "A completar"
         d["proxima"] = prox
         d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer, decal) if prox else None
-        d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["id"], {})},
+        d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["flujo_id"], {})},
                                                          d["vence"], ahora_, fer, decal) if d["vence"] and not f["borrador"] else "")
         d["etiqueta"] = etiqueta(f)
         d["tacos"] = tacos_del_estudio(f)
@@ -95,7 +97,7 @@ def flujos_de(protocolo_ids=None):
 
 
 def miembros_flujo(e):
-    return db.q("SELECT * FROM estudios WHERE protocolo_id=? AND tipo=? AND anulado=0 ORDER BY id", (e["protocolo_id"], e["tipo"]))
+    return db.q("SELECT * FROM estudios WHERE flujo_id=? AND anulado=0 ORDER BY id", (e["flujo_id"],))
 
 
 def variante_de(protocolo_id, tipo):
@@ -104,8 +106,8 @@ def variante_de(protocolo_id, tipo):
 
 
 def flujo_avanzado(protocolo_id, tipo):
-    r = db.uno("""SELECT x.etapa FROM etapas x JOIN estudios e ON e.id=x.estudio_id
-                  WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 ORDER BY x.fecha_hora DESC, x.id DESC LIMIT 1""", (protocolo_id, tipo))
+    r = db.uno("""SELECT x.etapa FROM etapas x JOIN flujos f ON f.id=x.flujo_id
+                  WHERE f.protocolo_id=? AND f.tipo=? ORDER BY x.fecha_hora DESC, x.id DESC LIMIT 1""", (protocolo_id, tipo))
     return NOMBRE_ETAPA.get(r["etapa"], r["etapa"]) if r else None
 
 
@@ -120,7 +122,5 @@ def tipos_lote_fijos():
 
 
 SQL_LISTAS = "SELECT nombre, valor FROM listas ORDER BY nombre, orden"
-SQL_VARIANTE = ("SELECT (SELECT 1 FROM micro m JOIN estudios e ON e.id=m.estudio_id "
-                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.solicita_ihq=1) AS ihq, "
-                "(SELECT 1 FROM macro m JOIN estudios e ON e.id=m.estudio_id "
-                "WHERE e.protocolo_id=? AND e.tipo=? AND e.anulado=0 AND m.decal=1) AS decal")
+SQL_VARIANTE = ("SELECT (SELECT 1 FROM micro m JOIN flujos f ON f.id=m.flujo_id WHERE f.protocolo_id=? AND f.tipo=? AND m.solicita_ihq=1) AS ihq, "
+                "(SELECT 1 FROM macro m JOIN flujos f ON f.id=m.flujo_id WHERE f.protocolo_id=? AND f.tipo=? AND m.decal=1) AS decal")

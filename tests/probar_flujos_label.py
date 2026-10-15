@@ -23,8 +23,8 @@ with A.app.app_context():
     chequear('protocolo de una biopsia: "BP"', f[ids['p_bp']] == 'BP', f)
     chequear('protocolo mixto 2 BP + 1 CT: "BP c/ CT"', f[ids['p_mix']] == 'BP c/ CT', f[ids['p_mix']])
     chequear('PAP: "PAP"', f[ids['p_pap']] == 'PAP')
-    db.ex("INSERT INTO micro (estudio_id, descripcion, solicita_ihq) VALUES (?,?,1)", (ids['pendiente'], 'x')) if not db.uno("SELECT 1 FROM micro WHERE estudio_id=?", (ids['pendiente'],)) else None
-    db.ex("UPDATE micro SET solicita_ihq=1 WHERE estudio_id=?", (ids['mix_b1'],))
+    db.ex("INSERT INTO micro (flujo_id, descripcion, solicita_ihq) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,1)", (ids['pendiente'], 'x')) if not db.uno("SELECT 1 FROM micro WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)", (ids['pendiente'],)) else None
+    db.ex("UPDATE micro SET solicita_ihq=1 WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)", (ids['mix_b1'],))
     chequear('si un BP pide IHQ: "BP c/ CT + IHQ"', srv_consultas.flujos_de([ids['p_mix']])[ids['p_mix']] == 'BP c/ CT + IHQ', srv_consultas.flujos_de([ids['p_mix']]))
     chequear('pedir uno solo no mezcla otros protocolos', list(srv_consultas.flujos_de([ids['p_mix']])) == [ids['p_mix']])
     db.ex("UPDATE estudios SET anulado=1 WHERE id=?", (ids['mix_c'],))

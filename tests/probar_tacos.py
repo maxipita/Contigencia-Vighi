@@ -124,6 +124,7 @@ print('4) lote lleno de 120 tacos (ONCO, Mama x 3 frascos = 30 tacos cada protoc
 with A.app.app_context():
     db.ex("UPDATE lotes SET cerrado=1 WHERE tipo_lote='ONCO'")
     db.ex("DELETE FROM estudios WHERE protocolo_id=?", (s1,))
+    db.ex("DELETE FROM flujos WHERE protocolo_id=?", (s1,))
     db.ex("DELETE FROM protocolos WHERE id=?", (s1,))
     lote = srv_lotes.crear_lote('ONCO', admin)['id']
     ps = [protocolo(f'C0009{n}', 3, lote)[0] for n in range(10, 14)]

@@ -186,6 +186,16 @@ def estudio_lote(eid):
     return destino
 
 
+@bp.route("/protocolo/<int:pid>/flujo/<tipo>")
+@requiere_login
+def flujo(pid, tipo):
+    fila = db.uno("""SELECT e.id FROM estudios e JOIN flujos f ON f.id=e.flujo_id WHERE f.protocolo_id=? AND f.tipo=?
+                     ORDER BY e.anulado, e.id LIMIT 1""", (pid, tipo))
+    if not fila:
+        abort(404)
+    return estudio(fila["id"])
+
+
 @bp.route("/estudio/<int:eid>")
 @requiere_login
 def estudio(eid):
@@ -251,7 +261,7 @@ def guardar_macro(eid):
                "descripcion": request.form.get("descripcion", "").strip()}
     detalle = ""
     if auto:
-        guardar_seccion("macro", e["dueno"], valores)
+        guardar_seccion("macro", e["flujo_id"], valores)
         auditar_autoguardado(usuario_actual(), e, "guardar_macro")
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
@@ -259,7 +269,7 @@ def guardar_macro(eid):
         valores["decal"] = decal
         if decal != (1 if macro and macro["decal"] else 0):
             detalle = "agrega Macro > Decal" if decal else "quita Macro > Decal"
-    guardar_seccion("macro", e["dueno"], valores)
+    guardar_seccion("macro", e["flujo_id"], valores)
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", detalle, eid)
     flash("Macroscopía guardada.", "ok")
     if request.form.get("y_listo"):
@@ -333,11 +343,11 @@ def guardar_micro(eid):
         flash(f"No se guardó: {motivo}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
     if auto:
-        guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(), "descripcion": request.form.get("descripcion", "").strip(),
+        guardar_seccion("micro", e["flujo_id"], {"template": request.form.get("template", "").strip(), "descripcion": request.form.get("descripcion", "").strip(),
                                               "conclusion": request.form.get("conclusion", "").strip(), "bethesda": request.form.get("bethesda", "").strip()})
         auditar_autoguardado(usuario_actual(), e, "guardar_micro")
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
-    guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(),
+    guardar_seccion("micro", e["flujo_id"], {"template": request.form.get("template", "").strip(),
                                           "descripcion": request.form.get("descripcion", "").strip(),
                                           "conclusion": request.form.get("conclusion", "").strip(),
                                           "bethesda": request.form.get("bethesda", "").strip()})
@@ -354,9 +364,9 @@ def guardar_ihq(eid):
     e, _, micro, ihq, _, _ = ficha(eid)
     confirmado = pedido_ihq_confirmado(micro, ihq)
     if confirmado:
-        guardar_seccion("ihq", e["dueno"], {"resultado": request.form.get("resultado", "").strip()})
+        guardar_seccion("ihq", e["flujo_id"], {"resultado": request.form.get("resultado", "").strip()})
     else:
-        guardar_seccion("ihq", e["dueno"], {"marcadores": ", ".join(lista_marcadores(request.form.get("marcadores", "")))})
+        guardar_seccion("ihq", e["flujo_id"], {"marcadores": ", ".join(lista_marcadores(request.form.get("marcadores", "")))})
     if request.form.get("autoguardar") == "1":
         auditar_autoguardado(usuario_actual(), e, "guardar_ihq")
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
@@ -385,8 +395,8 @@ def ihq_pedir(eid):
     elif not marcadores:
         flash("Elegí al menos un marcador antes de confirmar el pedido.", "error")
     else:
-        guardar_seccion("ihq", e["dueno"], {"marcadores": ", ".join(marcadores), "pedido_en": db.ahora(), "pedido_por": yo["id"]})
-        guardar_seccion("micro", e["dueno"], {"solicita_ihq": 1})
+        guardar_seccion("ihq", e["flujo_id"], {"marcadores": ", ".join(marcadores), "pedido_en": db.ahora(), "pedido_por": yo["id"]})
+        guardar_seccion("micro", e["flujo_id"], {"solicita_ihq": 1})
         tipo_tarea = tipo_solicitud_ihq()
         descripcion = (f"Marcadores pedidos ({len(marcadores)}):\n" + "\n".join(f"- {m}" for m in marcadores) + f"\nEstudio: {etiqueta(e)}")[:2000]
         crear_tarea(e["protocolo_id"], tipo_tarea, descripcion, "regular", "media", tipo_tarea["responsable_id"], yo["id"])
@@ -414,9 +424,8 @@ def marcar_listo(eid, etapa):
         flash(motivo, "error")
     else:
         ahora_ = db.ahora()
-        for m in miembros:
-            if not db.uno("SELECT 1 FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], etapa)):
-                db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (m["id"], etapa, yo["id"], ahora_))
+        if not db.uno("SELECT 1 FROM etapas WHERE flujo_id=? AND etapa=?", (e["flujo_id"], etapa)):
+            db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (e["flujo_id"], etapa, yo["id"], ahora_))
         db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa] + (f" (en {len(miembros)} estudios {tipo.nombre.lower()})" if len(miembros) > 1 else ""), eid)
         flash(f"✔ {NOMBRE_ETAPA[etapa]} registrada por {yo['iniciales']}"
               + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
@@ -434,15 +443,13 @@ def marcar_listo(eid, etapa):
 def deshacer(eid):
     yo = usuario_actual()
     e = ficha(eid)[0]
-    ultima = db.uno("SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (eid,))
+    ultima = db.uno("SELECT * FROM etapas WHERE flujo_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (e["flujo_id"],))
     if not ultima:
         flash("No hay etapas para deshacer.", "error")
     elif ultima["usuario_id"] != yo["id"] and not puede("etapas_deshacer"):
         flash("Solo quien la registró o alguien con permiso puede deshacer la etapa.", "error")
     else:
-        miembros = miembros_flujo(e)
-        for m in miembros or [e]:
-            db.ex("DELETE FROM etapas WHERE estudio_id=? AND etapa=?", (m["id"], ultima["etapa"]))
+        db.ex("DELETE FROM etapas WHERE flujo_id=? AND etapa=?", (e["flujo_id"], ultima["etapa"]))
         db.ex("UPDATE protocolos SET firmante_id=NULL WHERE id=?", (e["protocolo_id"],))
         db.auditar(yo["id"], e["protocolo_id"], "deshacer", NOMBRE_ETAPA.get(ultima["etapa"], ultima["etapa"]), eid)
         flash(f"Se deshizo {NOMBRE_ETAPA.get(ultima['etapa'])}.", "ok")
@@ -466,7 +473,6 @@ def anular(eid):
               "flujo. Primero hay que deshacer las etapas.", "error")
     else:
         db.ex("UPDATE estudios SET anulado=?, motivo_anulacion=? WHERE id=?", (nuevo, motivo if nuevo else None, eid))
-        db.consolidar_diagnosticos(db.con(), e["protocolo_id"], e["tipo"], extra=[eid] if nuevo else [])
         db.olvidar_cache()
         db.auditar(usuario_actual()["id"], e["protocolo_id"], "anular" if nuevo else "reactivar", motivo, eid)
         flash("Estudio anulado." if nuevo else "Estudio reactivado.", "ok")

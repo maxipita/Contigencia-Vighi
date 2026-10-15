@@ -95,10 +95,21 @@ def validar_estudios(lista, existentes=(), actual_id=None, con_lote=True):
     return validar_lote(lista[0]["lote_sel"], lista[0]["tipo"], actual_id)
 
 
+def flujo_de_protocolo(protocolo_id, tipo):
+    fila = db.uno("SELECT id FROM flujos WHERE protocolo_id=? AND tipo=?", (protocolo_id, tipo))
+    if fila:
+        return fila["id"]
+    try:
+        return db.ex("INSERT INTO flujos (protocolo_id, tipo, creado_en) VALUES (?,?,?)", (protocolo_id, tipo, db.ahora()))
+    except db.IntegrityError:
+        return db.uno("SELECT id FROM flujos WHERE protocolo_id=? AND tipo=?", (protocolo_id, tipo))["id"]
+
+
 def crear_estudio(protocolo_id, e, lote, usuario_id):
-    eid = db.ex(f"INSERT INTO estudios (protocolo_id, tipo, creado_por, creado_en, {', '.join(CAMPOS_ESTUDIO)}) "
-                f"VALUES (?,?,?,?,{','.join('?' * len(CAMPOS_ESTUDIO))})",
-                [protocolo_id, e["tipo"], usuario_id, db.ahora()] + [e[k] for k in CAMPOS_ESTUDIO])
+    flujo_id = flujo_de_protocolo(protocolo_id, e["tipo"])
+    eid = db.ex(f"INSERT INTO estudios (protocolo_id, flujo_id, tipo, creado_por, creado_en, {', '.join(CAMPOS_ESTUDIO)}) "
+                f"VALUES (?,?,?,?,?,{','.join('?' * len(CAMPOS_ESTUDIO))})",
+                [protocolo_id, flujo_id, e["tipo"], usuario_id, db.ahora()] + [e[k] for k in CAMPOS_ESTUDIO])
     recordar_tecnicas(e)
     db.auditar(usuario_id, protocolo_id, "nuevo_estudio", etiqueta(e), eid)
     asignar_lote(protocolo_id, lote, usuario_id)

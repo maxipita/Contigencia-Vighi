@@ -599,3 +599,4 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .lista-ihq-caja .lista-ihq li { padding: 8px 12px; border-bottom: 1px solid var(--borde); display: flex; gap: 8px; align-items: center; }
 .lista-ihq-caja .lista-ihq li:last-child { border-bottom: 0; }
 .lista-ihq-caja .lista-ihq li span { flex: 1; }
+.flujo-estado { float: right; display: inline-flex; gap: 8px; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 400; }

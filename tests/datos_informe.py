@@ -64,19 +64,25 @@ def preparar():
             return db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, dni, cobertura, n_afiliado, medico, lugar_recoleccion, creado_por, creado_en) "
                          "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (numero, '2026-10-01', ap, nom, '30111222', cob, afil, medico, inst, admin, db.ahora()))
 
+        def flujo(pid, tipo):
+            fila = db.uno("SELECT id FROM flujos WHERE protocolo_id=? AND tipo=?", (pid, tipo))
+            return fila['id'] if fila else db.ex("INSERT INTO flujos (protocolo_id, tipo, creado_en) VALUES (?,?,?)", (pid, tipo, db.ahora()))
+
         def estudio(pid, tipo, sitio, muestra, cant, resp):
-            return db.ex("INSERT INTO estudios (protocolo_id, tipo, categoria, sitio, tipo_muestra, cantidad, responsable_id, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
-                         (pid, tipo, 'Biopsias' if tipo == 'BP' else 'Citologías', sitio, muestra, cant, resp, admin, db.ahora()))
+            return db.ex("INSERT INTO estudios (protocolo_id, flujo_id, tipo, categoria, sitio, tipo_muestra, cantidad, responsable_id, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                         (pid, flujo(pid, tipo), tipo, 'Biopsias' if tipo == 'BP' else 'Citologías', sitio, muestra, cant, resp, admin, db.ahora()))
 
         def completar(eid, tipo, usuario, hora='2026-10-03 10:15:00'):
-            for clave, _, _ in REGISTRO[tipo].flujo(bool(db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (eid,)))):
-                db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (eid, clave, usuario, hora))
+            fid = db.uno("SELECT flujo_id FROM estudios WHERE id=?", (eid,))['flujo_id']
+            for clave, _, _ in REGISTRO[tipo].flujo(bool(db.uno("SELECT 1 FROM micro WHERE flujo_id=? AND solicita_ihq=1", (fid,)))):
+                if not db.uno("SELECT 1 FROM etapas WHERE flujo_id=? AND etapa=?", (fid, clave)):
+                    db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (fid, clave, usuario, hora))
 
         # 1) biopsia con macroscopía, microscopía y diagnóstico
         p1 = protocolo('C000101', 'Mancini', 'Héctor Adalberto', 'Dr. Gustavo Kido', 'Sanatorio Otamendi', 'MEDICUS', '10706795003')
         e1 = estudio(p1, 'BP', 'Esófago', 'Biopsia endoscópica', '2', med)
-        db.ex("INSERT INTO macro (estudio_id, descripcion, cassettes) VALUES (?,?,?)", (e1, 'Varios fragmentos irregulares, pardos claros, que miden entre 0.4 y 0.2 cm.\nSe procesa la totalidad en un cassette.', 1))
-        db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion) VALUES (?,?,?)", (e1,
+        db.ex("INSERT INTO macro (flujo_id, descripcion, cassettes) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)", (e1, 'Varios fragmentos irregulares, pardos claros, que miden entre 0.4 y 0.2 cm.\nSe procesa la totalidad en un cassette.', 1))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)", (e1,
               'Los cortes muestran fragmentos de un adenocarcinoma intramucoso moderadamente diferenciado (G2) ulcerado, originado en mucosa de Barrett con displasia epitelial de alto grado, el que infiltra la lámina propia de la mucosa, con abundantes pseudomembranas fibrinoleucocitarias y detritus. La muestra remitida no incluye muscular mucosae/submucosa. Células de 12 µm, ≥ 3 mitosis cada 10 CGA.',
               'Esófago (lengueta, cara posterior); biopsia endoscópica:\n- Adenocarcinoma intramucoso moderadamente diferenciado (G2) ulcerado (léase descripción).\n* Originado en mucosa de Barrett con displasia epitelial de alto grado.'))
         completar(e1, 'BP', med)
@@ -85,14 +91,14 @@ def preparar():
         # 2) PAP con resultado Bethesda: responsable médica sin firma
         p2 = protocolo('C000102', 'Ruiz', 'Inés', 'Dra. Laura Sosa', 'Centro Médico Pueyrredón', 'OSDE', '3105522')
         e2 = estudio(p2, 'PAP', 'Vagina', 'Citología endocervical', '1/2', sin)
-        db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion, bethesda) VALUES (?,?,?,?)", (e2, '', 'Frotis satisfactorio con representación de zona de transformación. Flora lactobacilar.', 'NILM'))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion, bethesda) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e2, '', 'Frotis satisfactorio con representación de zona de transformación. Flora lactobacilar.', 'NILM'))
         completar(e2, 'PAP', sin)
         ids.update(pap=e2, p_pap=p2)
 
         # 3) citología de líquido, solo con la descripción (sin conclusión)
         p3 = protocolo('C000103', 'Gómez', 'Luis', '', 'Hospital Italiano', '', '')
         e3 = estudio(p3, 'CT', 'Líquido pleural', 'Líquido', '3', med)
-        db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion) VALUES (?,?,?)", (e3, 'Extendido con escasa celularidad, linfocitos y células mesoteliales reactivas. Sin atipia.', ''))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)", (e3, 'Extendido con escasa celularidad, linfocitos y células mesoteliales reactivas. Sin atipia.', ''))
         completar(e3, 'CT', med)
         ids.update(ct=e3, p_ct=p3)
 
@@ -100,8 +106,8 @@ def preparar():
         p4 = protocolo('C000104', 'Pérez', 'Ana', 'Dr. Emiliano Pastor', 'Clínica del Sol', 'GALENO', '555', )
         e4 = estudio(p4, 'BP', 'Próstata', 'Biopsia por punción (12 frascos)', '10', med)
         largo = ' '.join(['Proliferación de glándulas pequeñas con núcleos agrandados y nucléolos evidentes, dispuestas en patrón infiltrativo entre glándulas benignas.'] * 40)
-        db.ex("INSERT INTO macro (estudio_id, descripcion) VALUES (?,?)", (e4, 'Doce cilindros de tejido blanquecino de 1,0 a 1,6 cm de longitud.'))
-        db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion, tecnicas_especiales) VALUES (?,?,?,?)", (e4, largo, 'Adenocarcinoma acinar de próstata, Gleason 3+4=7.\nCompromete 6 de 12 cilindros.', 'PAS, Giemsa'))
+        db.ex("INSERT INTO macro (flujo_id, descripcion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?)", (e4, 'Doce cilindros de tejido blanquecino de 1,0 a 1,6 cm de longitud.'))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion, tecnicas_especiales) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e4, largo, 'Adenocarcinoma acinar de próstata, Gleason 3+4=7.\nCompromete 6 de 12 cilindros.', 'PAS, Giemsa'))
         completar(e4, 'BP', med)
         ids.update(largo=e4, p_largo=p4)
 
@@ -115,10 +121,10 @@ def preparar():
         b1 = estudio(p6, 'BP', 'Estómago', 'Biopsia endoscópica', '2', med)
         b2 = estudio(p6, 'BP', 'Duodeno', 'Biopsia endoscópica', '1', med)
         c1 = estudio(p6, 'CT', 'Líquido ascítico', 'Líquido', '1', otro)
-        for b, cuerpo in ((b1, 'Gastritis crónica leve.\nSin Helicobacter.'), (b2, 'Duodenitis crónica inespecífica.')):
-            db.ex("INSERT INTO macro (estudio_id, descripcion) VALUES (?,?)", (b, 'Fragmentos pardos de 0,3 cm.'))
-            db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion) VALUES (?,?,?)", (b, 'Mucosa con infiltrado linfoplasmocitario.', cuerpo))
-        db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion) VALUES (?,?,?)", (c1, 'Celularidad escasa, sin atipia.', 'Negativo para células neoplásicas.'))
+        db.ex("INSERT INTO macro (flujo_id, descripcion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?)", (b1, 'Fragmentos pardos de 0,3 cm.'))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)",
+              (b1, 'Mucosa con infiltrado linfoplasmocitario.', 'Gastritis crónica leve.\nSin Helicobacter.\n\nDuodenitis crónica inespecífica.'))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)", (c1, 'Celularidad escasa, sin atipia.', 'Negativo para células neoplásicas.'))
         for b in (b1, b2):
             completar(b, 'BP', med, '2026-10-03 10:00:00')
         completar(c1, 'CT', cito, '2026-10-03 11:30:00')       # lo último lo cierra la citotécnica

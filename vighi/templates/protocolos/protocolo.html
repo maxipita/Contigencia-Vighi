@@ -106,8 +106,13 @@
       <tr><th>Estudio</th><th>Muestra</th><th>Tacos</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th></tr>
       {% for tipo, grupo in estudios | groupby('tipo') %}
       {% set activos = grupo | rejectattr('anulado') | list %}
-      <tr class="flujo-cab{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}><td colspan="8"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b>
-        {% if activos | length > 1 %}<span class="muted">· flujo compartido por {{ activos | length }} estudios (mismo recorrido)</span>{% endif %}</td></tr>
+      {% set ref = activos[0] if activos else grupo[0] %}
+      <tr class="flujo-cab{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}><td colspan="8">
+        <a href="{{ url_for('estudios.flujo', pid=p.id, tipo=tipo) }}" title="Abrir el flujo (macro, micro, IHQ y seguimiento)"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b> →</a>
+        {% if activos | length > 1 %}<span class="muted">· {{ activos | length }} estudios en el mismo flujo</span>{% endif %}
+        <span class="flujo-estado"><span class="chip {{ 'informado' if not ref.proxima }}">{{ ref.estado }}</span>
+          {% if ref.proxima %}<span class="muted">{{ SECTORES[ref.proxima[2]] }}</span>{% endif %}
+          {{ pill(ref.semaforo) }}{% if ref.vence %} <span class="muted">vence {{ ref.vence | dh }}</span>{% endif %}</span></td></tr>
       {% for e in grupo %}
       <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
         <td><a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>

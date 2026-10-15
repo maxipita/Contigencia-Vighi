@@ -35,7 +35,7 @@ with A.app.app_context():
     for clave, _, _ in REGISTRO["BP"].flujo(0):
         if clave == "microscopia":
             break
-        db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (e2, clave, admin, db.ahora()))
+        db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e2, clave, admin, db.ahora()))
 
 c, csrf = cliente(admin)
 
@@ -46,7 +46,7 @@ def autoguardar(ruta, **datos):
 
 def fila(tabla, eid):
     with A.app.app_context():
-        r = db.uno(f"SELECT * FROM {tabla} WHERE estudio_id=?", (eid,))
+        r = db.uno(f"SELECT * FROM {tabla} WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)", (eid,))
         return dict(r) if r else None
 
 
@@ -72,7 +72,7 @@ r = c.post(f"/estudio/{e1}/macro", data={"_csrf": csrf, "descripcion": "Texto fi
 chequear("el botón Guardar sigue funcionando como siempre", fila("macro", e1)["descripcion"] == "Texto final" and fila("macro", e1)["decal"] == 1 and "Macroscopía guardada" in r.get_data(as_text=True))
 autoguardar(f"/estudio/{e1}/macro", template="", descripcion="Otro texto", y_listo="1")
 with A.app.app_context():
-    chequear("no se completó ninguna etapa", db.uno("SELECT COUNT(*) AS n FROM etapas WHERE estudio_id=?", (e1,))["n"] == 0)
+    chequear("no se completó ninguna etapa", db.uno("SELECT COUNT(*) AS n FROM etapas WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)", (e1,))["n"] == 0)
 
 print("2) microscopía")
 r = autoguardar(f"/estudio/{e1}/micro", descripcion="Aún no corresponde", conclusion="")

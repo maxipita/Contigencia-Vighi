@@ -136,13 +136,13 @@ def armar(pid, comentario=""):
         raise InformeError("El protocolo no tiene estudios activos.")
 
     etapas = {}
-    for x in db.q("SELECT x.* FROM etapas x JOIN estudios e ON e.id=x.estudio_id WHERE e.protocolo_id=?", (pid,)):
-        etapas.setdefault(x["estudio_id"], {})[x["etapa"]] = x
-    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (e["id"],))}
-    decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE estudio_id=? AND decal=1", (e["id"],))}
+    for x in db.q("SELECT x.* FROM etapas x JOIN flujos f ON f.id=x.flujo_id WHERE f.protocolo_id=?", (pid,)):
+        etapas.setdefault(x["flujo_id"], {})[x["etapa"]] = x
+    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE flujo_id=? AND solicita_ihq=1", (e["flujo_id"],))}
+    decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE flujo_id=? AND decal=1", (e["flujo_id"],))}
     pendientes = []
     for e in estudios:
-        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
+        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["flujo_id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
         if proxima and (_etiqueta(e), proxima[1]) not in pendientes:
             pendientes.append((_etiqueta(e), proxima[1]))
     if pendientes:
@@ -161,9 +161,9 @@ def armar(pid, comentario=""):
     for miembros in flujos.values():
         e = miembros[0]
         tipo = REGISTRO[e["tipo"]]
-        macro = db.uno("SELECT * FROM macro WHERE estudio_id=?", (e["id"],))
-        micro = db.uno("SELECT * FROM micro WHERE estudio_id=?", (e["id"],))
-        ihq = db.uno("SELECT * FROM ihq WHERE estudio_id=?", (e["id"],))
+        macro = db.uno("SELECT * FROM macro WHERE flujo_id=?", (e["flujo_id"],))
+        micro = db.uno("SELECT * FROM micro WHERE flujo_id=?", (e["flujo_id"],))
+        ihq = db.uno("SELECT * FROM ihq WHERE flujo_id=?", (e["flujo_id"],))
         cuerpo = _t(micro, "conclusion")
         if tipo.bethesda and _t(micro, "bethesda"):
             diag, detalle = _t(micro, "bethesda"), cuerpo or _t(micro, "descripcion")
