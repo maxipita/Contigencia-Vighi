@@ -162,6 +162,12 @@ CREATE TABLE IF NOT EXISTS tareas (
     cerrada_por INTEGER REFERENCES usuarios(id), cerrada_en VARCHAR(19), cierre_detalle VARCHAR(100)
 );
 CREATE INDEX IF NOT EXISTS ix_tareas_protocolo ON tareas(protocolo_id);
+CREATE TABLE IF NOT EXISTS claves_api (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre VARCHAR(60) NOT NULL, huella VARCHAR(64) NOT NULL UNIQUE,
+    creada_por INTEGER REFERENCES usuarios(id), creada_en VARCHAR(19) NOT NULL,
+    ultimo_uso VARCHAR(19), activa INTEGER NOT NULL DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS ordenes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     protocolo_id INTEGER REFERENCES protocolos(id),

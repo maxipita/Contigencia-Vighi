@@ -15,6 +15,9 @@ SQL_BORRADORES = "SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1"
 SQL_MIS_TAREAS = "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN urgencia='urgente' THEN 1 ELSE 0 END), 0) AS urgentes FROM tareas WHERE estado='abierta' AND responsable_id=?"
 
 
+RUTAS_CON_CLAVE = ("/api/ordenes/automatico",)
+
+
 def adelantar_lecturas():
     if session.get("uid") and request.endpoint != "static":
         db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ()), (SQL_MIS_TAREAS, (session["uid"],))])
@@ -87,7 +90,7 @@ def requiere_admin(f):
 def verificar_csrf():
     if "csrf" not in session:
         session["csrf"] = secrets.token_hex(16)
-    if request.method == "POST":
+    if request.method == "POST" and request.path not in RUTAS_CON_CLAVE and not request.headers.get("Authorization", "").startswith("Bearer "):
         token = request.form.get("_csrf") or request.headers.get("X-CSRF")
         if token != session["csrf"]:
             abort(400, "Formulario vencido: recargá la página e intentá de nuevo.")

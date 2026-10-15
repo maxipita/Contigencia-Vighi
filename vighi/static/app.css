@@ -600,3 +600,5 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .orden-pendiente img { width: 110px; border: 1px solid var(--borde); border-radius: 4px; }
 .asignar-orden { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
 .asignar-orden input { max-width: 240px; }
+.clave-nueva { border-left: 3px solid #2a7a4b; }
+.clave-texto { width: 100%; font-family: var(--mono, monospace); font-size: 14px; padding: 8px 10px; }

@@ -5,7 +5,7 @@
     {% for o in ordenes %}
     <figure>
       <a href="{{ url_for('ordenes.orden_ver', oid=o.id) }}" data-visor title="{{ o.nombre or 'Orden' }}{% if o.pagina > 1 %} · página {{ o.pagina }}{% endif %}"><img src="{{ url_for('ordenes.orden_mini', oid=o.id) }}" loading="lazy" alt="Orden"></a>
-      <figcaption><div>{{ o.nombre or 'Orden' }}{% if o.pagina > 1 %} · p. {{ o.pagina }}{% endif %}</div><span class="muted">{{ o.iniciales or '?' }} · {{ o.creado_en | fh }}{% if o.metodo %} · {{ {'qr': 'por QR', 'ocr': 'por lectura del número', 'manual': 'a mano', 'continuacion': 'continuación'}.get(o.metodo, o.metodo) }}{% endif %}</span>
+      <figcaption><div>{{ o.nombre or 'Orden' }}{% if o.pagina > 1 %} · p. {{ o.pagina }}{% endif %}</div><span class="muted">{{ o.iniciales or 'Automático' }} · {{ o.creado_en | fh }}{% if o.metodo %} · {{ {'qr': 'por QR', 'ocr': 'por lectura del número', 'manual': 'a mano', 'continuacion': 'continuación'}.get(o.metodo, o.metodo) }}{% endif %}</span>
         {% if puede('protocolo_editar') %}<form method="post" action="{{ url_for('ordenes.orden_borrar', oid=o.id) }}" data-confirmar="¿Borrar esta orden?">
           <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="enlace" title="Borrar orden">Borrar</button></form>{% endif %}</figcaption>
     </figure>

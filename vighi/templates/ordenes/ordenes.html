@@ -31,7 +31,7 @@
     <a href="{{ url_for('ordenes.orden_ver', oid=o.id) }}" data-visor title="{{ o.nombre }}"><img src="{{ url_for('ordenes.orden_mini', oid=o.id) }}" loading="lazy" alt="Orden"></a>
     <div>
       <b>{{ o.nombre }}</b>{% if o.pagina > 1 %} <span class="muted">· página {{ o.pagina }}</span>{% endif %}
-      <div class="muted">{{ o.motivo or 'Sin identificar' }} · {{ o.iniciales or '?' }} · {{ o.creado_en | fh }}</div>
+      <div class="muted">{{ o.motivo or 'Sin identificar' }} · {{ o.iniciales or 'Automático' }} · {{ o.creado_en | fh }}</div>
       {% if puede('protocolo_editar') %}
       <form method="post" action="{{ url_for('ordenes.orden_asignar', oid=o.id) }}" class="asignar-orden">
         <input type="hidden" name="_csrf" value="{{ csrf }}">
@@ -56,7 +56,7 @@
       <td><a href="{{ url_for('protocolos.protocolo', pid=o.protocolo_id) }}#ordenes"><b>{{ o.numero }}</b></a></td>
       <td>{{ o.nombre }}{% if o.pagina > 1 %} <span class="muted">· p. {{ o.pagina }}</span>{% endif %}</td>
       <td>{{ {'qr': 'QR', 'ocr': 'Número impreso', 'manual': 'A mano', 'continuacion': 'Continuación de la hoja anterior'}.get(o.metodo, o.metodo or '') }}</td>
-      <td>{{ o.iniciales or '?' }}</td><td class="muted">{{ o.creado_en | fh }}</td>
+      <td>{{ o.iniciales or 'Automático' }}</td><td class="muted">{{ o.creado_en | fh }}</td>
     </tr>
     {% endfor %}
   </table>

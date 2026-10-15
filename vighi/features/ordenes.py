@@ -4,6 +4,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 
 from vighi.core import almacen, db
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
+from vighi.servicios.claves_api import clave_valida
 from vighi.servicios.ordenes import PERMISOS_ORDENES, SQL_PENDIENTES, SQL_RECIENTES, asignar_orden, borrar_orden, lectores, procesar_archivo
 from vighi.servicios.protocolos import protocolo_o_404
 
@@ -89,3 +90,19 @@ def orden_borrar(oid):
     pid = borrar_orden(oid, usuario_actual()["id"])
     flash("Orden borrada.", "ok")
     return volver(pid, "#ordenes" if pid else "")
+
+
+@bp.route("/api/ordenes/automatico", methods=["POST"])
+def api_ordenes_automatico():
+    cabecera = request.headers.get("Authorization", "")
+    clave = clave_valida(cabecera[7:].strip() if cabecera.startswith("Bearer ") else "")
+    if not clave:
+        return jsonify(ok=False, error="Clave inválida o revocada."), 401
+    f = request.files.get("archivo")
+    if not f or not f.filename:
+        return jsonify(ok=False, error="No llegó ningún archivo."), 400
+    try:
+        paginas = procesar_archivo(f.filename, f.read(), None)
+    except ValueError as error:
+        return jsonify(ok=False, archivo=f.filename, error=str(error)), 400
+    return jsonify(ok=True, archivo=f.filename, clave=clave["nombre"], paginas=paginas)
