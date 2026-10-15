@@ -42,7 +42,7 @@ chequear("sin responsable hasta que se asigne", all(t["responsable_id"] is None 
 h = c.get("/tareas/tipos").get_data(as_text=True)
 chequear("la pantalla lista título, responsable y cierre", "Responsables de tareas" in h and "Macro urgente" in h and "Histo &gt; Procesar" in h and "Cons &gt; Entregar" in h and "Micro &gt; Interpretar" in h)
 chequear("cada fila tiene su Modificar", h.count("Modificar") >= 15)
-chequear("el menú de administración la ofrece", 'href="/tareas/tipos"' in c.get("/").get_data(as_text=True))
+chequear("Configuraciones la ofrece", 'href="/tareas/tipos"' in c.get("/configuraciones").get_data(as_text=True))
 
 print("1) modificar")
 tid = tipo("Macro urgente")["id"]
@@ -78,7 +78,7 @@ sin, scsrf = cliente(ids["otro"])
 chequear("solo el administrador", sin.get("/tareas/tipos").status_code == 403 and sin.get("/tareas/tipos/nuevo").status_code == 403)
 sin.post(f"/tareas/tipos/{tid}", data={"_csrf": scsrf, "titulo": "Intruso"})
 chequear("y no puede modificar", tipo("Macro urgente") is not None and tipo("Intruso") is None)
-chequear("el menú no la muestra", 'href="/tareas/tipos"' not in sin.get("/").get_data(as_text=True))
+chequear("Configuraciones no la muestra", 'href="/tareas/tipos"' not in sin.get("/configuraciones").get_data(as_text=True))
 
 print()
 print("FALLAS:", fallas if fallas else "ninguna")
