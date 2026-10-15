@@ -41,18 +41,6 @@
           <a href="{{ url_for('sistema.configuraciones') }}"><svg class="ic"><use href="#i-config"/></svg> Configuraciones</a>
           {% if puede('exportar') %}<a href="{{ url_for('tablero.exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>{% endif %}
           <a href="{{ url_for('ubicaciones.ubicaciones_lista') }}"><svg class="ic"><use href="#i-ubicacion"/></svg> Ubicaciones</a>
-          {% if yo.admin or puede('usuarios') or puede('feriados') or puede('facturacion') %}
-          <div class="sep"></div>
-          <div class="rotulo">Administración</div>
-          {% if puede('usuarios') %}<a href="{{ url_for('usuarios.usuarios') }}"><svg class="ic"><use href="#i-usuarios"/></svg> Usuarios</a>{% endif %}
-          {% if yo.admin %}<a href="{{ url_for('usuarios.perfiles') }}"><svg class="ic"><use href="#i-llave"/></svg> Perfiles y permisos</a>{% endif %}
-          {% if yo.admin %}<a href="{{ url_for('listados.listados') }}"><svg class="ic"><use href="#i-completar"/></svg> Listados</a>
-          <a href="{{ url_for('plantillas.templates_admin') }}"><svg class="ic"><use href="#i-informe"/></svg> Templates</a>
-          <a href="{{ url_for('tareas.tipos_tarea') }}"><svg class="ic"><use href="#i-lista"/></svg> Tareas</a>
-          <a href="{{ url_for('envios.correo') }}"><svg class="ic"><use href="#i-mail"/></svg> Correo</a>{% endif %}
-          {% if puede('facturacion') %}<a href="{{ url_for('coberturas.coberturas') }}"><svg class="ic"><use href="#i-completar"/></svg> Coberturas</a>{% endif %}
-          {% if puede('feriados') %}<a href="{{ url_for('usuarios.feriados') }}"><svg class="ic"><use href="#i-calendario"/></svg> Feriados</a>{% endif %}
-          {% endif %}
         </div>
       </div>
     </nav>
