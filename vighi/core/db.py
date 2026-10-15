@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS micro (
 );
 CREATE TABLE IF NOT EXISTS ihq (
     estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
-    marcadores TEXT, resultado TEXT
+    marcadores TEXT, resultado TEXT, pedido_en VARCHAR(19), pedido_por INTEGER REFERENCES usuarios(id)
 );
 CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -539,11 +539,18 @@ def preparar_esquema(c):
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),
                                    ("ubicaciones", "nombre", "VARCHAR(200)"),
                                    ("facturas", "cobrado", "REAL"),
+                                   ("ihq", "pedido_en", "VARCHAR(19)"),
+                                   ("ihq", "pedido_por", "INTEGER"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
+    c.execute("""UPDATE ihq SET pedido_en = (SELECT MAX(x.fecha_hora) FROM etapas x WHERE x.estudio_id=ihq.estudio_id AND x.etapa='microscopia'),
+                                pedido_por = (SELECT x.usuario_id FROM etapas x WHERE x.estudio_id=ihq.estudio_id AND x.etapa='microscopia' ORDER BY x.id DESC LIMIT 1)
+                 WHERE pedido_en IS NULL
+                   AND estudio_id IN (SELECT m.estudio_id FROM micro m WHERE m.solicita_ihq=1)
+                   AND EXISTS (SELECT 1 FROM etapas x WHERE x.estudio_id=ihq.estudio_id AND x.etapa='microscopia')""")
     return antes_de_informes
 
 

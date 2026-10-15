@@ -251,8 +251,8 @@
           {% else %}<div class="muted">Ninguna.</div>{% endif %}</div>
         {% if 'ihq' in tipo.secciones %}
         <div><label>¿Solicita IHQ?</label>
-          <select name="solicita_ihq">
-            <option value="0">No</option><option value="1" {{ 'selected' if micro and micro.solicita_ihq }}>Si</option></select></div>
+          <select data-ihq-toggle {{ 'disabled' if ihq_confirmado }}>
+            <option value="0">No</option><option value="1" {{ 'selected' if ihq_confirmado or marcadores_ihq or (micro and micro.solicita_ihq) }}>Sí{{ ' (pedido confirmado)' if ihq_confirmado }}</option></select></div>
         {% endif %}
       </div>
       <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('microscopia') }}</div>
@@ -261,21 +261,47 @@
   </div>
   {% endif %}
 
-  {% if 'ihq' in tipo.secciones and micro and micro.solicita_ihq %}
-  <div class="tarjeta" id="ihq">
+  {% if 'ihq' in tipo.secciones %}
+  <div class="tarjeta" id="ihq"{% if not (ihq_confirmado or marcadores_ihq or (micro and micro.solicita_ihq)) %} hidden{% endif %}>
     <h2>IHQ</h2>
+    {% if not puede('micro') %}<div class="aviso">🔒 No tenés permiso para cargar esta sección.</div>{% endif %}
+    {% if ihq_confirmado %}
+    <p class="muted" style="margin-top:0">Pedido confirmado{% if ihq and ihq.pedido_en %} el {{ ihq.pedido_en | fh }}{% endif %}. Los marcadores pedidos:</p>
+    <ol class="lista-ihq">{% for m in marcadores_ihq %}<li>{{ m }}</li>{% else %}<li class="muted">Sin marcadores cargados.</li>{% endfor %}</ol>
     <form method="post" action="{{ url_for('estudios.guardar_ihq', eid=e.id) }}" data-autoguardar>
       <input type="hidden" name="_csrf" value="{{ csrf }}">
-      {% if not puede('micro') %}<div class="aviso">🔒 No tenés permiso para cargar esta sección.</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not puede('micro') }}>
       <div class="grilla">
-        <div class="ancho"><label>Marcadores / anticuerpos</label><textarea name="marcadores" id="ihq_marc" style="min-height:60px">{{ ihq.marcadores if ihq else '' }}</textarea>
-          {{ chips(lista_ihq, 'ihq_marc') }}</div>
-        <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq else '' }}</textarea></div>
+        <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq and ihq.resultado else '' }}</textarea></div>
       </div>
       <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('interp_ihq') }}</div>
       </fieldset>
     </form>
+    {% else %}
+    <form method="post" action="{{ url_for('estudios.guardar_ihq', eid=e.id) }}" data-autoguardar>
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <fieldset class="seccion" {{ 'disabled' if not puede('micro') }}>
+      <p class="muted" style="margin-top:0">Elegí los marcadores a pedir. El resultado se carga más adelante, cuando se interpreta. Recién al <b>confirmar el pedido</b> arrancan las etapas de IHQ y se avisa al responsable.</p>
+      <textarea name="marcadores" id="ihq_marc" hidden>{{ ihq.marcadores if ihq and ihq.marcadores else '' }}</textarea>
+      <label>Marcador / anticuerpo</label>
+      <div class="agregar-ihq">
+        <input data-ihq-otro {{ 'list=lista-ihq-marcadores' if lista_ihq }} placeholder="Escribí un marcador y apretá Enter o Agregar" autocomplete="off">
+        <button type="button" class="btn" data-ihq-agregar>＋ Agregar</button>
+      </div>
+      {% if lista_ihq %}<datalist id="lista-ihq-marcadores">{% for x in lista_ihq %}<option value="{{ x }}">{% endfor %}</datalist>{% endif %}
+      <div class="lista-ihq-caja">
+        <div class="lista-ihq-titulo">Marcadores pedidos <span class="muted" data-ihq-cuenta></span></div>
+        <ol class="lista-ihq" data-lista-ihq></ol>
+      </div>
+      <div class="acciones">
+        <button class="btn sec">Guardar borrador</button>
+        <button class="btn listo" formaction="{{ url_for('estudios.ihq_pedir', eid=e.id) }}" data-ihq-confirmar
+                data-pregunta="¿Confirmar el pedido de IHQ? Arrancan las etapas de IHQ y se avisa al responsable.">✔ Confirmar pedido de IHQ</button>
+        <span class="autoestado" data-autoestado aria-live="polite"></span>
+      </div>
+      </fieldset>
+    </form>
+    {% endif %}
   </div>
   {% endif %}
 </div>

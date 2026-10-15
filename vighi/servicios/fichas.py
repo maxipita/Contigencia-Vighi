@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 
 from flask import abort
@@ -111,6 +112,14 @@ def sumar_cassettes(e):
     guardar_seccion("macro", e["dueno"], {"cassettes": total})
 
 
+def lista_marcadores(texto):
+    return list(dict.fromkeys(x.strip() for x in re.split(r"[,;\n]+", texto or "") if x.strip()))
+
+
+def pedido_ihq_confirmado(micro, ihq):
+    return bool(ihq and ihq["pedido_en"])
+
+
 def guardar_seccion(tabla, eid, valores):
     if db.uno(f"SELECT 1 FROM {tabla} WHERE estudio_id=?", (eid,)):
         db.ex(f"UPDATE {tabla} SET {', '.join(k + '=?' for k in valores)} WHERE estudio_id=?", list(valores.values()) + [eid])
@@ -126,6 +135,8 @@ def entero_positivo(valor, maximo=999):
 
 def motivo_no_listo(yo, tipo, etapa, prox, solicita, macro, micro, ihq, sin_tecnicas):
     falta = None if etapa in PASOS_IHQ and not solicita else REGISTRO[tipo].requisito(etapa, macro, micro, ihq)
+    if not falta and solicita and (etapa == "microscopia" or etapa in PASOS_IHQ) and not pedido_ihq_confirmado(micro, ihq):
+        falta = "Falta confirmar el pedido de IHQ: cargá los marcadores y apretá «Confirmar pedido de IHQ»."
     if not falta and sin_tecnicas:
         falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin_tecnicas) + "."
     if not prox or prox[0] != etapa:

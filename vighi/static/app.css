@@ -588,3 +588,14 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .tabla-tareas tr.cerrada td { opacity: .7; }
 .tabla-tareas .tarea-texto { white-space: pre-wrap; font-size: 12px; margin-top: 2px; }
 .tabla-tareas .edicion { margin: 0; }
+.lista-ihq { margin: 6px 0 10px 20px; padding: 0; }
+.lista-ihq li { padding: 3px 0; }
+.lista-ihq .lapiz { margin-left: 6px; }
+.agregar-ihq { display: flex; gap: 8px; align-items: stretch; margin-bottom: 12px; }
+.agregar-ihq .buscador, .agregar-ihq > input { flex: 1; min-width: 0; }
+.lista-ihq-caja { border: 1px solid var(--borde); border-radius: 10px; background: #fff; overflow: hidden; }
+.lista-ihq-titulo { padding: 8px 12px; font-weight: 600; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; background: var(--superficie); border-bottom: 1px solid var(--borde); }
+.lista-ihq-caja .lista-ihq { list-style: decimal inside; margin: 0; padding: 0; }
+.lista-ihq-caja .lista-ihq li { padding: 8px 12px; border-bottom: 1px solid var(--borde); display: flex; gap: 8px; align-items: center; }
+.lista-ihq-caja .lista-ihq li:last-child { border-bottom: 0; }
+.lista-ihq-caja .lista-ihq li span { flex: 1; }
