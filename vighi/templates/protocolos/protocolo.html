@@ -111,15 +111,7 @@
       {% for e in grupo %}
       <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
         <td><a href="{{ url_for('estudios.estudio', eid=e.id) }}"><b>{{ e.etiqueta }}</b></a></td>
-        <td>{% if muestras.get(e.id) %}
-          <form method="post" action="{{ url_for('estudios.estudio_muestra', eid=e.id) }}" class="edicion">
-            <input type="hidden" name="_csrf" value="{{ csrf }}">
-            <div class="ver">{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or 'Sin tipo' }} {{ lapiz() }}</div></div>
-            <div class="editar"><div class="muted">{{ e.subcategoria or '' }}</div>
-              <select name="tipo_muestra" aria-label="Tipo de muestra">{% for m in muestras[e.id] %}<option {{ 'selected' if m == e.tipo_muestra }}>{{ m }}</option>{% endfor %}</select>
-              <div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div></div>
-          </form>
-          {% else %}{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div>{% endif %}</td>
+        <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
         <td>{{ e.tacos if e.tacos is not none else '' }}</td>
         <td>{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
         <td>{{ e.responsable or '' }}</td>

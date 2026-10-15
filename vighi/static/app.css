@@ -316,6 +316,10 @@ h1 .semaforo { font-size: 12px; vertical-align: middle; }
 .semaforo-total a.activo { background: var(--superficie); box-shadow: 0 0 0 2px var(--acento); }
 .filtros.auto button { display: none; }
 .marca small.base-modo { margin-top: 2px; font-weight: 700; color: #7ee2a8; }
+.datos-estudio { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 14px 24px; margin-bottom: 8px; }
+.datos-estudio .dato { font-size: 14px; }
+.datos-estudio .dato b { display: block; min-width: 0; margin-bottom: 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--pizarra); }
+.datos-estudio form.edicion { margin: 0; }
 .miembro { padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--borde); }
 .miembro:last-of-type { border-bottom: 0; }
 .miembro .acciones { align-items: center; }
@@ -547,3 +551,7 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .sin-vinetas { list-style: none; margin: 0 0 12px; padding: 0; }
 .sin-vinetas li { padding: 2px 0; }
 .totales-fact .dif-cobro b { color: #b3261e; }
+
+.autoestado { font-size: 12px; color: var(--pizarra); }
+.autoestado.ok { color: var(--ok, #2a7a4b); }
+.autoestado.error { color: #b42318; }

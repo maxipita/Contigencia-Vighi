@@ -1,17 +1,18 @@
 from datetime import datetime
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from vighi.core import db
+from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
-from vighi.servicios.catalogo import muestras_posibles
-from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado
-from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSIONES, OPCIONES_FRAGMENTOS, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
+from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
+from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
+from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, macro_editable, motivo_no_listo, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
-from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote
-from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
+from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
+from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, opciones_de_edicion, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
 
 bp = Blueprint("estudios", __name__)
 
@@ -82,15 +83,28 @@ def estudio_editar(eid):
                            lote_fijo=lote_fijo["codigo"] if lote_fijo else None, **ctx)
 
 
+def estudio_para_modificar(eid):
+    e = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
+    destino = redirect(url_for("estudios.estudio", eid=eid))
+    if e["anulado"]:
+        flash("El estudio está anulado: no se puede modificar.", "error")
+        return None, destino
+    return e, destino
+
+
+def registrar_cambio(e, accion, detalle):
+    db.auditar(usuario_actual()["id"], e["protocolo_id"], accion, detalle, e["id"])
+    avisar_lote_lleno(ubicar_en_lote(e["protocolo_id"], usuario_actual()["id"]))
+
+
 @bp.route("/estudio/<int:eid>/muestra", methods=["POST"])
 @requiere_permiso("protocolo_editar")
 def estudio_muestra(eid):
-    e = db.uno("SELECT * FROM estudios WHERE id=?", (eid,)) or abort(404)
+    e, destino = estudio_para_modificar(eid)
     nuevo = request.form.get("tipo_muestra", "").strip()
-    destino = redirect(url_for("protocolos.protocolo", pid=e["protocolo_id"]))
-    if e["anulado"]:
-        flash("El estudio está anulado: no se puede cambiar la muestra.", "error")
-    elif nuevo not in muestras_posibles(e):
+    if not e:
+        return destino
+    if nuevo not in muestras_posibles(e):
         flash("Elegí un tipo de muestra de la lista.", "error")
     elif nuevo != (e["tipo_muestra"] or ""):
         db.ex("UPDATE estudios SET tipo_muestra=? WHERE id=?", (nuevo, eid))
@@ -99,10 +113,82 @@ def estudio_muestra(eid):
     return destino
 
 
+@bp.route("/estudio/<int:eid>/sitio", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_sitio(eid):
+    e, destino = estudio_para_modificar(eid)
+    nuevo = request.form.get("sitio", "").strip()
+    if not e:
+        return destino
+    if nuevo not in sitios_posibles(e):
+        flash("Elegí un órgano de la lista.", "error")
+    elif nuevo != (e["sitio"] or ""):
+        muestra = muestra_para(e, nuevo)
+        db.ex("UPDATE estudios SET sitio=?, tipo_muestra=? WHERE id=?", (nuevo, muestra, eid))
+        registrar_cambio(e, "cambiar_sitio", f"{etiqueta(e)}: {e['sitio'] or 'sin órgano'} → {nuevo}" + (f" (muestra: {muestra})" if muestra != (e["tipo_muestra"] or "") else ""))
+        flash(f"Órgano cambiado a «{nuevo}»." + (f" La muestra pasó a «{muestra}»: revisala si hace falta." if muestra != (e["tipo_muestra"] or "") else ""), "ok")
+    return destino
+
+
+@bp.route("/estudio/<int:eid>/cantidad", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_cantidad(eid):
+    e, destino = estudio_para_modificar(eid)
+    nuevo = request.form.get("cantidad", "").strip()
+    if not e:
+        return destino
+    if nuevo not in REGISTRO[e["tipo"]].cantidades:
+        flash("Elegí una cantidad de la lista.", "error")
+    elif nuevo != (e["cantidad"] or ""):
+        db.ex("UPDATE estudios SET cantidad=? WHERE id=?", (nuevo, eid))
+        registrar_cambio(e, "cambiar_cantidad", f"{etiqueta(e)}: {e['cantidad'] or '—'} → {nuevo} {REGISTRO[e['tipo']].etiqueta_cantidad}")
+        flash(f"Cantidad cambiada a {nuevo} {REGISTRO[e['tipo']].etiqueta_cantidad}.", "ok")
+    return destino
+
+
+@bp.route("/estudio/<int:eid>/responsable", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_responsable(eid):
+    e, destino = estudio_para_modificar(eid)
+    if not e:
+        return destino
+    posibles = {str(r["id"]): r["iniciales"] for r in responsables(e["tipo"])}
+    nuevo = request.form.get("responsable_id", "")
+    if nuevo not in posibles:
+        flash("Elegí un responsable de la lista.", "error")
+    elif nuevo != str(e["responsable_id"] or ""):
+        antes = db.uno("SELECT iniciales FROM usuarios WHERE id=?", (e["responsable_id"],)) if e["responsable_id"] else None
+        db.ex("UPDATE estudios SET responsable_id=? WHERE id=?", (int(nuevo), eid))
+        db.auditar(usuario_actual()["id"], e["protocolo_id"], "cambiar_responsable", f"{etiqueta(e)}: {antes['iniciales'] if antes else '—'} → {posibles[nuevo]}", eid)
+        flash(f"Responsable cambiado a {posibles[nuevo]}.", "ok")
+    return destino
+
+
+@bp.route("/estudio/<int:eid>/lote", methods=["POST"])
+@requiere_permiso("protocolo_editar")
+def estudio_lote(eid):
+    e, destino = estudio_para_modificar(eid)
+    if not e:
+        return destino
+    primero = primer_estudio(e["protocolo_id"])
+    if not primero or primero["id"] != eid:
+        flash("El lote es de todo el protocolo: se cambia desde su primer estudio.", "error")
+        return destino
+    valor, error = validar_lote(request.form.get("lote_id", ""), e["tipo"], e["lote_id"])
+    if error:
+        flash(error, "error")
+        return destino
+    yo = usuario_actual()
+    asignar_lote(e["protocolo_id"], concretar_lote(valor, yo["id"]), yo["id"])
+    avisar_lote_lleno(ubicar_en_lote(e["protocolo_id"], yo["id"]))
+    flash("Lote del protocolo actualizado.", "ok")
+    return destino
+
+
 @bp.route("/estudio/<int:eid>")
 @requiere_login
 def estudio(eid):
-    db.precargar(consultas_ficha(eid) + [(SQL_ULTIMA_ETAPA, (eid,)), (SQL_HISTORIAL_ESTUDIO, (eid,)), (SQL_TEMPLATES, ("macro",)),
+    db.precargar(consultas_ficha(eid) + ([(SQL_RESPONSABLES, ()), (SQL_LOTES_ABIERTOS, (hoy(),))] if puede("protocolo_editar") else []) + [(SQL_ULTIMA_ETAPA, (eid,)), (SQL_HISTORIAL_ESTUDIO, (eid,)), (SQL_TEMPLATES, ("macro",)),
                                          (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
     primero = db.uno(SQL_FICHA, (eid,))
     if primero:
@@ -135,7 +221,7 @@ def estudio(eid):
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
-    return render_template("estudios/estudio.html", FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudios/estudio.html", FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
@@ -154,12 +240,19 @@ def estudio(eid):
 def guardar_macro(eid):
     e, macro, _, _, etapas, solicita = ficha(eid)
     ok, motivo = macro_editable(e, etapas, solicita)
+    auto = request.form.get("autoguardar") == "1"
     if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
+        if auto:
+            return jsonify(ok=False, error=motivo or "este estudio no tiene macroscopía"), 409
         flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#macro")
     valores = {"template": request.form.get("template", "").strip(),
                "descripcion": request.form.get("descripcion", "").strip()}
     detalle = ""
+    if auto:
+        guardar_seccion("macro", e["dueno"], valores)
+        auditar_autoguardado(usuario_actual(), e, "guardar_macro")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
         decal = 1 if request.form.get("decal") == "1" else 0
         valores["decal"] = decal
@@ -226,9 +319,17 @@ def tecnica_borrar(tid):
 def guardar_micro(eid):
     e, _, micro, _, etapas, solicita = ficha(eid)
     ok, motivo = habilitada(e, etapas, solicita, "microscopia")
+    auto = request.form.get("autoguardar") == "1"
     if not ok:
+        if auto:
+            return jsonify(ok=False, error=motivo), 409
         flash(f"No se guardó: {motivo}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
+    if auto:
+        guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(), "descripcion": request.form.get("descripcion", "").strip(),
+                                              "conclusion": request.form.get("conclusion", "").strip(), "bethesda": request.form.get("bethesda", "").strip()})
+        auditar_autoguardado(usuario_actual(), e, "guardar_micro")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     con_ihq = "ihq" in REGISTRO[e["tipo"]].secciones
     pide_ihq = 1 if con_ihq and request.form.get("solicita_ihq") == "1" else 0
     guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(),
@@ -249,6 +350,9 @@ def guardar_ihq(eid):
     e = ficha(eid)[0]
     guardar_seccion("ihq", e["dueno"], {"marcadores": request.form.get("marcadores", "").strip(),
                                  "resultado": request.form.get("resultado", "").strip()})
+    if request.form.get("autoguardar") == "1":
+        auditar_autoguardado(usuario_actual(), e, "guardar_ihq")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_ihq", "", eid)
     flash("IHQ guardada.", "ok")
     if request.form.get("y_listo"):

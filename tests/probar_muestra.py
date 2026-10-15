@@ -31,8 +31,8 @@ with A.app.app_context():
                 "VALUES (?,?,?,?,?,?,?,?,?,?)", (pid, "BP", "Biopsias", "Ginecológica", "Endometrio", "Biopsia", "1", ids["med"], admin, db.ahora()))
 
 c, csrf = cliente(admin)
-h = c.get(f"/protocolo/{pid}").get_data(as_text=True)
-chequear("la tabla de estudios ofrece cambiar la muestra", f'/estudio/{eid}/muestra' in h and 'name="tipo_muestra"' in h and "<option selected>Biopsia</option>" in h and "Reseccion</option>" in h)
+h = c.get(f"/estudio/{eid}").get_data(as_text=True)
+chequear("la pantalla del estudio ofrece cambiar la muestra", f'/estudio/{eid}/muestra' in h and 'name="tipo_muestra"' in h and "<option selected>Biopsia</option>" in h and "Reseccion</option>" in h)
 chequear("solo ofrece las muestras de esa subcategoría y sitio", "No va" not in h)
 r = c.post(f"/estudio/{eid}/muestra", data={"_csrf": csrf, "tipo_muestra": "Reseccion"}, follow_redirects=True)
 with A.app.app_context():
@@ -50,7 +50,7 @@ sin, scsrf = cliente(ids["otro"])
 r = sin.post(f"/estudio/{eid}/muestra", data={"_csrf": scsrf, "tipo_muestra": "Biopsia"}, follow_redirects=True)
 with A.app.app_context():
     chequear("sin el permiso de edición no cambia nada", db.uno("SELECT tipo_muestra FROM estudios WHERE id=?", (eid,))["tipo_muestra"] == "Reseccion")
-chequear("y no ve el lápiz", f'/estudio/{eid}/muestra' not in sin.get(f"/protocolo/{pid}").get_data(as_text=True))
+chequear("y no ve el lápiz", f'/estudio/{eid}/muestra' not in sin.get(f"/estudio/{eid}").get_data(as_text=True))
 c.post(f"/estudio/{eid}/anular", data={"_csrf": csrf, "motivo": "prueba"})
 r = c.post(f"/estudio/{eid}/muestra", data={"_csrf": csrf, "tipo_muestra": "Biopsia"}, follow_redirects=True)
 with A.app.app_context():

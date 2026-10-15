@@ -81,9 +81,12 @@ def concretar_lote(valor, usuario_id):
     return valor
 
 
+SQL_LOTES_ABIERTOS = "SELECT * FROM lotes WHERE fecha=? AND cerrado=0 ORDER BY tipo_lote, numero"
+
+
 def lotes_para_formulario(tipo, actual_id=None):
     validos = tipos_lote(tipo)
-    lotes = [l for l in db.q("SELECT * FROM lotes WHERE fecha=? AND cerrado=0 ORDER BY tipo_lote, numero", (hoy(),))
+    lotes = [l for l in db.q(SQL_LOTES_ABIERTOS, (hoy(),))
              if l["tipo_lote"] in validos]
     if actual_id and actual_id not in [l["id"] for l in lotes]:
         actual = db.uno("SELECT * FROM lotes WHERE id=?", (actual_id,))
