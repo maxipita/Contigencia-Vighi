@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 from vighi.core import db
 from vighi.core.fechas import hoy
@@ -9,7 +9,7 @@ from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
 from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
-from vighi.servicios.fichas import INCLUSIONES, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, guardar_seccion, habilitada, macro_editable, motivo_no_listo, sumar_cassettes
+from vighi.servicios.fichas import INCLUSIONES, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, guardar_seccion, habilitada, macro_editable, motivo_no_listo, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, opciones_de_edicion, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
@@ -240,12 +240,19 @@ def estudio(eid):
 def guardar_macro(eid):
     e, macro, _, _, etapas, solicita = ficha(eid)
     ok, motivo = macro_editable(e, etapas, solicita)
+    auto = request.form.get("autoguardar") == "1"
     if "macro" not in REGISTRO[e["tipo"]].secciones or not ok:
+        if auto:
+            return jsonify(ok=False, error=motivo or "este estudio no tiene macroscopía"), 409
         flash(f"No se guardó: {motivo or 'este estudio no tiene macroscopía.'}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#macro")
     valores = {"template": request.form.get("template", "").strip(),
                "descripcion": request.form.get("descripcion", "").strip()}
     detalle = ""
+    if auto:
+        guardar_seccion("macro", e["dueno"], valores)
+        auditar_autoguardado(usuario_actual(), e, "guardar_macro")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
         decal = 1 if request.form.get("decal") == "1" else 0
         valores["decal"] = decal
@@ -312,9 +319,17 @@ def tecnica_borrar(tid):
 def guardar_micro(eid):
     e, _, micro, _, etapas, solicita = ficha(eid)
     ok, motivo = habilitada(e, etapas, solicita, "microscopia")
+    auto = request.form.get("autoguardar") == "1"
     if not ok:
+        if auto:
+            return jsonify(ok=False, error=motivo), 409
         flash(f"No se guardó: {motivo}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
+    if auto:
+        guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(), "descripcion": request.form.get("descripcion", "").strip(),
+                                              "conclusion": request.form.get("conclusion", "").strip(), "bethesda": request.form.get("bethesda", "").strip()})
+        auditar_autoguardado(usuario_actual(), e, "guardar_micro")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     con_ihq = "ihq" in REGISTRO[e["tipo"]].secciones
     pide_ihq = 1 if con_ihq and request.form.get("solicita_ihq") == "1" else 0
     guardar_seccion("micro", e["dueno"], {"template": request.form.get("template", "").strip(),
@@ -335,6 +350,9 @@ def guardar_ihq(eid):
     e = ficha(eid)[0]
     guardar_seccion("ihq", e["dueno"], {"marcadores": request.form.get("marcadores", "").strip(),
                                  "resultado": request.form.get("resultado", "").strip()})
+    if request.form.get("autoguardar") == "1":
+        auditar_autoguardado(usuario_actual(), e, "guardar_ihq")
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_ihq", "", eid)
     flash("IHQ guardada.", "ok")
     if request.form.get("y_listo"):

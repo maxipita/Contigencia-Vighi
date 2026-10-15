@@ -202,7 +202,7 @@
 
   <div class="tarjeta" id="macro">
     <h2>Macroscopía</h2>
-    <form method="post" action="{{ url_for('estudios.guardar_macro', eid=e.id) }}">
+    <form method="post" action="{{ url_for('estudios.guardar_macro', eid=e.id) }}" data-autoguardar>
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       {% if not edita_macro[0] %}<div class="aviso">🔒 {{ edita_macro[1] }}</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not edita_macro[0] }}>
@@ -217,7 +217,7 @@
           {% elif macro and macro.decal %}<div class="muted">Ya no se puede cambiar: el estudio pasó por esas etapas (deshacelas para modificarlo).</div>{% endif %}</div>
         {% if macro and macro.cassettes %}<div><label>N° cassettes (suma de las técnicas)</label><input value="{{ macro.cassettes }}" readonly tabindex="-1"></div>{% endif %}
       </div>
-      <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('macroscopia') }}</div>
+      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('macroscopia') }}</div>
       </fieldset>
     </form>
   </div>
@@ -226,7 +226,7 @@
   {% if 'micro' in tipo.secciones %}
   <div class="tarjeta" id="micro">
     <h2>Microscopía / Diagnóstico</h2>
-    <form method="post" action="{{ url_for('estudios.guardar_micro', eid=e.id) }}">
+    <form method="post" action="{{ url_for('estudios.guardar_micro', eid=e.id) }}" data-autoguardar>
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       {% if not edita_micro[0] %}<div class="aviso">🔒 {{ edita_micro[1] }}</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not edita_micro[0] }}>
@@ -250,7 +250,7 @@
             <option value="0">No</option><option value="1" {{ 'selected' if micro and micro.solicita_ihq }}>Si</option></select></div>
         {% endif %}
       </div>
-      <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('microscopia') }}</div>
+      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('microscopia') }}</div>
       </fieldset>
     </form>
   </div>
@@ -259,7 +259,7 @@
   {% if 'ihq' in tipo.secciones and micro and micro.solicita_ihq %}
   <div class="tarjeta" id="ihq">
     <h2>IHQ</h2>
-    <form method="post" action="{{ url_for('estudios.guardar_ihq', eid=e.id) }}">
+    <form method="post" action="{{ url_for('estudios.guardar_ihq', eid=e.id) }}" data-autoguardar>
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       {% if not puede('micro') %}<div class="aviso">🔒 No tenés permiso para cargar esta sección.</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not puede('micro') }}>
@@ -268,7 +268,7 @@
           {{ chips(lista_ihq, 'ihq_marc') }}</div>
         <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq else '' }}</textarea></div>
       </div>
-      <div class="acciones"><button class="btn">Guardar</button>{{ listo_toggle('interp_ihq') }}</div>
+      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('interp_ihq') }}</div>
       </fieldset>
     </form>
   </div>

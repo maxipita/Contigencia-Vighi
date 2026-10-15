@@ -142,7 +142,7 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
     limpiar.type = "button";
     limpiar.className = "lapiz";
     limpiar.textContent = "limpiar lista";
-    limpiar.addEventListener("click", () => { usados.length = 0; pintar(); });
+    limpiar.addEventListener("click", () => { usados.length = 0; pintar(); oculto.dispatchEvent(new Event("input", { bubbles: true })); });
     resumen.append(limpiar);
   };
   const sumar = (campo, texto, separador) => {
@@ -163,6 +163,7 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
     pintar();
     sel.value = "";
     destino.focus();
+    destino.dispatchEvent(new Event("input", { bubbles: true }));
   });
 });
 
@@ -449,6 +450,7 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
       else actuales.push(valor);
       destino.value = actuales.join(", ");
       pintar();
+      destino.dispatchEvent(new Event("input", { bubbles: true }));
     });
     destino.addEventListener("input", pintar);
     pintar();
@@ -621,3 +623,60 @@ document.querySelectorAll("[data-alternar-anulados]").forEach((b) => {
     b.textContent = (ver ? "Ocultar anulados (" : "Ver anulados (") + b.dataset.n + ")";
   });
 });
+
+(function () {
+  const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado"];
+  document.querySelectorAll("form[data-autoguardar]").forEach((form) => {
+    const estado = form.querySelector("[data-autoestado]");
+    const csrf = form.querySelector("[name=_csrf]").value;
+    const serializar = () => {
+      const p = new URLSearchParams();
+      for (const [k, v] of new FormData(form)) if (typeof v === "string" && CAMPOS.includes(k)) p.append(k, v);
+      return p;
+    };
+    let base = serializar().toString();
+    let temporizador = null, enCurso = false, pendiente = false;
+    const mostrar = (texto, clase) => { if (estado) { estado.textContent = texto; estado.className = "autoestado" + (clase ? " " + clase : ""); } };
+    async function guardar() {
+      temporizador = null;
+      const cuerpo = serializar();
+      if (cuerpo.toString() === base) { mostrar(""); return; }
+      if (enCurso) { pendiente = true; return; }
+      enCurso = true;
+      mostrar("Guardando…");
+      cuerpo.set("_csrf", csrf);
+      cuerpo.set("autoguardar", "1");
+      try {
+        const r = await fetch(form.action, { method: "POST", body: cuerpo, headers: { "X-CSRF": csrf, "Accept": "application/json" } });
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error(d.error || "no se pudo guardar");
+        base = serializar().toString();
+        mostrar("Guardado automáticamente " + d.hora, "ok");
+      } catch (e) {
+        mostrar("No se guardó solo: " + (e.message || "sin conexión") + ". Usá Guardar.", "error");
+      }
+      enCurso = false;
+      if (pendiente) { pendiente = false; guardar(); }
+    }
+    const programar = (ev) => {
+      if (!ev.target.name || !CAMPOS.includes(ev.target.name)) return;
+      if (serializar().toString() === base) { mostrar(""); return; }
+      mostrar("Cambios sin guardar…");
+      clearTimeout(temporizador);
+      temporizador = setTimeout(guardar, 1500);
+    };
+    form.addEventListener("input", programar);
+    form.addEventListener("change", programar);
+    form.addEventListener("submit", () => { clearTimeout(temporizador); base = serializar().toString(); });
+    const volcar = () => {
+      if (serializar().toString() === base || !navigator.sendBeacon) return;
+      const cuerpo = serializar();
+      cuerpo.set("_csrf", csrf);
+      cuerpo.set("autoguardar", "1");
+      navigator.sendBeacon(form.action, cuerpo);
+      base = serializar().toString();
+    };
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") volcar(); });
+    window.addEventListener("pagehide", volcar);
+  });
+})();

@@ -544,3 +544,6 @@ details.modificar .acciones { margin-top: 6px; }
 .zona-eliminar { border-color: #e2b4ad; }
 .zona-eliminar h2 { color: #a3281b; }
 .zona-eliminar p { margin-top: 0; }
+.autoestado { font-size: 12px; color: var(--pizarra); }
+.autoestado.ok { color: var(--ok, #2a7a4b); }
+.autoestado.error { color: #b42318; }

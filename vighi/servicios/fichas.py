@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from flask import abort
 
 from vighi.core import db
@@ -132,3 +134,9 @@ def informe_vigente(pid, emitido):
         return True
     activos = {str(x["id"]) for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if not x["anulado"]}
     return set(emitido["estudios"].split(",")) == activos
+
+
+def auditar_autoguardado(yo, e, accion):
+    desde = (datetime.now() - timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+    if not db.uno("SELECT 1 FROM auditoria WHERE estudio_id=? AND accion=? AND usuario_id=? AND fecha_hora>=?", (e["id"], accion, yo["id"], desde)):
+        db.auditar(yo["id"], e["protocolo_id"], accion, "autoguardado", e["id"])
