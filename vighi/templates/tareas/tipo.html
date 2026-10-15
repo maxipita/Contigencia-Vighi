@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Modificar tarea' if t and t.id else 'Nuevo título de tarea' }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Administración</div>
+<p><a href="{{ url_for('tareas.tipos_tarea') }}">← Responsables de tareas</a></p>
+<h1>{{ t.titulo if t and t.id else 'Nuevo título de tarea' }}</h1>
+<form method="post" class="tarjeta" style="max-width:640px">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label>Título *</label>
+  <input name="titulo" value="{{ t.titulo if t else '' }}" maxlength="80" required>
+  <label style="margin-top:12px">Responsable por defecto</label>
+  <select name="responsable_id">
+    <option value="">— Sin asignar —</option>
+    {% for u in usuarios %}<option value="{{ u.id }}" {{ 'selected' if t and t.responsable_id == u.id }}>{{ u.iniciales }}{% if u.nombre and u.nombre != u.iniciales %} · {{ u.nombre }}{% endif %}</option>{% endfor %}
+  </select>
+  <label style="margin-top:12px">Cierre automático</label>
+  <select name="cierre">
+    <option value="">— Se cierra a mano —</option>
+    {% for k, n in cierres.items() %}<option value="{{ k }}" {{ 'selected' if t and t.cierre == k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <div class="muted">La tarea se cierra sola cuando se completa esa etapa del protocolo.</div>
+  <div class="acciones"><button class="btn">Guardar</button><a class="btn sec" href="{{ url_for('tareas.tipos_tarea') }}">Cancelar</a></div>
+</form>
+{% endblock %}
