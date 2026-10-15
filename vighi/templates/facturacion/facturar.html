@@ -95,7 +95,7 @@
         <td>{{ r.paciente }}</td>
         <td class="muted">{{ r.afiliado }}</td>
         <td>{{ r.cobertura or '—' }}{% if r.plan %} <span class="muted">· {{ r.plan }}</span>{% endif %}</td>
-        <td><a href="{{ url_for('estudios.estudio', eid=r.id) }}">{{ r.etiqueta }}</a></td>
+        <td><a href="{{ url_for('estudios.flujo', pid=r.protocolo_id, tipo=r.tipo) }}">{{ r.etiqueta }}</a></td>
         <td>{{ r.codigo }}</td>
         <td class="num">{{ r.cantidad }}</td>
         <td class="num">{% if r.tarifa %}{{ r.unitario | peso }}{% else %}<span class="lt" title="{{ r.motivo }}">{{ r.motivo | capitalize }}</span>{% endif %}</td>

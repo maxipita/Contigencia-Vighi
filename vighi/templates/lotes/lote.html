@@ -41,7 +41,7 @@
       {% if not l.cerrado and puede('lotes_armar') %}<td class="no-imprimir">{% if loop.first or estudios[loop.index0 - 1].protocolo_id != c.protocolo_id %}<input type="checkbox" name="eids" value="{{ c.id }}" form="form-mover" data-protocolo>{% endif %}</td>{% endif %}
       <td class="muted">{{ loop.index }}</td>
       <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}{% if c.borrador %} <a class="mini" href="{{ url_for('protocolos.protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
-      <td><a href="{{ url_for('estudios.estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
+      <td><a href="{{ url_for('estudios.flujo', pid=c.protocolo_id, tipo=c.tipo) }}">{{ c.etiqueta }}</a></td>
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
       <td>{{ c.tacos if c.tacos is not none else '' }}</td>

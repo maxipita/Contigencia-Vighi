@@ -26,7 +26,7 @@
         <td class="muted">{{ i.fecha | f }}</td>
         <td>{{ i.paciente }}</td>
         <td class="muted">{{ i.afiliado }}</td>
-        <td><a href="{{ url_for('estudios.estudio', eid=i.estudio_id) }}">{{ i.estudio }}</a>{% if i.descripcion %}<div class="muted">{{ i.descripcion }}</div>{% endif %}</td>
+        <td>{{ i.estudio }}{% if i.descripcion %}<div class="muted">{{ i.descripcion }}</div>{% endif %}</td>
         {% if editable %}
         <td><input name="k_{{ i.id }}" value="{{ i.codigo }}" size="8"></td>
         <td class="num"><input name="c_{{ i.id }}" value="{{ i.cantidad }}" size="3" class="num"></td>
