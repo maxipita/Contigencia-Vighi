@@ -310,4 +310,5 @@ errata; no la renombres sin avisar.
 **Un push a `main` despliega a producción** (`.github/workflows/desplegar.yml`): corre la batería contra D1 y PostgreSQL 17 y, si pasa, arma la imagen ARM64, la sube a ECR con el
 commit como tag (inmutable) y como `produccion` (el único tag que se puede mover; es el que usa la tarea) y fuerza un deploy de ECS (rolling; si la tarea nueva no queda sana, ECS vuelve
 a la anterior). No despliegan los cambios que solo tocan `*.md`, `docs/` o `infra/`. GitHub entra a AWS por OIDC con el rol `vighi-contingencia-github`, que solo acepta la rama `main`
-de este repositorio y solo puede subir imágenes y reiniciar el servicio. Para volver a una versión anterior: *Re-run* del workflow de ese commit (re-etiqueta su imagen sin rearmarla) o `git revert`.
+de este repositorio y solo puede subir imágenes y reiniciar el servicio. El repo usa el `sub` **inmutable** de GitHub (`repo:dueño@id/repo@id`, variable `github_sub`), no `repo:dueño/repo`:
+lo da `gh api repos/maxipita/Contigencia-Vighi/actions/oidc/customization/sub`. Para volver a una versión anterior: *Re-run* del workflow de ese commit (re-etiqueta su imagen sin rearmarla) o `git revert`.
