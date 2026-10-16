@@ -85,6 +85,12 @@ chequear("adjunta la orden al protocolo, sin usuario, y anota el uso de la clave
 chequear("se ve como automático en la ficha", "Automático" in c.get(f"/protocolo/{p1}").get_data(as_text=True))
 r = subir(anonimo, b"no es una imagen", token, "x.png")
 chequear("un archivo ilegible responde 400", r.status_code == 400 and not r.get_json()["ok"])
+r = anonimo.post("/api/ordenes/automatico?nombre=C%3A%5Cescaneos%5Cdesde-onedrive.png", data=hoja("C000123"), headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
+chequear("acepta el archivo como cuerpo del pedido (como lo manda OneDrive) y usa el nombre sin la ruta", r.status_code == 200 and r.get_json()["archivo"] == "desde-onedrive.png" and len(r.get_json()["paginas"]) == 1, r.get_data(as_text=True)[:150])
+r = anonimo.post("/api/ordenes/automatico", data=hoja("C000123"), headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
+chequear("sin nombre de archivo avisa cómo mandarlo", r.status_code == 400 and "nombre=" in r.get_json()["error"])
+r = anonimo.post("/api/ordenes/automatico?nombre=vacio.png", data=b"", headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
+chequear("un cuerpo vacío se rechaza", r.status_code == 400)
 chequear("un formulario común sin token de seguridad sigue rechazado", anonimo.post("/api/ordenes/subir", data={"archivo": (io.BytesIO(hoja()), "a.png")}, content_type="multipart/form-data").status_code == 400)
 
 print("3) el programa que mira la carpeta")

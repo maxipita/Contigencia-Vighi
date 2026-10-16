@@ -99,10 +99,15 @@ def api_ordenes_automatico():
     if not clave:
         return jsonify(ok=False, error="Clave inválida o revocada."), 401
     f = request.files.get("archivo")
-    if not f or not f.filename:
-        return jsonify(ok=False, error="No llegó ningún archivo."), 400
+    if f and f.filename:
+        nombre, contenido = f.filename, f.read()
+    else:
+        nombre = (request.args.get("nombre") or request.headers.get("X-Nombre-Archivo") or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+        contenido = request.get_data()
+    if not nombre or not contenido:
+        return jsonify(ok=False, error="No llegó ningún archivo: mandalo como formulario (campo archivo) o como cuerpo del pedido con ?nombre=archivo.pdf."), 400
     try:
-        paginas = procesar_archivo(f.filename, f.read(), None)
+        paginas = procesar_archivo(nombre, contenido, None)
     except ValueError as error:
-        return jsonify(ok=False, archivo=f.filename, error=str(error)), 400
-    return jsonify(ok=True, archivo=f.filename, clave=clave["nombre"], paginas=paginas)
+        return jsonify(ok=False, archivo=nombre, error=str(error)), 400
+    return jsonify(ok=True, archivo=nombre, clave=clave["nombre"], paginas=paginas)
