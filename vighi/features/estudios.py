@@ -12,6 +12,7 @@ from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios,
 from vighi.servicios.validacion import solo_pap
 from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
+from vighi.servicios.ordenes import SQL_ORDENES, ordenes_de
 from vighi.servicios.pap import aplicar_sospecha, contexto as contexto_pap, valores_de_formulario as valores_pap
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
 from vighi.servicios.tareas import cerrar_por_etapa, crear_tarea, tipo_solicitud_ihq
@@ -205,7 +206,7 @@ def estudio(eid):
                                          (SQL_TEMPLATES, ("micro",)), (SQL_LISTAS, ()), ("SELECT fecha FROM feriados", ())])
     primero = db.uno(SQL_FICHA, (eid,))
     if primero:
-        db.precargar([(SQL_VARIANTE, (primero["protocolo_id"], primero["tipo"], primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],)), (SQL_IMAGENES, (primero["protocolo_id"],)), (SQL_TECNICAS, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
+        db.precargar([(SQL_VARIANTE, (primero["protocolo_id"], primero["tipo"], primero["protocolo_id"], primero["tipo"])), (SQL_COMENTARIOS, (primero["protocolo_id"],)), (SQL_IMAGENES, (primero["protocolo_id"],)), (SQL_ORDENES, (primero["protocolo_id"],)), (SQL_TECNICAS, (primero["protocolo_id"], primero["tipo"]))] + consultas_estudios("e.protocolo_id=?", (primero["protocolo_id"],), True))
     e, macro, micro, ihq, etapas, solicita = ficha(eid)
     tipo = REGISTRO[e["tipo"]]
     est, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
@@ -235,7 +236,7 @@ def estudio(eid):
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"])
                             and any(h["tipo"] != "PAP" for h in activos))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
-    return render_template("estudios/estudio.html", ihq_confirmado=pedido_ihq_confirmado(micro, ihq), marcadores_ihq=lista_marcadores(ihq["marcadores"] if ihq else ""), INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudios/estudio.html", ihq_confirmado=pedido_ihq_confirmado(micro, ihq), marcadores_ihq=lista_marcadores(ihq["marcadores"] if ihq else ""), INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), ordenes=ordenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,

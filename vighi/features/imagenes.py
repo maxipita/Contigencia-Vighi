@@ -12,7 +12,7 @@ bp = Blueprint("imagenes", __name__)
 @requiere_permiso(*PERMISOS_IMAGENES)
 def imagenes_subir(pid):
     protocolo_o_404(pid)
-    archivos = [f for f in request.files.getlist("imagenes") if f and f.filename]
+    archivos = [f for f in (request.files.getlist("imagenes") + request.files.getlist("archivos")) if f and f.filename]
     if not archivos:
         flash("Elegí al menos una imagen.", "error")
         return volver_a_imagenes(pid)
