@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS ihq (
 CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     clase VARCHAR(10) NOT NULL, titulo VARCHAR(120) NOT NULL, tipo_biopsia VARCHAR(40),
-    texto TEXT, conclusion TEXT, organo VARCHAR(80), tipo_muestra VARCHAR(80),
+    texto TEXT, conclusion TEXT, organo VARCHAR(80), tipo_muestra VARCHAR(80), sb_id INTEGER,
     UNIQUE (clase, titulo)
 );
 CREATE TABLE IF NOT EXISTS catalogo (
@@ -635,9 +635,62 @@ def migrar_a_flujos(c):
     c.commit()
 
 
+def _clave_template(texto):
+    sin = "".join(ch for ch in unicodedata.normalize("NFD", texto or "") if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", sin).casefold().strip()
+
+
+def _clave_titulo(clase, titulo):
+    return clase, _clave_template(re.sub(r"\s*\(\d+\)$", "", titulo or "")[:30])
+
+
+def sincronizar_templates(c, nuevos):
+    viejos = [dict(r) for r in c.execute("SELECT id, clase, titulo, tipo_biopsia, organo, texto FROM templates ORDER BY id").fetchall()]
+    por_clave, grupos = {}, {}
+    for r in viejos:
+        por_clave.setdefault(_clave_titulo(r["clase"], r["titulo"]), []).append(r)
+    for n in sorted(nuevos, key=lambda x: x["sb_id"]):
+        grupos.setdefault(_clave_titulo(n["clase"], n["titulo"]), []).append(n)
+    pares, altas = [], []
+    for clave, ns in grupos.items():
+        libres, restantes = list(por_clave.get(clave, [])), []
+        for n in ns:
+            igual = next((o for o in libres if n["texto"] and _clave_template(o["texto"]) == _clave_template(n["texto"])), None)
+            if igual:
+                pares.append((igual, n))
+                libres.remove(igual)
+            else:
+                restantes.append(n)
+        for n in restantes:
+            if libres:
+                pares.append((libres.pop(0), n))
+            else:
+                altas.append(n)
+    emparejados = {o["id"] for o, _ in pares}
+    ocupados = {(r["clase"], r["titulo"]) for r in viejos if r["id"] not in emparejados}
+
+    def titulo_final(n):
+        titulo = n["titulo"]
+        while (n["clase"], titulo) in ocupados:
+            titulo = f"{n['titulo']} [{n['sb_id']}]"
+        ocupados.add((n["clase"], titulo))
+        return titulo
+    sentencias = [("ALTER TABLE templates ADD COLUMN sb_id INTEGER", ())]
+    sentencias += [("UPDATE templates SET titulo=? WHERE id=?", (f"~{o['id']}", o["id"])) for o, _ in pares]
+    for o, n in pares:
+        sentencias.append(("UPDATE templates SET titulo=?, texto=?, conclusion=?, sb_id=?, tipo_biopsia=?, organo=? WHERE id=?",
+                           (titulo_final(n), n["texto"], n["conclusion"], n["sb_id"], o["tipo_biopsia"] or n["tipo_biopsia"] or None, o["organo"] or n["organo"] or None, o["id"])))
+    for n in altas:
+        sentencias.append(("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion, organo, sb_id) VALUES (?,?,?,?,?,?,?)",
+                           (n["clase"], titulo_final(n), n["tipo_biopsia"] or None, n["texto"], n["conclusion"], n["organo"] or None, n["sb_id"])))
+    c.lote(sentencias)
+
+
 def inicializar():
     c = _conectar()
     sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
+    columnas_templates = {r["name"] for r in c.execute("PRAGMA table_info(templates)")}
+    templates_sin_origen = bool(columnas_templates) and "sb_id" not in columnas_templates
     sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     antes_de_informes = preparar_esquema(c)
     if sin_destinos:
@@ -688,9 +741,11 @@ def inicializar():
                       [("cobertura", i, v) for i, v in enumerate(cargar("listas.json")["cobertura"])])
     if not c.execute("SELECT 1 FROM templates LIMIT 1").fetchone():
         for clase in ("macro", "micro"):
-            c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion) VALUES (?,?,?,?,?)",
-                          [(t["clase"], t["titulo"], t["tipo_biopsia"], t["texto"], t["conclusion"])
+            c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion, organo, sb_id) VALUES (?,?,?,?,?,?,?)",
+                          [(t["clase"], t["titulo"], t["tipo_biopsia"] or None, t["texto"], t["conclusion"], t.get("organo") or None, t.get("sb_id"))
                            for t in cargar(f"templates_{clase}.json")])
+    if templates_sin_origen:
+        sincronizar_templates(c, cargar("templates_micro.json") + cargar("templates_macro.json"))
     if not c.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone():
         c.executemany("INSERT INTO usuarios (iniciales, nombre, sectores) VALUES (?,?,?)",
                       [(u["iniciales"], u["iniciales"], ",".join(u["sectores"])) for u in cargar("usuarios.json")])
