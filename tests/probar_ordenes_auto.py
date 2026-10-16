@@ -33,10 +33,11 @@ def cliente(uid):
         return c, s["csrf"]
 
 
-def hoja(numero=None):
+def hoja(numero=None, n=0):
     img = Image.new("RGB", (1654, 2339), "white")
     d = ImageDraw.Draw(img)
     d.text((120, 150), "ORDEN DE ESTUDIO", fill="black", font=ImageFont.load_default(size=40))
+    d.text((120, 400 + n * 3), "hoja " + str(n), fill="black", font=ImageFont.load_default(size=30))
     if numero:
         b = io.BytesIO()
         segno.make(numero, error="m").save(b, kind="png", scale=6, border=1)
@@ -48,6 +49,7 @@ def hoja(numero=None):
 
 with A.app.app_context():
     p1 = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, creado_por, creado_en) VALUES ('C000123','2026-10-14','Uno','Ana',?,?)", (admin, db.ahora()))
+    p2 = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, creado_por, creado_en) VALUES ('C000124','2026-10-14','Dos','Beto',?,?)", (admin, db.ahora()))
 
 c, csrf = cliente(admin)
 
@@ -92,6 +94,64 @@ chequear("sin nombre de archivo avisa cómo mandarlo", r.status_code == 400 and 
 r = anonimo.post("/api/ordenes/automatico?nombre=vacio.png", data=b"", headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
 chequear("un cuerpo vacío se rechaza", r.status_code == 400)
 chequear("un formulario común sin token de seguridad sigue rechazado", anonimo.post("/api/ordenes/subir", data={"archivo": (io.BytesIO(hoja()), "a.png")}, content_type="multipart/form-data").status_code == 400)
+
+print("2b) hojas sueltas del mismo lote (Capture Pro entrega una imagen por archivo)")
+
+
+def lote(ruta, nombre, datos):
+    r = anonimo.post("/api/ordenes/automatico?nombre=" + nombre + "&ruta=" + ruta + "/" + nombre, data=datos,
+                     headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
+    return r.status_code, r.get_json()
+
+
+def destino(grupo):
+    with A.app.app_context():
+        return {r["nombre"]: (r["protocolo_id"], r["metodo"]) for r in db.q("SELECT nombre, protocolo_id, metodo FROM ordenes WHERE grupo=?", (grupo,))}
+
+
+G = "/Escaneos/Batch1"
+estado, j = lote(G, "00000001.png", hoja("C000123", 11))
+chequear("la primera hoja con QR abre el grupo", j["paginas"][0]["estado"] == "adjunta" and j["paginas"][0]["numero"] == "C000123", str(j))
+estado, j = lote(G, "00000002.png", hoja(None, 12))
+chequear("la hoja siguiente sin número se suma al mismo protocolo, sea cual sea la cantidad", j["paginas"][0]["estado"] == "adjunta" and j["paginas"][0]["metodo"] == "continuacion" and j["paginas"][0]["numero"] == "C000123", str(j))
+lote(G, "00000003.png", hoja(None, 13))
+lote(G, "00000004.png", hoja(None, 14))
+estado, j = lote(G, "00000005.png", hoja("C000124", 15))
+chequear("un QR con otro número cierra el grupo anterior y abre uno nuevo", j["paginas"][0]["numero"] == "C000124")
+lote(G, "00000006.png", hoja(None, 16))
+d = destino(G.strip("/"))
+chequear("quedan agrupadas: 1 a 4 en el primer protocolo, 5 y 6 en el segundo",
+         [d[n][0] for n in ("00000001.png", "00000002.png", "00000003.png", "00000004.png")] == [p1] * 4 and [d[n][0] for n in ("00000005.png", "00000006.png")] == [p2] * 2, str(d))
+
+G2 = "/Escaneos/Batch2"
+lote(G2, "00000003.png", hoja(None, 23))
+lote(G2, "00000005.png", hoja(None, 25))
+d = destino(G2.strip("/"))
+chequear("las hojas que llegan antes que su QR esperan sin identificar", all(v[0] is None for v in d.values()), str(d))
+lote(G2, "00000004.png", hoja("C000124", 24))
+d = destino(G2.strip("/"))
+chequear("al llegar el QR se suman las que siguen en el orden del lote, no las que lo preceden", d["00000003.png"][0] is None and d["00000004.png"][0] == p2 and d["00000005.png"][0] == p2, str(d))
+lote(G2, "00000001.png", hoja("C000123", 21))
+lote(G2, "00000002.png", hoja(None, 22))
+d = destino(G2.strip("/"))
+chequear("llegando desordenadas el resultado es el mismo que si llegaran en orden", [d[n][0] for n in ("00000001.png", "00000002.png", "00000003.png", "00000004.png", "00000005.png")] == [p1, p1, p1, p2, p2], str(d))
+chequear("las que siguen a otro protocolo quedan como continuación", d["00000003.png"][1] == "continuacion" and d["00000004.png"][1] == "qr")
+
+G3 = "/Escaneos/Batch3"
+lote(G3, "00000001.png", hoja("C000123", 31))
+lote(G3, "00000002.png", hoja("C000999", 32))
+estado, j = lote(G3, "00000003.png", hoja(None, 33))
+chequear("tras un número que no existe, las hojas siguientes no se pegan al protocolo anterior", j["paginas"][0]["estado"] == "pendiente" and destino(G3.strip("/"))["00000003.png"][0] is None, str(j))
+
+estado, j = lote("/Escaneos", "suelta.png", hoja(None, 41))
+chequear("un archivo directo en la carpeta vigilada (sin subcarpeta de lote) no se agrupa con otros", j["paginas"][0]["estado"] == "pendiente", str(j))
+
+r = anonimo.post("/api/ordenes/automatico?nombre=INDEX.DAT&ruta=/Escaneos/Batch1/INDEX.DAT", data=b"INDEX interno de Capture Pro",
+                 headers={"Authorization": "Bearer " + token, "Content-Type": "application/octet-stream"})
+chequear("los archivos que no son imagen ni PDF (INDEX.DAT) se ignoran sin error", r.status_code == 200 and r.get_json().get("ignorado") is True)
+with A.app.app_context():
+    fila = db.uno("SELECT COUNT(*) AS n FROM auditoria WHERE accion='orden' AND detalle LIKE '%continuación%'")
+chequear("las hojas agregadas por continuación quedan en el historial del protocolo", fila["n"] >= 3)
 
 print("3) el programa que mira la carpeta")
 servidor = make_server("127.0.0.1", 0, A.app, threaded=True)

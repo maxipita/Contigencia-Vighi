@@ -93,6 +93,10 @@
     </div>
     <div class="seleccion" data-tipos="pap lab">
       <div class="sel-cab">
+        <label>Fecha del lote
+          <input type="date" id="fechaLote" title="Muestra todos los lotes de esa fecha, con las etiquetas ya impresas, para reimprimirlas">
+        </label>
+        <button type="button" class="btn sec mini oculto" id="fechaLoteQuitar">Pendientes y recientes</button>
         <label>Lote
           <select id="origen"></select>
         </label>
@@ -199,6 +203,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     var casos = DATOS.casos;
     var ESTUDIO = {pap: 'PAP', lab: 'BP'};
     var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;
+    var loteExtra = presetPendiente, filtroFecha = '';
 
     var elec = {pato: {}, muestra: {}, nro: {}};
     var seleccion = {};
@@ -349,7 +354,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         casos.forEach(function (c) {
             if (c.estudio === ESTUDIO[t] && c.loteId && !vistos[c.loteId]) {
                 vistos[c.loteId] = true;
-                h += '<option value="' + c.loteId + '">' + esc(c.loteCodigo) + '</option>';
+                h += '<option value="' + c.loteId + '">' + esc(c.loteCodigo) + (filtroFecha || !c.loteFecha ? '' : ' (' + formatearFecha(c.loteFecha) + ')') + '</option>';
             }
         });
         $('origen').innerHTML = h;
@@ -454,10 +459,32 @@ window.ETIQUETAS = {{ datos|tojson }};
         mostrarInfo();
     }
 
-    function refrescar(j) {
+    function urlEstado() {
+        var q = [];
+        if (filtroFecha) q.push('fecha=' + encodeURIComponent(filtroFecha));
+        if (loteExtra) q.push('lote=' + loteExtra);
+        return window.URLS.estado + (q.length ? '?' + q.join('&') : '');
+    }
+    function refrescar(j, yaFiltrado) {
         if (j.historial) historial = j.historial;
         if (j.casos) casos = j.casos;
         renderHistorial();
+        if (!yaFiltrado && (filtroFecha || loteExtra)) traerCasos();
+    }
+    function traerCasos() {
+        fetch(urlEstado(), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || !j.casos) return;
+            casos = j.casos;
+            if (!itemsFijos) { cargarOrigenes(); renderSeleccion(); generar(); }
+        }).catch(function () {});
+    }
+    function cambiarFechaLote() {
+        filtroFecha = $('fechaLote').value || '';
+        $('fechaLoteQuitar').classList.toggle('oculto', !filtroFecha);
+        seleccion = {};
+        $('origen').value = '';
+        loteExtra = null;
+        traerCasos();
     }
     function enviarConfirmacion(payload) {
         enviando = true;
@@ -635,6 +662,8 @@ window.ETIQUETAS = {{ datos|tojson }};
         r.addEventListener('change', cambiarTipo);
     });
     $('origen').addEventListener('change', function () { renderSeleccion(); generar(); });
+    $('fechaLote').addEventListener('change', cambiarFechaLote);
+    $('fechaLoteQuitar').addEventListener('click', function () { $('fechaLote').value = ''; cambiarFechaLote(); });
     $('selTodos').addEventListener('click', function () {
         candidatos(tipoActual()).forEach(function (c) { seleccion[c.id] = true; });
         renderSeleccion(); generar();
@@ -662,10 +691,10 @@ window.ETIQUETAS = {{ datos|tojson }};
     });
     document.addEventListener('visibilitychange', function () {
         if (document.hidden || loteActual || enviando) return;
-        fetch(window.URLS.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+        fetch(urlEstado(), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || !j.historial) return;
             var t = tipoActual(), antes = proximo();
-            refrescar(j);
+            refrescar(j, true);
             if (t === 'bp' && parseInt($('inicio').value, 10) === antes) $('inicio').value = proximo();
             cargarOrigenes(); renderSeleccion(); generar();
         }).catch(function () {});

@@ -32,13 +32,23 @@ def etiquetas():
         else:
             flash("Las etiquetas de laboratorio son para lotes de biopsias y de PAP.", "error")
             return redirect(url_for("lotes.lote", lote_id=lote["id"]))
-    return render_template("etiquetas/etiquetas.html", datos={**datos_etiquetas(), "nombres": TIPOS_ETIQUETA, "preset": preset})
+    datos = datos_etiquetas()
+    if preset:
+        datos["casos"] = etiquetas_casos(lote_id=preset["loteId"])
+    return render_template("etiquetas/etiquetas.html", datos={**datos, "nombres": TIPOS_ETIQUETA, "preset": preset})
 
 
 @bp.route("/api/etiquetas/estado")
 @requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
 def api_etiquetas_estado():
-    return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos()})
+    fecha = request.args.get("fecha")
+    if fecha:
+        try:
+            datetime.strptime(fecha, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Fecha inválida."}), 400
+    lote = request.args.get("lote", "")
+    return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos(fecha or None, int(lote) if lote.isdigit() else None)})
 
 
 @bp.route("/api/etiquetas/qr")
