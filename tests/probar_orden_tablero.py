@@ -15,13 +15,13 @@ def chequear(n, ok, det=''):
         fallas.append(n)
 
 
+INGRESOS = (('C000100', '2026-01-05 10:00:00'), ('P1165658-BP', '2026-01-06 08:00:00'), ('C000010', '2026-01-07 09:00:00'), ('C000009', '2026-01-07 09:00:00'))
 with A.app.app_context():
-    ahora = db.ahora()
-    for numero in ('C000009', 'C000100', 'P1165658-BP', 'C000010'):
+    for numero, creado in INGRESOS:
         pid = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, borrador, creado_por, creado_en) VALUES (?,?,?,?,0,?,?)",
-                    (numero, '2026-10-14', 'Orden', numero, admin, ahora))
+                    (numero, '2026-10-14', 'Orden', numero, admin, creado))
         db.ex("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, tipo_muestra, cantidad, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
-              (pid, 'BP', 'Biopsias', 'Digestiva', 'Estómago', 'Biopsia', '1', admin, ahora))
+              (pid, 'BP', 'Biopsias', 'Digestiva', 'Estómago', 'Biopsia', '1', admin, creado))
 
 c = A.app.test_client()
 with c.session_transaction() as s:
@@ -31,10 +31,11 @@ h = c.get('/?ver=todos').get_data(as_text=True)
 numeros = re.findall(r'(C\d{6}|P1165658-BP)', h)
 vistos = list(dict.fromkeys(numeros))
 propios = [n for n in vistos if n in ('C000009', 'C000010', 'C000100', 'P1165658-BP')]
-chequear('ordena por número de protocolo, el mayor primero', propios == ['C000100', 'C000010', 'C000009', 'P1165658-BP'], propios)
-todos_c = [n for n in vistos if n.startswith('C')]
-chequear('C000010 va antes que C000009 (como persona, no como texto)', todos_c.index('C000010') < todos_c.index('C000009'))
-chequear('toda la lista de números C está en orden descendente', todos_c == sorted(todos_c, reverse=True), todos_c)
+chequear('ordena por fecha de ingreso, el más viejo primero (aunque el número sea mayor)', propios[:2] == ['C000100', 'P1165658-BP'], propios)
+chequear('con el mismo ingreso, C000009 va antes que C000010 (como persona, no como texto)', propios == ['C000100', 'P1165658-BP', 'C000009', 'C000010'], propios)
+fechas = re.findall(r'<td class="muted">(\d\d)/(\d\d)/(\d{4}) (\d\d):(\d\d)</td>', h)
+claves = [(a, m, d, hh, mm) for d, m, a, hh, mm in fechas]
+chequear('toda la columna Ingresado está en orden ascendente', len(claves) > 4 and claves == sorted(claves), claves[:6])
 
 print()
 print('FALLAS:', 'ninguna' if not fallas else fallas)

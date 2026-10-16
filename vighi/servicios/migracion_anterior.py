@@ -9,7 +9,7 @@ from vighi.servicios.validacion import PACIENTE_PROVISORIO
 INICIALES_SISTEMA = "ANT"
 NOMBRE_SISTEMA = "Sistema anterior"
 RE_LOTE = re.compile(r"^(.+)-(\d{2})(\d{2})\.(\d+)$")
-RE_TITULO_PERSONA = re.compile(r"^(dr|dra|lic)\.?\s+", re.I)
+RE_TITULO_PERSONA = re.compile(r"^(dr|dra|lic|ct)\.?\s+", re.I)
 CAMPOS_PAP = ("leucocitos", "hematies", "flora", "aspecto", "otros", "pavimentosas", "endocervicales", "metaplasicas", "endometriales", "resultado")
 
 

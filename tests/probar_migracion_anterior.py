@@ -201,6 +201,13 @@ chequear('el PAP sin letra queda como muestra, no como práctica', len(r4['flujo
 chequear('sin paciente entra como provisorio a validar', (p4['apellido'], p4['nombre'], p4['pendiente_validacion']) == ('IA', 'EnProceso', 1), dict(p4))
 chequear('el lote del PAP es el del citotécnico y él queda de responsable', l4 and l4['tipo_lote'] == 'ZZTP' and e4[0]['responsable_id'] == u4['id'] and e4[0]['lote_id'] == l4['id'], (l4 and dict(l4), dict(e4[0])))
 
+print('7b) títulos en el nombre del firmante o asignado')
+with A.app.app_context():
+    uid_mad = db.ex("INSERT INTO usuarios (iniciales, nombre, sectores, admin, activo, debe_cambiar_clave) VALUES ('ZZMAD','Miguel Ángel Domenianni','citotecnico',0,1,0)")
+    ctx = mig.Contexto(ensayo=True)
+    chequear('«Ct. DOMENIANNI, Miguel Angel» encuentra a Miguel Ángel Domenianni', ctx.persona('Ct. DOMENIANNI, Miguel Angel') == uid_mad and not ctx.nuevos['sin_firmante'], ctx.nuevos['sin_firmante'])
+    chequear('sin el título también lo encuentra', ctx.persona('DOMENIANNI, Miguel Angel') == uid_mad)
+
 print('8) imágenes y órdenes')
 import io
 from PIL import Image

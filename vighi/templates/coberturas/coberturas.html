@@ -16,7 +16,7 @@
 
 <div class="tarjeta">
   <h2>Nueva cobertura</h2>
-  <form method="post" action="{{ url_for('coberturas.cobertura_nueva') }}" class="filtros">
+  <form method="post" action="{{ url_for('coberturas.cobertura_nueva') }}" class="en-linea" style="max-width:520px">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <input type="text" name="nombre" maxlength="80" placeholder="Nombre de la cobertura" required autocomplete="off">
     <button class="btn">Crear</button>

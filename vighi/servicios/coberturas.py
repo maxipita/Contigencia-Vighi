@@ -25,6 +25,25 @@ def crear_cobertura(nombre):
     db.ex("INSERT INTO listas (nombre, orden, valor) VALUES ('cobertura', ?, ?)", (orden, nombre))
 
 
+def usos_de_cobertura(nombre):
+    protocolos = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE cobertura=?", (nombre,))["n"]
+    facturas = db.uno("SELECT COUNT(*) AS n FROM facturas WHERE cobertura=?", (nombre,))["n"]
+    return protocolos, facturas
+
+
+def error_eliminar(nombre):
+    protocolos, facturas = usos_de_cobertura(nombre)
+    if protocolos or facturas:
+        return f"No se puede eliminar «{nombre}»: la usan {protocolos} protocolo(s) y {facturas} factura(s)."
+    return None
+
+
+def eliminar_cobertura(nombre):
+    db.lote_ex([("DELETE FROM listas WHERE nombre='cobertura' AND valor=?", (nombre,)),
+                ("DELETE FROM tarifario_coberturas WHERE cobertura=?", (nombre,)),
+                ("DELETE FROM cobertura_pago WHERE cobertura=?", (nombre,))])
+
+
 def tarifa_general():
     filas = db.q("SELECT id, nombre, iva FROM tarifarios ORDER BY id")
     return next((t for t in filas if t["nombre"] == facturacion.GENERAL), filas[0] if filas else None)

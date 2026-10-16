@@ -19,12 +19,21 @@ SQL_FIRMANTES = "SELECT id, iniciales, nombre, sectores FROM usuarios WHERE acti
 bp = Blueprint("tablero", __name__)
 
 
+def dia_valido(texto):
+    try:
+        datetime.strptime(texto, "%Y-%m-%d")
+        return texto
+    except ValueError:
+        return ""
+
+
 @bp.route("/")
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf")}
+    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta")}
     f["ver"] = f["ver"] or "pendientes"
+    f["desde"], f["hasta"] = dia_valido(f["desde"]), dia_valido(f["hasta"])
     grupos = {}
     db.precargar(consultas_estudios() + [(SQL_FIRMANTES, ())])
     for e in cargar_estudios():
@@ -87,6 +96,9 @@ def tablero():
             continue
         if f["mf"] and f["mf"] != firmante_de(g):
             continue
+        ingreso = min(e["creado_en"] for e in g)[:10]
+        if (f["desde"] and ingreso < f["desde"]) or (f["hasta"] and ingreso > f["hasta"]):
+            continue
         elegidos = [e for e in g if estudio_ok(e)]
         if f["ver"] == "anulados":
             vista = [e for e in elegidos if e["anulado"]]
@@ -110,7 +122,7 @@ def tablero():
             "semaforo": max((e["semaforo"] for e in vista), key=lambda s: trazabilidad.GRAVEDAD[s or ""]),
             "vence": min(vencen) if vencen else None,
             "creado_en": min(e["creado_en"] for e in g)})
-    filas.sort(key=lambda r: (orden_numero(r["numero"])[0].upper() == "C", orden_numero(r["numero"]), r["protocolo_id"]), reverse=True)
+    filas.sort(key=lambda r: (r["creado_en"], orden_numero(r["numero"]), r["protocolo_id"]))
     por_semaforo = {k: sum(1 for r in filas if r["semaforo"] == k) for k in SEMAFOROS}
     if f["semaforo"]:
         filas = [r for r in filas if r["semaforo"] == f["semaforo"]]

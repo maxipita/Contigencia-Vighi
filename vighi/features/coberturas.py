@@ -67,9 +67,18 @@ def cobertura():
                 db.auditar(yo["id"], None, "cobertura_plan_quitado", f"{nombre} · {request.form.get('plan', '')}")
                 flash("Plan quitado.", "ok")
             return redirect(destino_planes)
+        elif accion == "eliminar":
+            error = srv.error_eliminar(nombre)
+            if error:
+                flash(error, "error")
+                return redirect(destino)
+            srv.eliminar_cobertura(nombre)
+            db.auditar(yo["id"], None, "cobertura", f"Baja: {nombre}")
+            flash(f"Cobertura «{nombre}» eliminada.", "ok")
+            return redirect(url_for("coberturas.coberturas"))
         return redirect(destino)
     pestana = "planes" if request.args.get("pestana") == "planes" else "datos"
     tarifas = db.q("SELECT id, nombre FROM tarifarios ORDER BY nombre")
-    protocolos = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE cobertura=?", (nombre,))["n"]
+    protocolos, facturas = srv.usos_de_cobertura(nombre)
     return render_template("coberturas/cobertura.html", c=srv.contexto_cobertura(nombre), pestana=pestana, tarifas=tarifas, general=srv.tarifa_general(),
-                           tipos_iva=facturacion.TIPOS_IVA, protocolos=protocolos)
+                           tipos_iva=facturacion.TIPOS_IVA, protocolos=protocolos, facturas=facturas)

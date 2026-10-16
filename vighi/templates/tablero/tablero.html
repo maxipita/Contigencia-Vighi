@@ -36,7 +36,10 @@
     <option value="">Cualquier médico firmante</option>
     {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.iniciales }}</option>{% endfor %}
   </select>
+  <label class="muted" title="Fecha de ingreso del protocolo">Ingresado del <input type="date" name="desde" value="{{ f.desde }}"></label>
+  <label class="muted">al <input type="date" name="hasta" value="{{ f.hasta }}"></label>
   <button class="btn sec">Filtrar</button>
+  {% if f.desde or f.hasta %}<a class="btn sec" href="{{ url_for('tablero.tablero', **dict(args, desde='', hasta='')) }}">Quitar fechas</a>{% endif %}
 </form>
 <div class="semaforo-total">
   {% for k, n in SEMAFOROS.items() %}
