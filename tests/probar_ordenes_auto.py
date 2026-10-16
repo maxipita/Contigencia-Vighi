@@ -5,6 +5,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from datos_informe import preparar
@@ -186,6 +187,22 @@ try:
     poner("bien.png", hoja("C000123"))
     hechos = vig.procesar_carpeta(carpeta, url, token, {}, None, espera=0)
     chequear("un archivo repetido no se duplica pero igual se archiva", hechos == 1 and not os.path.exists(os.path.join(carpeta, "bien.png")) and len(os.listdir(os.path.join(carpeta, "Procesadas"))) == 3)
+    sub = os.path.join(carpeta, "Batch9", "00000001")
+    os.makedirs(sub)
+    for nombre_hoja, datos_hoja in (("00000001.png", hoja("C000124", 51)), ("00000002.png", hoja(None, 52)), ("info", b"[Default] document.doc_id = 1")):
+        with open(os.path.join(sub, nombre_hoja), "wb") as f:
+            f.write(datos_hoja)
+    enviados = {}
+    hechos = vig.procesar_carpeta(carpeta, url, token, {}, None, espera=0, enviados=enviados)
+    d = destino(os.path.basename(carpeta) + "/Batch9/00000001")
+    chequear("recorre las subcarpetas del lote y sube sus hojas", hechos == 2 and sorted(enviados) == ["Batch9/00000001/00000001.png", "Batch9/00000001/00000002.png"], str((hechos, enviados)))
+    chequear("manda la ruta: las hojas de la subcarpeta quedan agrupadas bajo el protocolo de la primera", d.get("00000001.png") == (p2, "qr") and d.get("00000002.png") == (p2, "continuacion"), str(d))
+    chequear("las de las subcarpetas se quedan donde están y lo que no es un escaneo no se toca", os.path.exists(os.path.join(sub, "00000001.png")) and os.path.exists(os.path.join(sub, "info")))
+    chequear("no vuelve a subir lo ya enviado ni entra en Procesadas", vig.procesar_carpeta(carpeta, url, token, {}, None, espera=0, enviados=enviados) == 0)
+    estado_json = os.path.join(carpeta, "estado.json")
+    vig.guardar_estado(estado_json, enviados)
+    chequear("el registro de enviados se guarda y se vuelve a leer", vig.cargar_estado(estado_json) == enviados and vig.cargar_estado(os.path.join(carpeta, "no-existe.json")) == {})
+    chequear("--desde ignora lo modificado antes de esa fecha", vig.candidatos(carpeta, {}, 0, {}, desde=time.time() + 3600) == [] and len(vig.candidatos(carpeta, {}, 0, {})) >= 2)
     poner("otra.png", hoja("C000123"))
     with A.app.app_context():
         kid = db.uno("SELECT id FROM claves_api WHERE nombre='PC del escáner'")["id"]
