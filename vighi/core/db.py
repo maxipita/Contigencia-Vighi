@@ -183,6 +183,12 @@ CREATE TABLE IF NOT EXISTS claves_api (
     creada_por INTEGER REFERENCES usuarios(id), creada_en VARCHAR(19) NOT NULL,
     ultimo_uso VARCHAR(19), activa INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS onedrive_carpetas (id VARCHAR(120) PRIMARY KEY, nombre VARCHAR(255) NOT NULL, padre VARCHAR(120));
+CREATE TABLE IF NOT EXISTS onedrive_archivos (
+    id VARCHAR(120) PRIMARY KEY, nombre VARCHAR(255) NOT NULL, padre VARCHAR(120), tamano INTEGER, modificado VARCHAR(40),
+    estado VARCHAR(12) NOT NULL, detalle VARCHAR(300), intentos INTEGER NOT NULL DEFAULT 0, descubierto_en VARCHAR(19) NOT NULL, procesado_en VARCHAR(19)
+);
+CREATE TABLE IF NOT EXISTS onedrive_estado (clave VARCHAR(30) PRIMARY KEY, valor TEXT);
 CREATE TABLE IF NOT EXISTS ordenes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     protocolo_id INTEGER REFERENCES protocolos(id),

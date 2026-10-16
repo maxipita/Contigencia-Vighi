@@ -12,6 +12,14 @@
   <div class="muted">Se instalan con <code>python -m pip install -r requirements.txt</code> y reiniciando el sistema.</div>
 </div>
 {% endif %}
+{% if onedrive.configurado %}
+<div class="tarjeta" id="onedrive">
+  <h2>Lectura automática de OneDrive</h2>
+  <p>Carpeta <b>{{ onedrive.carpeta }}</b>: {{ onedrive.listos }} archivo(s) leído(s){% if onedrive.pendientes %}, {{ onedrive.pendientes }} en espera{% endif %}{% if onedrive.descartados %}, {{ onedrive.descartados }} que no se pudieron leer{% endif %}{% if onedrive.con_error %}, {{ onedrive.con_error }} con error{% endif %}.
+    {% if onedrive.ultimo %}Última revisión: {{ onedrive.ultimo | fh }}.{% else %}Todavía no hizo la primera revisión.{% endif %}</p>
+  {% if onedrive.error %}<div class="aviso-orden">{{ onedrive.error }}</div>{% endif %}
+</div>
+{% endif %}
 {% if puede('protocolo_editar') %}
 <div class="tarjeta" id="subida-ordenes" data-ordenes-subida data-csrf="{{ csrf }}" data-url="{{ url_for('ordenes.api_ordenes_subir') }}">
   <h2>Subir escaneos</h2>
