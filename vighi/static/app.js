@@ -649,7 +649,8 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
 });
 
 (function () {
-  const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado"];
+  const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado", "leucocitos", "hematies", "flora", "aspecto", "otros",
+                  "pavimentosas", "endocervicales", "metaplasicas", "endometriales"];
   document.querySelectorAll("form[data-autoguardar]").forEach((form) => {
     const estado = form.querySelector("[data-autoestado]");
     const csrf = form.querySelector("[name=_csrf]").value;
@@ -868,3 +869,27 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
   });
   pintar();
 })();
+
+document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
+  const sel = document.getElementById(caja.dataset.abrevDe);
+  if (!sel) return;
+  const marca = document.querySelector('[data-sospecha-de="' + sel.id + '"]');
+  const reflejar = () => {
+    const o = sel.selectedOptions[0];
+    caja.value = o && o.dataset.abrev ? o.dataset.abrev : "";
+    caja.classList.remove("invalida");
+    if (marca) marca.hidden = !(o && o.dataset.sospechoso);
+  };
+  const aplicar = () => {
+    const t = caja.value.trim().toLowerCase();
+    if (!t) { caja.classList.remove("invalida"); if (sel.value !== "") { sel.value = ""; sel.dispatchEvent(new Event("change", { bubbles: true })); } return; }
+    const o = [...sel.options].find((x) => (x.dataset.abrev || "").toLowerCase() === t);
+    if (!o) { caja.classList.add("invalida"); return; }
+    if (sel.value !== o.value) { sel.value = o.value; sel.dispatchEvent(new Event("change", { bubbles: true })); } else reflejar();
+  };
+  caja.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); aplicar(); } });
+  caja.addEventListener("change", aplicar);
+  caja.addEventListener("input", () => caja.classList.remove("invalida"));
+  sel.addEventListener("change", reflejar);
+  reflejar();
+});

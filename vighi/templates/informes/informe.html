@@ -35,6 +35,11 @@
       <tr><th>Diagnóstico final</th><td>{% if s.diagnostico %}<b>{{ s.diagnostico }}</b>{% if s.detalle %}<div class="texto-largo">{{ s.detalle }}</div>{% endif %}{% else %}<span class="lt">sin diagnóstico cargado</span>{% endif %}</td></tr>
       {% if s.macroscopia %}<tr><th>Macroscopía</th><td><div class="texto-largo">{{ s.macroscopia }}</div></td></tr>{% endif %}
       {% if s.microscopia %}<tr><th>{{ 'Microscopía' if s.tipo == 'BP' else 'Descripción' }}</th><td><div class="texto-largo">{{ s.microscopia }}</div></td></tr>{% endif %}
+      {% for b in s.hallazgos %}
+        {% if b.titulo %}<tr><th colspan="2" style="padding-top:14px">{{ b.titulo }}</th></tr>{% endif %}
+        {% for rotulo, valor in b.filas %}<tr><th>{{ rotulo }}</th><td>{{ valor }}</td></tr>{% endfor %}
+      {% endfor %}
+      {% if s.observaciones %}<tr><th>Observaciones</th><td><div class="texto-largo">{{ s.observaciones }}</div></td></tr>{% endif %}
       {% if s.tecnicas %}<tr><th>Técnicas especiales</th><td>{{ s.tecnicas }}</td></tr>{% endif %}
       {% if s.ihq %}<tr><th>Inmunohistoquímica</th><td><div class="texto-largo">{{ s.ihq }}</div></td></tr>{% endif %}
     </table>

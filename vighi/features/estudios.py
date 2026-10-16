@@ -11,6 +11,7 @@ from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_pos
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
 from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
+from vighi.servicios.pap import aplicar_sospecha, contexto as contexto_pap, valores_de_formulario as valores_pap
 from vighi.servicios.lotes import asignar_lote, avisar_lote_lleno, concretar_lote, lote_del_protocolo, lotes_para_formulario, primer_estudio, ubicar_en_lote, validar_lote, SQL_LOTES_ABIERTOS
 from vighi.servicios.tareas import cerrar_por_etapa, crear_tarea, tipo_solicitud_ihq
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, SQL_COMENTARIOS, comentarios_de, contexto_formulario, crear_estudio, estudios_del_formulario, leer_estudio, opciones_de_edicion, protocolo_o_404, recordar_tecnicas, sin_repetidos, validar_estudios
@@ -236,7 +237,7 @@ def estudio(eid):
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
-                           tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), bethesda=listas().get("bethesda", []),
+                           tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), pap=contexto_pap() if tipo.micro_pap else None,
                            tecnicas_pedidas=sin_repetidos(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";")),
                            lista_ihq=listas().get("ihq_marcadores", []),
                            filtro_templates={"zona": e["subcategoria"] or "", "organo": e["sitio"] or "", "tipo": e["tipo_muestra"] or ""},
@@ -342,15 +343,16 @@ def guardar_micro(eid):
             return jsonify(ok=False, error=motivo), 409
         flash(f"No se guardó: {motivo}", "error")
         return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
+    es_pap = REGISTRO[e["tipo"]].micro_pap
+    valores = valores_pap(request.form) if es_pap else {"template": request.form.get("template", "").strip(),
+                                                        "descripcion": request.form.get("descripcion", "").strip(),
+                                                        "conclusion": request.form.get("conclusion", "").strip()}
+    guardar_seccion("micro", e["flujo_id"], valores)
+    if es_pap:
+        aplicar_sospecha(e, micro, valores["resultado"], usuario_actual())
     if auto:
-        guardar_seccion("micro", e["flujo_id"], {"template": request.form.get("template", "").strip(), "descripcion": request.form.get("descripcion", "").strip(),
-                                              "conclusion": request.form.get("conclusion", "").strip(), "bethesda": request.form.get("bethesda", "").strip()})
         auditar_autoguardado(usuario_actual(), e, "guardar_micro")
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
-    guardar_seccion("micro", e["flujo_id"], {"template": request.form.get("template", "").strip(),
-                                          "descripcion": request.form.get("descripcion", "").strip(),
-                                          "conclusion": request.form.get("conclusion", "").strip(),
-                                          "bethesda": request.form.get("bethesda", "").strip()})
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_micro", "", eid)
     flash("Microscopía guardada.", "ok")
     if request.form.get("y_listo"):

@@ -15,7 +15,7 @@ from reportlab.platypus import (BaseDocTemplate, Frame, HRFlowable, Image, KeepT
 
 from vighi.core import almacen
 from vighi.core import db
-from vighi.dominio.estudios import REGISTRO, Variante
+from vighi.dominio.estudios import REGISTRO, Variante, pap
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO = os.path.join(BASE, "static", "img", "logo.png")
@@ -165,8 +165,11 @@ def armar(pid, comentario=""):
         micro = db.uno("SELECT * FROM micro WHERE flujo_id=?", (e["flujo_id"],))
         ihq = db.uno("SELECT * FROM ihq WHERE flujo_id=?", (e["flujo_id"],))
         cuerpo = _t(micro, "conclusion")
-        if tipo.bethesda and _t(micro, "bethesda"):
-            diag, detalle = _t(micro, "bethesda"), cuerpo or _t(micro, "descripcion")
+        estructura = tipo.micro_pap and pap.tiene_estructura(micro)
+        if estructura:
+            diag, detalle = pap.resultado_de(micro), ""
+        elif tipo.micro_pap and pap.resultado_de(micro):
+            diag, detalle = pap.resultado_de(micro), cuerpo or _t(micro, "descripcion")
         elif cuerpo:
             primera, _, resto = cuerpo.partition("\n")
             diag, detalle = primera.strip(), resto.strip()
@@ -190,7 +193,8 @@ def armar(pid, comentario=""):
             avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico final.")
         secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "material": "\n".join(materiales),
                           "diagnostico": diag, "detalle": detalle,
-                          "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": _t(micro, "descripcion"),
+                          "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": "" if estructura else _t(micro, "descripcion"),
+                          "hallazgos": pap.hallazgos(micro) if estructura else [], "observaciones": cuerpo if estructura else "",
                           "tecnicas": "; ".join(dict.fromkeys(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";") if x.strip()))
                           or _t(micro, "tecnicas_especiales"), "ihq": ihq_txt})
     if not tiene_firma:
@@ -308,6 +312,13 @@ def _construir(d, total, firma_png):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 12), ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 11)])))
             flujo.append(Spacer(1, 8))
         seccion("MATERIAL", est["material"])
+        for b in est["hallazgos"]:
+            filas_b = [[Paragraph(escape(a), s["etiqueta"]), _p(v, s["valor"])] for a, v in b["filas"]]
+            tabla = Table(filas_b, colWidths=[110, util - 110], style=TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
+            cabecera = [HRFlowable(width="100%", thickness=0.6, color=BORDE, spaceBefore=2, spaceAfter=7), Paragraph(b["titulo"].upper(), s["seccion"])] if b["titulo"] else []
+            flujo.append(KeepTogether(cabecera + [tabla, Spacer(1, 6)]))
+        seccion("OBSERVACIONES", est["observaciones"])
         seccion("MACROSCOPÍA", est["macroscopia"])
         seccion("MICROSCOPÍA" if est["tipo"] == "BP" else "DESCRIPCIÓN", est["microscopia"])
         seccion("TÉCNICAS ESPECIALES", est["tecnicas"])

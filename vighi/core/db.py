@@ -96,7 +96,15 @@ CREATE TABLE IF NOT EXISTS macro (
 CREATE TABLE IF NOT EXISTS micro (
     flujo_id INTEGER PRIMARY KEY REFERENCES flujos(id),
     template VARCHAR(120), descripcion TEXT, conclusion TEXT,
-    bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0
+    bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0,
+    leucocitos VARCHAR(40), hematies VARCHAR(40), flora VARCHAR(200), aspecto VARCHAR(200), otros VARCHAR(200),
+    pavimentosas VARCHAR(200), endocervicales VARCHAR(200), metaplasicas VARCHAR(200), endometriales VARCHAR(200), resultado VARCHAR(200)
+);
+CREATE TABLE IF NOT EXISTS abreviaturas_pap (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo VARCHAR(20) NOT NULL, orden INTEGER NOT NULL, abreviatura VARCHAR(20) NOT NULL, descripcion VARCHAR(200) NOT NULL,
+    sospechoso INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tipo, orden)
 );
 CREATE TABLE IF NOT EXISTS ihq (
     flujo_id INTEGER PRIMARY KEY REFERENCES flujos(id),
@@ -368,7 +376,7 @@ def cerrar(_=None):
         c.close()
 
 
-REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo", "tarifario_coberturas")
+REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo", "tarifario_coberturas", "abreviaturas_pap")
 VIGENCIA_REFERENCIA = 120
 _fijas = {}
 
@@ -574,6 +582,10 @@ def preparar_esquema(c):
                                    ("ihq", "pedido_en", "VARCHAR(19)"),
                                    ("ihq", "pedido_por", "INTEGER"),
                                    ("estudios", "flujo_id", "INTEGER"),
+                                   ("micro", "leucocitos", "VARCHAR(40)"), ("micro", "hematies", "VARCHAR(40)"),
+                                   ("micro", "flora", "VARCHAR(200)"), ("micro", "aspecto", "VARCHAR(200)"), ("micro", "otros", "VARCHAR(200)"),
+                                   ("micro", "pavimentosas", "VARCHAR(200)"), ("micro", "endocervicales", "VARCHAR(200)"),
+                                   ("micro", "metaplasicas", "VARCHAR(200)"), ("micro", "endometriales", "VARCHAR(200)"), ("micro", "resultado", "VARCHAR(200)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
@@ -663,6 +675,12 @@ def inicializar():
     if not c.execute("SELECT 1 FROM listas LIMIT 1").fetchone():
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [(n, i, v) for n, vals in cargar("listas.json").items() for i, v in enumerate(vals)])
+    if not c.execute("SELECT 1 FROM abreviaturas_pap LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "abreviaturas_pap.json")):
+        try:
+            c.executemany("INSERT INTO abreviaturas_pap (tipo, orden, abreviatura, descripcion, sospechoso) VALUES (?,?,?,?,?)",
+                          [(x["tipo"], x["orden"], x["abreviatura"], x["descripcion"], 1 if x["sospechoso"] else 0) for x in cargar("abreviaturas_pap.json")])
+        except sqlite3.IntegrityError:
+            pass
     actuales = [r[0] for r in c.execute("SELECT valor FROM listas WHERE nombre='cobertura' ORDER BY orden")]
     if actuales in ([], ["Particular", "Obra Social", "Prepaga"]):
         c.execute("DELETE FROM listas WHERE nombre='cobertura'")

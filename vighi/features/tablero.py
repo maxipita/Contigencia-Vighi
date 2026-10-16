@@ -157,7 +157,7 @@ def exportar():
                 p["lugar_entrega"], p["observaciones"], e["categoria"], e["subcategoria"], e["sitio"], e["tipo_muestra"],
                 e["cantidad"], e["citologia_hormonal"], e["observaciones"],
                 g(ma, "template"), g(ma, "descripcion"), g(ma, "cassettes"),
-                g(mi, "template"), g(mi, "descripcion"), g(mi, "conclusion"), g(mi, "bethesda"),
+                g(mi, "template"), g(mi, "descripcion"), g(mi, "conclusion"), g(mi, "resultado") or g(mi, "bethesda"),
                 e["tecnicas_especiales"] or g(mi, "tecnicas_especiales"), "Si" if mi and mi["solicita_ihq"] else "", g(ih, "marcadores"), g(ih, "resultado")]
         for k in orden_etapas:
             x = et.get(k)

@@ -233,10 +233,31 @@
       {% if not edita_micro[0] %}<div class="aviso">🔒 {{ edita_micro[1] }}</div>{% endif %}
       <fieldset class="seccion" {{ 'disabled' if not edita_micro[0] }}>
       <div class="grilla">
-        {% if tipo.bethesda %}
-          <div><label>Resultado (Bethesda)</label><select name="bethesda"><option value="" hidden>Seleccionar…</option>
-            {% for x in bethesda %}<option {{ 'selected' if micro and micro.bethesda == x }}>{{ x }}</option>{% endfor %}</select></div>
-        {% endif %}
+        {% if tipo.micro_pap %}
+        {% macro fila_pap(k, rotulo) %}
+          {% set actual = ((micro['resultado'] or micro['bethesda']) if k == 'resultado' else micro[k]) if micro else '' %}
+          {% set opciones = pap.opciones.get(k, []) %}
+          <div class="pap-fila"><label for="pap_{{ k }}">{{ rotulo }}</label>
+            <input class="pap-abrev" data-abrev-de="pap_{{ k }}" maxlength="12" autocomplete="off" aria-label="Abreviatura de {{ rotulo }}">
+            <select name="{{ k }}" id="pap_{{ k }}"><option value="">[ N/D ]</option>
+              {% if actual and actual not in opciones | map(attribute='texto') | list %}<option value="{{ actual }}" selected>{{ actual }}</option>{% endif %}
+              {% for o in opciones %}<option value="{{ o.texto }}" data-abrev="{{ o.abrev }}"{% if o.sospechoso %} data-sospechoso="1"{% endif %}{{ ' selected' if o.texto == actual }}>{{ o.texto }}</option>{% endfor %}</select>
+            {% if k == 'resultado' %}<span class="chip sospechoso" data-sospecha-de="pap_resultado" hidden>Sospechoso</span>{% endif %}</div>
+        {% endmacro %}
+        <div class="ancho pap-micro">
+          {% for k, rotulo in pap.simples %}
+          <div class="pap-fila pap-simple"><label for="pap_{{ k }}">{{ rotulo }}</label>
+            <select name="{{ k }}" id="pap_{{ k }}">{% for marca, texto in pap.escala %}<option value="{{ texto }}" {{ 'selected' if micro and micro[k] == texto }}>{{ marca }} {{ texto }}</option>{% endfor %}</select></div>
+          {% endfor %}
+          <h3>Citología hormonal</h3>
+          {% for k, rotulo in pap.hormonal %}{{ fila_pap(k, rotulo) }}{% endfor %}
+          <h3>Citología oncológica</h3>
+          {% for k, rotulo in pap.oncologica %}{{ fila_pap(k, rotulo) }}{% endfor %}
+          {{ fila_pap(pap.resultado[0], pap.resultado[1]) }}
+          <div class="pap-fila pap-obs"><label for="concl_micro">Observaciones</label>
+            <textarea name="conclusion" id="concl_micro" rows="3" placeholder="Observaciones…">{{ micro.conclusion if micro else '' }}</textarea></div>
+        </div>
+        {% else %}
         <div class="ancho"><label>Template micro</label>{{ select_template(tpl_micro, micro.template if micro else '', 'desc_micro', 'concl_micro') }}</div>
         <div class="ancho"><label>Descripción microscópica</label>
           <textarea name="descripcion" id="desc_micro" rows="7">{{ micro.descripcion if micro else '' }}</textarea></div>
@@ -250,6 +271,7 @@
         <div><label>¿Solicita IHQ?</label>
           <select data-ihq-toggle {{ 'disabled' if ihq_confirmado }}>
             <option value="0">No</option><option value="1" {{ 'selected' if ihq_confirmado or marcadores_ihq or (micro and micro.solicita_ihq) }}>Sí{{ ' (pedido confirmado)' if ihq_confirmado }}</option></select></div>
+        {% endif %}
         {% endif %}
       </div>
       <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('microscopia') }}</div>

@@ -1,0 +1,975 @@
+[
+ {
+  "tipo": "flora",
+  "orden": 10,
+  "abreviatura": "EBL",
+  "descripcion": "Escasa cantidad de bacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 20,
+  "abreviatura": "MBL",
+  "descripcion": "Moderada cantidad de bacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 30,
+  "abreviatura": "ABL",
+  "descripcion": "Abundante cantidad de bacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 40,
+  "abreviatura": "BHM",
+  "descripcion": "Bacilar - Hifas micóticas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 50,
+  "abreviatura": "BHEM",
+  "descripcion": "Bacilar - Hifas y esporas micóticas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 60,
+  "abreviatura": "BA",
+  "descripcion": "Bacilar . Actinomyces Israelli",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 70,
+  "abreviatura": "BL",
+  "descripcion": "Bacilar . Leptotrhix",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 80,
+  "abreviatura": "EC",
+  "descripcion": "Escasa cantidad de cocos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 90,
+  "abreviatura": "MC",
+  "descripcion": "Moderada cantidad de cocos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 100,
+  "abreviatura": "AC",
+  "descripcion": "Abundante cantidad de cocos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 110,
+  "abreviatura": "ABC",
+  "descripcion": "Abundantes bacilos y cocos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 120,
+  "abreviatura": "MCG",
+  "descripcion": "Moderada cantidad de cocos tipo Gardenerella",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 130,
+  "abreviatura": "CEM",
+  "descripcion": "Cocos - Esporas micóticas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 140,
+  "abreviatura": "ACG",
+  "descripcion": "Abundante cantidad de cocos tipo Gardenerella",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 150,
+  "abreviatura": "CHM",
+  "descripcion": "Cocos - hifas micóticas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 160,
+  "abreviatura": "CT",
+  "descripcion": "Cocos - Trichomonas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 170,
+  "abreviatura": "ACT",
+  "descripcion": "Abundantes cocos - moderada cantidad de Trichomonas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 180,
+  "abreviatura": "ECB",
+  "descripcion": "Escasa cantidad de cocobacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 190,
+  "abreviatura": "MCB",
+  "descripcion": "Moderada cantidad de cocobacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "flora",
+  "orden": 200,
+  "abreviatura": "ACB",
+  "descripcion": "Abundante cantidad de cocobacilos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 10,
+  "abreviatura": "HIPERT",
+  "descripcion": "Hipertrófico",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 20,
+  "abreviatura": "TF",
+  "descripcion": "Trófico",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 30,
+  "abreviatura": "TFI",
+  "descripcion": "Trófico . Inflamatorio",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 40,
+  "abreviatura": "HT",
+  "descripcion": "Hipotrófico",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 50,
+  "abreviatura": "HTC",
+  "descripcion": "Hipotrófico - Citolítico",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 60,
+  "abreviatura": "HTI",
+  "descripcion": "Hipotrófico - inflamatorio",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 70,
+  "abreviatura": "TD",
+  "descripcion": "Trofismo disociado",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 80,
+  "abreviatura": "TDI",
+  "descripcion": "Trofismo disociado - Inflamatorio",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 90,
+  "abreviatura": "AT",
+  "descripcion": "Atrófico",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 100,
+  "abreviatura": "ATI",
+  "descripcion": "Atrófico - Inflamatorio",
+  "sospechoso": false
+ },
+ {
+  "tipo": "aspecto",
+  "orden": 110,
+  "abreviatura": "TNE",
+  "descripcion": "Trofismo no evaluable",
+  "sospechoso": false
+ },
+ {
+  "tipo": "otros",
+  "orden": 10,
+  "abreviatura": "EH",
+  "descripcion": "Escasa cantidad de histiocitos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "otros",
+  "orden": 20,
+  "abreviatura": "MH",
+  "descripcion": "Moderada cantidad de histiocitos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "otros",
+  "orden": 30,
+  "abreviatura": "AH",
+  "descripcion": "Abundante cantidad de histiocitos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "otros",
+  "orden": 40,
+  "abreviatura": "HMM",
+  "descripcion": "Histiocitos mono y multinucleados",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 10,
+  "abreviatura": "ACB",
+  "descripcion": "Aisladas con cambios benignos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 20,
+  "abreviatura": "CB",
+  "descripcion": "Con cambios benignos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 30,
+  "abreviatura": "CIT",
+  "descripcion": "No se visualizan por avanzado proceso de citólisis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 40,
+  "abreviatura": "DES",
+  "descripcion": "Con cambios nucleares y citoplasmáticos vinculables a desecación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 50,
+  "abreviatura": "CBB",
+  "descripcion": "Con cambios benignos, aislada binucleación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 60,
+  "abreviatura": "CBM",
+  "descripcion": "Con cambios benignos, aislada macrocariosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 70,
+  "abreviatura": "CBMB",
+  "descripcion": "Con cambios benignos, aislada macrocariosis y binucleación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 80,
+  "abreviatura": "CBD",
+  "descripcion": "Con cambios benignos, disqueratosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 90,
+  "abreviatura": "CBEC",
+  "descripcion": "Con cambios benignos, escamas córneas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 100,
+  "abreviatura": "LAI",
+  "descripcion": "Con leves anomalías inflamatorias",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 110,
+  "abreviatura": "MOAI",
+  "descripcion": "Con moderadas anomalías inflamatorias",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 120,
+  "abreviatura": "MAIM",
+  "descripcion": "Con moderadas anomalías inflamatorias, macrocariosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 130,
+  "abreviatura": "MAAI",
+  "descripcion": "Con marcadas anomalías inflamatorias",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 140,
+  "abreviatura": "HERPES",
+  "descripcion": "Con macrocariosis, multinucleación y núcleos en vidrio esmerilado",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 150,
+  "abreviatura": "IMD",
+  "descripcion": "Con anomalías inflamatorias, macrocariosis y disqueratosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 160,
+  "abreviatura": "CAT",
+  "descripcion": "En colgajos con fenómenos irritativos por atrofia",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 170,
+  "abreviatura": "AT",
+  "descripcion": "Con cambios por atrofia",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 180,
+  "abreviatura": "ATD",
+  "descripcion": "Con cambios por atrofia, disqueratosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 190,
+  "abreviatura": "ATI",
+  "descripcion": "Con anomalías por atrofia e inflamación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 200,
+  "abreviatura": "MAT",
+  "descripcion": "Con marcadas anomalías por atrofia",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 210,
+  "abreviatura": "CBRR",
+  "descripcion": "Con anomalías benignas reactivas y reparativas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 220,
+  "abreviatura": "CAR",
+  "descripcion": "En colgajos con anomalías reparativas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 230,
+  "abreviatura": "ACM",
+  "descripcion": "Con amfofilia citoplasmática y aislada macrocariosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 240,
+  "abreviatura": "DVC",
+  "descripcion": "Con disqueratosis y vacuolización citoplasmática",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 250,
+  "abreviatura": "MBL",
+  "descripcion": "Con macrocariosis y binucleación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 260,
+  "abreviatura": "MBD",
+  "descripcion": "Con disqueratosis, macrocariosis y binucleación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 280,
+  "abreviatura": "MBC",
+  "descripcion": "Con macrocariosis, binucleación y aislada coilocitosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 290,
+  "abreviatura": "CMDS",
+  "descripcion": "Con coilocitosis, macrocariosis y discariosis superficial",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 300,
+  "abreviatura": "CMDI",
+  "descripcion": "Con coilocitosis, macrocariosis y discariosis intermedia",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 310,
+  "abreviatura": "CMDP",
+  "descripcion": "Con coilocitosis, macrocariosis y discariosis parabasal",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 320,
+  "abreviatura": "DDS",
+  "descripcion": "Con disqueratosis y discariosis superficial",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 330,
+  "abreviatura": "DSC",
+  "descripcion": "Con discariosis superficial y aislada coilocitosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 340,
+  "abreviatura": "DSI",
+  "descripcion": "Con discariosis superficial e intermedia",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 350,
+  "abreviatura": "DI",
+  "descripcion": "Con discariosis en células intermedias",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 360,
+  "abreviatura": "DIP",
+  "descripcion": "Con discariosis intermedia y parabasal",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 370,
+  "abreviatura": "ADP",
+  "descripcion": "Con atipía y discariosis de células parabasales.",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 380,
+  "abreviatura": "AN",
+  "descripcion": "Con atipía citológica y necrosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 390,
+  "abreviatura": "RAYOS",
+  "descripcion": "Con anomalías celulares atribuibles a efecto radiante",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 400,
+  "abreviatura": "VAC",
+  "descripcion": "Vacuolización citoplasmática",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 410,
+  "abreviatura": "PC",
+  "descripcion": "En proceso de citólisis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 420,
+  "abreviatura": "mhn",
+  "descripcion": "Con macrocariosis e hipercromasia nuclear",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 430,
+  "abreviatura": "HPVPAV",
+  "descripcion": "con macrocariosis, binucleación y coilocitosis.",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 440,
+  "abreviatura": "CCL",
+  "descripcion": "Cubiertas por polinucleares",
+  "sospechoso": false
+ },
+ {
+  "tipo": "pavimentosas",
+  "orden": 500,
+  "abreviatura": "Q y P",
+  "descripcion": "Cambios benignos, queratosis y disqueratosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 10,
+  "abreviatura": "NO",
+  "descripcion": "No se observan",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 20,
+  "abreviatura": "MEMI",
+  "descripcion": "Con signos morfológicos de metaplasia escamosa madura e inmadura",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 30,
+  "abreviatura": "AB",
+  "descripcion": "Aisladas con cambios benignos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 40,
+  "abreviatura": "SG",
+  "descripcion": "Sueltas y en grupos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 50,
+  "abreviatura": "AAT",
+  "descripcion": "Aisladas y en acúmulos típicos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 60,
+  "abreviatura": "CCT",
+  "descripcion": "Aislados colgajos celulares típicos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 70,
+  "abreviatura": "IRRIT",
+  "descripcion": "Aislados colgajos celulares con anomalías irritativas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 80,
+  "abreviatura": "SOSP",
+  "descripcion": "Colgajos típicos y otros con macrocariosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 90,
+  "abreviatura": "AIS",
+  "descripcion": "En colgajos con macrocariosis y desflecamiento",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 100,
+  "abreviatura": "ADENO",
+  "descripcion": "Con anomalías en células glandulares vinculables a atipía",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 101,
+  "abreviatura": "HM",
+  "descripcion": "Cubiertas por hematíes.",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endocervicales",
+  "orden": 102,
+  "abreviatura": "AGCR",
+  "descripcion": "Aisladas y en grupos con cambios reactivos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 10,
+  "abreviatura": "NO",
+  "descripcion": "No se observan",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 20,
+  "abreviatura": "AMI",
+  "descripcion": "Abundantes maduras e inmaduras",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 30,
+  "abreviatura": "MII",
+  "descripcion": "Maduras e inmaduras con fenómenos irritativos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 40,
+  "abreviatura": "ISE",
+  "descripcion": "Inmaduras, sueltas, en escasa cantidad",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 50,
+  "abreviatura": "IGE",
+  "descripcion": "Inmaduras, en grupos, escasa cantidad",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 70,
+  "abreviatura": "MIR",
+  "descripcion": "Maduras e inmaduras con cambios reactivos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 80,
+  "abreviatura": "MIRP",
+  "descripcion": "Maduras e inmaduras con fenómenos de tejido de reparación",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 90,
+  "abreviatura": "MM",
+  "descripcion": "Escasas células metaplásicas maduras",
+  "sospechoso": false
+ },
+ {
+  "tipo": "metaplasicas",
+  "orden": 100,
+  "abreviatura": "Ma",
+  "descripcion": "Células metaplásicas con discariosis",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endometriales",
+  "orden": 10,
+  "abreviatura": "NO",
+  "descripcion": "No se observan",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endometriales",
+  "orden": 20,
+  "abreviatura": "AB",
+  "descripcion": "Aisladas con cambios benignos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endometriales",
+  "orden": 30,
+  "abreviatura": "AG",
+  "descripcion": "Aisladas y en grupos",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endometriales",
+  "orden": 40,
+  "abreviatura": "IRRIT",
+  "descripcion": "Con anomalías irritativas",
+  "sospechoso": false
+ },
+ {
+  "tipo": "endometriales",
+  "orden": 50,
+  "abreviatura": "SOSP",
+  "descripcion": "Con macrocariosis y atipía",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 10,
+  "abreviatura": "NEG",
+  "descripcion": "NEGATIVO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 20,
+  "abreviatura": "NEGIN",
+  "descripcion": "NEGATIVO. INFLAMATORIO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 30,
+  "abreviatura": "HIP",
+  "descripcion": "HIPOCELULAR",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 40,
+  "abreviatura": "INF",
+  "descripcion": "INFLAMATORIO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 50,
+  "abreviatura": "INFCC",
+  "descripcion": "INFLAMATORIO (campos cubiertos por leucocitos)",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 60,
+  "abreviatura": "NEGCIT",
+  "descripcion": "NEGATIVO. CITOLITICO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 70,
+  "abreviatura": "NEGHIP",
+  "descripcion": "NEGATIVO. HIPOCELULAR",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 80,
+  "abreviatura": "NEGAT",
+  "descripcion": "NEGATIVO. ATROFICO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 90,
+  "abreviatura": "NEGHEM",
+  "descripcion": "NEGATIVO. HEMORRAGICO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 100,
+  "abreviatura": "HEM",
+  "descripcion": "EXTENDIDO HEMORRAGICO",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 110,
+  "abreviatura": "DES",
+  "descripcion": "EXTENDIDO DESECADO",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 120,
+  "abreviatura": "NEGLD",
+  "descripcion": "NEGATIVO. LIMITADO POR DESECACION",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 130,
+  "abreviatura": "NEGLC",
+  "descripcion": "NEGATIVO. LIMITADO POR CITOLISIS",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 140,
+  "abreviatura": "NEGLI",
+  "descripcion": "NEGATIVO. LIMITADO POR EXUDADO INFLAMATORIO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 150,
+  "abreviatura": "HERPES",
+  "descripcion": "CAMBIOS SUGESTIVOS DE INFECCION VIRAL HERPES",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 160,
+  "abreviatura": "ASC",
+  "descripcion": "ASC (Hallazgos sugestivos de SIL)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 170,
+  "abreviatura": "ASCUS",
+  "descripcion": "ASC-US (hallazgos sugestivos de SIL de bajo grado)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 180,
+  "abreviatura": "ASCH",
+  "descripcion": "ASC-H (células escamosas anómalas, no es posible descartar HSIL)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 190,
+  "abreviatura": "SUGES",
+  "descripcion": "CUADRO CITOLOGICO SUGESTIVO DE INFECCION VIRAL (HPV)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 200,
+  "abreviatura": "HPV",
+  "descripcion": "SIL DE BAJO GRADO (HPV)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 210,
+  "abreviatura": "CIN1-HPV",
+  "descripcion": "SIL DE BAJO GRADO (CIN1-HPV)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 220,
+  "abreviatura": "CIN1",
+  "descripcion": "SIL DE BAJO GRADO (CIN1)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 230,
+  "abreviatura": "CIN2-HPV",
+  "descripcion": "SIL DE ALTO GRADO (CIN2-HPV)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 240,
+  "abreviatura": "CIN2",
+  "descripcion": "SIL DE ALTO GRADO (CIN2)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 250,
+  "abreviatura": "CIN3",
+  "descripcion": "SIL DE ALTO GRADO (CIN3)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 260,
+  "abreviatura": "CA",
+  "descripcion": "CARCINOMA ESCAMOSO",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 270,
+  "abreviatura": "ACG",
+  "descripcion": "ACG (células glandulares anómalas)",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 280,
+  "abreviatura": "AIS",
+  "descripcion": "VINCULABLE A ADENOCARCINOMA IN SITU",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 290,
+  "abreviatura": "ADENO",
+  "descripcion": "POSITIVO, VINCULABLE A ADENOCARCINOMA",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 300,
+  "abreviatura": "RAYOS",
+  "descripcion": "CAMBIOS VINCULABLES A IRRADIACION",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 310,
+  "abreviatura": "NOEV",
+  "descripcion": "NO EVALUABLE",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 320,
+  "abreviatura": "TTO",
+  "descripcion": "CAMBIOS VINCULABLES A TRATAMIENTO",
+  "sospechoso": true
+ },
+ {
+  "tipo": "resultado",
+  "orden": 400,
+  "abreviatura": "ATR",
+  "descripcion": "EXTENDIDO ATROFICO",
+  "sospechoso": false
+ },
+ {
+  "tipo": "resultado",
+  "orden": 410,
+  "abreviatura": "PsCar",
+  "descripcion": "POSITIVO PARA CARCINOMA",
+  "sospechoso": false
+ }
+]
