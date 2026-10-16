@@ -32,9 +32,9 @@
     <option value="">Cualquier ubicación</option>
     {% for l in lugares %}<option value="{{ l }}" {{ 'selected' if f.ubicacion == l }}>{{ l }}</option>{% endfor %}
   </select>
-  <select name="mf" title="Médico firmante">
+  <select name="mf" title="Médico firmante (iniciales)">
     <option value="">Cualquier médico firmante</option>
-    {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>MF: {{ u.nombre or u.iniciales }}</option>{% endfor %}
+    {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.iniciales }}</option>{% endfor %}
   </select>
   <button class="btn sec">Filtrar</button>
 </form>
