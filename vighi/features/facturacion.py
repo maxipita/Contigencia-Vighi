@@ -12,6 +12,7 @@ from vighi.dominio import facturacion
 from vighi.servicios.catalogo import tipos_de_muestra, tipos_de_muestra_bp
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios import factura_archivos as adjuntos
+from vighi.servicios.factura_soporte import soporte_de
 from vighi.servicios.coberturas import contexto_cobertura
 from vighi.servicios.facturas import (coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, items_de_factura,
                                      planilla_de_tarifa, sentencias_asignacion, tarifa_elegida)
@@ -161,7 +162,7 @@ def facturar():
 def factura(fid):
     return render_template("facturacion/factura.html", f=factura_o_404(fid), items=items_de_factura(fid), estados=facturacion.ESTADOS,
                            clases=facturacion.CLASES_ESTADO, tipos_iva=facturacion.TIPOS_IVA, hoy=hoy(), tipos_fec=facturacion.TIPOS_FEC, dos=dos_decimales,
-                           archivos=adjuntos.archivos_de(fid), tamano=adjuntos.tamano_legible, visibles=adjuntos.VISIBLES)
+                           archivos=adjuntos.archivos_de(fid), tamano=adjuntos.tamano_legible, visibles=adjuntos.VISIBLES, soporte=soporte_de(fid))
 
 
 @bp.route("/facturacion/<int:fid>/guardar", methods=["POST"])

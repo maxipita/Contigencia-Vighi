@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Factura del sistema anterior{% endblock %}
+{% block contenido %}
+<p class="no-imprimir"><a href="{{ url_for('facturacion.administracion') }}">Administración</a> › <a href="{{ url_for('facturacion.facturacion_lista') }}">Facturación</a></p>
+<div class="eyebrow">Facturación</div>
+<h1>Cargar una factura del sistema anterior</h1>
+<p class="muted">Subí el soporte extraído del sistema anterior (Excel o CSV). Se crea la factura como <b>emitida</b> con los importes del soporte y se genera la planilla de pacientes en el formato del sistema nuevo.
+  Las fechas se cargan a mano.</p>
+<form method="post" enctype="multipart/form-data" class="tarjeta">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="grilla">
+    <div><label>Número de factura *</label><input name="numero" value="{{ d.numero }}" required autocomplete="off" placeholder="PJ_Sept26"></div>
+    <div><label>Cobertura</label>
+      <select name="cobertura"><option value="">(la del soporte)</option>{% for c in coberturas %}<option {{ 'selected' if d.cobertura == c }}>{{ c }}</option>{% endfor %}</select></div>
+    <div><label>Fecha de factura (FF) *</label><input type="date" name="fecha_factura" value="{{ d.fecha_factura }}" required></div>
+    <div><label>Fecha estimada de cobro (FEC)</label><input type="date" name="fecha_estimada_cobro" value="{{ d.fecha_estimada_cobro }}"></div>
+    <div><label>Tipo de fecha</label>
+      <select name="fec_tipo">{% for k, n in tipos_fec.items() %}<option value="{{ k }}" {{ 'selected' if d.fec_tipo == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div><label>Soporte (Excel o CSV) *</label><input type="file" name="soporte" required accept=".xlsx,.xlsm,.csv,.txt"></div>
+  </div>
+  <p class="muted">Columnas que lee: Fecha, Protocolo, Descripcion (estudio), Paciente, NroCredencial (afiliado), Nomenclador, Unidades, Neto, Cond.IVA, IVA, Bruto y Cobertura.
+    Si una fila tiene un error, no se carga nada y se indica cuál.</p>
+  <div class="acciones"><button class="btn">Cargar factura</button><a class="btn sec" href="{{ url_for('facturacion.facturacion_lista') }}">Cancelar</a></div>
+</form>
+{% endblock %}
