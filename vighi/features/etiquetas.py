@@ -7,7 +7,7 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO
-from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, ubicaciones_abreviaturas, etiquetas_cantidad, qrs_protocolos, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
+from vighi.servicios.etiquetas import ESTUDIO_LAB, lotes_previstos, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, ubicaciones_abreviaturas, etiquetas_cantidad, qrs_protocolos, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
 from vighi.servicios.lotes import tipos_lote
 
 bp = Blueprint("etiquetas", __name__)
@@ -49,6 +49,17 @@ def api_etiquetas_estado():
             return jsonify({"error": "Fecha inválida."}), 400
     lote = request.args.get("lote", "")
     return jsonify({"historial": etiquetas_historial(), "casos": etiquetas_casos(fecha or None, int(lote) if lote.isdigit() else None)})
+
+
+@bp.route("/api/etiquetas/lotes-previstos")
+@requiere_permiso("etiquetas_recepcion", "etiquetas_lab")
+def api_etiquetas_lotes_previstos():
+    fecha = request.args.get("fecha", "")
+    try:
+        datetime.strptime(fecha, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({}), 400
+    return jsonify(lotes_previstos(fecha))
 
 
 @bp.route("/api/etiquetas/qr")
@@ -104,7 +115,7 @@ def api_etiquetas_confirmar():
         params = {"fecha": p["fecha"], "lote": p["lote"], "cito": cito, "ubicacion": ubicacion}
         est = REGISTRO[estudio_de_lote(p["lote"])]
         borradores = {"estudio": est.clave, "categoria": est.categoria, "subcategoria": est.subcategoria_fija,
-                      "sitio": est.sitio_fijo, "tipo_lote": cito if paps else p["lote"], "fecha_lote": hoy(),
+                      "sitio": est.sitio_fijo, "tipo_lote": cito if paps else p["lote"], "fecha_lote": p["fecha"] if estudio_de_lote(p["lote"]) == "PAP" else hoy(),
                       "fecha_rec": p["fecha"], "lugar": ubicacion or None, "protocolos": [numero_protocolo(k) for k in range(desde, hasta + 1)],
                       "responsable_id": (db.uno("SELECT id FROM usuarios WHERE iniciales=?", (cito,))["id"] if paps else None)}
         por_proto, total = 2, n * 2

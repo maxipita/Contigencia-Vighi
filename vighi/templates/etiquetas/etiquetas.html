@@ -165,7 +165,7 @@
 
 <script>
 window.CSRF = {{ csrf|tojson }};
-window.URLS = {"confirmar": {{ url_for('etiquetas.api_etiquetas_confirmar')|tojson }}, "estado": {{ url_for('etiquetas.api_etiquetas_estado')|tojson }}, "qrs": {{ url_for('etiquetas.api_etiquetas_qr')|tojson }},
+window.URLS = {"confirmar": {{ url_for('etiquetas.api_etiquetas_confirmar')|tojson }}, "estado": {{ url_for('etiquetas.api_etiquetas_estado')|tojson }}, "qrs": {{ url_for('etiquetas.api_etiquetas_qr')|tojson }}, "previstos": {{ url_for('etiquetas.api_etiquetas_lotes_previstos')|tojson }},
                "completar": {{ url_for('tablero.completar')|tojson }}};
 window.ETIQUETAS = {{ datos|tojson }};
 </script>
@@ -204,6 +204,17 @@ window.ETIQUETAS = {{ datos|tojson }};
     var ESTUDIO = {pap: 'PAP', lab: 'BP'};
     var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;
     var loteExtra = presetPendiente, filtroFecha = '';
+    var PREVISTOS = {}, PREVISTOS_PEDIDOS = {};
+    PREVISTOS[hoyISO()] = DATOS.listas.lotesHoy;
+    function pedirPrevistos(fecha) {
+        if (!fecha || PREVISTOS[fecha] || PREVISTOS_PEDIDOS[fecha]) return;
+        PREVISTOS_PEDIDOS[fecha] = true;
+        fetch(window.URLS.previstos + '?fecha=' + encodeURIComponent(fecha), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            delete PREVISTOS_PEDIDOS[fecha];
+            PREVISTOS[fecha] = j;
+            generar();
+        }).catch(function () { delete PREVISTOS_PEDIDOS[fecha]; });
+    }
 
     var elec = {pato: {}, muestra: {}, nro: {}};
     var seleccion = {};
@@ -247,7 +258,8 @@ window.ETIQUETAS = {{ datos|tojson }};
     function renderBp(d) {
         var html = '';
         var paps = d.lote === 'PAPS';
-        var linea2 = paps ? (loteActual && loteActual.loteCodigo) || DATOS.listas.lotesHoy[d.cito] || d.cito : d.lote;
+        if (paps) pedirPrevistos(d.fecha);
+        var linea2 = paps ? (loteActual && loteActual.loteCodigo) || (PREVISTOS[d.fecha] || {})[d.cito] || d.cito : d.lote;
         var linea3 = d.ubicacion;
         for (var i = 0; i < d.n; i++) {
             var proto = '#' + numero(d.inicio + i);
@@ -498,6 +510,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             $('confirmar').disabled = false;
             refrescar(j);
             if (j.ok) {
+                PREVISTOS = {};
                 loteActual = buscarLote(j.id);
                 aplicarBloqueo();
             } else if (j.conflicto) {

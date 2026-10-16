@@ -61,8 +61,8 @@ def ubicaciones_abreviaturas():
     return [r["abreviatura"] for r in db.q("SELECT abreviatura FROM ubicaciones ORDER BY abreviatura")]
 
 
-def lotes_de_hoy():
-    hoy_ = hoy()
+def lotes_previstos(fecha):
+    hoy_ = fecha
     out = {}
     for u in personal("citotecnico"):
         abierto = db.uno("SELECT codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1", (u["iniciales"], hoy_))
@@ -72,6 +72,10 @@ def lotes_de_hoy():
         n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (u["iniciales"], hoy_))["m"] or 0) + 1
         out[u["iniciales"]] = f"{u['iniciales']}-{hoy_[5:7]}{hoy_[8:10]}.{n}"
     return out
+
+
+def lotes_de_hoy():
+    return lotes_previstos(hoy())
 
 
 def listas_etiquetas():
