@@ -124,7 +124,7 @@ with A.app.app_context():
     pdf = informes.generar_pdf(d)
 doc = fitz.open(stream=pdf, filetype="pdf")
 texto = "\n".join(p.get_text() for p in doc)
-chequear("el PDF tiene el diagnóstico, la técnica y las lecturas", all(x in texto for x in ("DIAGNÓSTICO FINAL", "NEGATIVO. INFLAMATORIO", "Coloración de Papanicolaou", "Leucocitos", "Moderada cantidad", "Hematíes")))
+chequear("el PDF tiene el diagnóstico, la técnica y las lecturas", all(x in texto for x in ("DIAGNÓSTICO", "NEGATIVO. INFLAMATORIO", "Coloración de Papanicolaou", "Leucocitos", "Moderada cantidad", "Hematíes")))
 chequear("y los dos bloques con sus filas", all(x in texto for x in ("CITOLOGÍA HORMONAL", "Moderada cantidad de cocos", "Hipotrófico - inflamatorio", "CITOLOGÍA ONCOLÓGICA", "Con leves anomalías inflamatorias", "Metaplásicas")))
 chequear("las observaciones salen al final", "OBSERVACIONES" in texto and "Se sugiere control." in texto)
 chequear("sin las marcas [+] del formulario", "[++]" not in texto and "Otros" not in texto)

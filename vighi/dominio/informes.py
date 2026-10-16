@@ -125,6 +125,10 @@ def _institucion(abreviatura):
     return (u["nombre"] if u and u["nombre"] else abreviatura)
 
 
+def _letra(i):
+    return "abcdefghijklmnopqrstuvwxyz"[i % 26] * (i // 26 + 1)
+
+
 def armar(pid, comentario=""):
     p = db.uno("SELECT * FROM protocolos WHERE id=?", (pid,))
     if not p:
@@ -178,20 +182,17 @@ def armar(pid, comentario=""):
         else:
             diag, detalle = "", ""
         materiales = []
-        for m in miembros:
-            cant = (m["cantidad"] or "").strip()
+        for i, m in enumerate(miembros):
             material = " · ".join(x for x in (m["sitio"], m["tipo_muestra"]) if x)
-            if cant:
-                material += f" ({cant} {tipo.etiqueta_cantidad})" if material else f"{cant} {tipo.etiqueta_cantidad}"
             if material:
-                materiales.append(material)
+                materiales.append(f"{_letra(i)}) {material}" if len(miembros) > 1 else material)
         ihq_txt = ""
         if "ihq" in tipo.secciones and ihq and (_t(ihq, "marcadores") or _t(ihq, "resultado")):
             ihq_txt = "\n".join(x for x in (("Marcadores: " + _t(ihq, "marcadores")) if _t(ihq, "marcadores") else "", _t(ihq, "resultado")) if x)
         etiqueta = _etiqueta(e) if len(miembros) == 1 else f"{tipo.nombre} · " + ", ".join(dict.fromkeys(m["sitio"] for m in miembros if m["sitio"]))
         if not diag:
-            avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico final.")
-        secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "material": "\n".join(materiales),
+            avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico.")
+        secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "titulo": tipo.nombre, "material": "\n".join(materiales),
                           "diagnostico": diag, "detalle": detalle,
                           "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": "" if estructura else _t(micro, "descripcion"),
                           "hallazgos": pap.hallazgos(micro) if estructura else [], "observaciones": cuerpo if estructura else "",
@@ -284,9 +285,8 @@ def _construir(d, total, firma_png):
                 Paragraph(c, s["etiqueta"]) if c else "", _p(d_, s["valor"]) if d_ else ""]
     filas = [fila("Paciente:", d["paciente"], "Protocolo:", d["numero"]),
              fila("Médico solicitante:", d["medico_solicitante"], "Fecha:", d["fecha"]),
-             fila("Institución:", d["institucion"], "Página:", f"1 de {total or 1}"),
-             fila("Cobertura:", d["cobertura"], "", "")]
-    cw = [106, util - 106 - 62 - 100, 62, 100]
+             fila("Institución:", d["institucion"], "Cobertura:", d["cobertura"])]
+    cw = [106, util - 106 - 62 - 150, 62, 150]
     flujo.append(Table(filas, colWidths=cw, style=TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2), ("LINEBELOW", (0, -1), (-1, -1), 0.6, BORDE)])))
@@ -300,11 +300,11 @@ def _construir(d, total, firma_png):
     varios = len(d["estudios"]) > 1
     for est in d["estudios"]:
         if varios:
-            flujo.append(Table([[Paragraph(escape(est["etiqueta"]).upper(), s["estudio"])]], colWidths=[util], style=TableStyle([
+            flujo.append(Table([[Paragraph(escape(est["titulo"]).upper(), s["estudio"])]], colWidths=[util], style=TableStyle([
                 ("LINEBELOW", (0, 0), (-1, -1), 1.2, ACENTO), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)])))
             flujo.append(Spacer(1, 6))
         if est["diagnostico"]:
-            partes = [Paragraph("DIAGNÓSTICO FINAL", s["seccion"]), _p(est["diagnostico"], s["diagnostico"])]
+            partes = [Paragraph("DIAGNÓSTICO", s["seccion"]), _p(est["diagnostico"], s["diagnostico"])]
             if est["detalle"]:
                 partes.append(_p(est["detalle"], s["texto"]))
             flujo.append(Table([[partes]], colWidths=[util], style=TableStyle([
