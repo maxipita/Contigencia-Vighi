@@ -9,11 +9,22 @@ from vighi.dominio import anterior
 CARPETA = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "migracion_anterior")
 
 
+DANADAS = []
+
+
 def leer_lineas(ruta):
     if not os.path.exists(ruta):
         return []
+    salida = []
     with open(ruta, encoding="utf-8") as f:
-        return [json.loads(x) for x in f if x.strip()]
+        for n, x in enumerate(f, start=1):
+            if not x.strip():
+                continue
+            try:
+                salida.append(json.loads(x))
+            except ValueError:
+                DANADAS.append(f"{os.path.basename(ruta)} línea {n}")
+    return salida
 
 
 def cargar(carpeta):
@@ -65,6 +76,12 @@ def main(argv=None):
         for r in registros:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     tipos, sin, etapas = resumen(registros)
+    flujos, pacientes, _ = cargar(args.carpeta)
+    faltan = sorted({(g.get("paciente") or {}).get("id") for g in flujos if (g.get("paciente") or {}).get("id")} - set(pacientes))
+    with open(os.path.join(args.carpeta, "pacientes_faltantes.json"), "w", encoding="utf-8") as f:
+        json.dump(faltan, f)
+    if DANADAS or faltan:
+        print(f"ATENCIÓN: {len(DANADAS)} línea(s) dañada(s) {DANADAS[:5]} y {len(faltan)} paciente(s) sin ficha (lista en pacientes_faltantes.json): volver a extraerlos.")
     print(f"Flujos leídos: {n_flujos} · pacientes: {n_pacientes} · formularios de micro: {n_formularios}")
     print(f"Protocolos armados: {len(registros)} · descartados: {len(descartados)}")
     print("Flujos por tipo:", dict(tipos))
