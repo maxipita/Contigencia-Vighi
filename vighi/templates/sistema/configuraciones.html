@@ -19,6 +19,7 @@
     <h2>Ubicaciones y calendario</h2>
     <div class="accesos">
       {{ acceso('ubicaciones.ubicaciones_lista', 'i-ubicacion', 'Ubicaciones', 'Procedencias, médicos y envío de informes') }}
+      {{ acceso('medicos.medicos_lista', 'i-usuarios', 'Médicos', 'Médicos solicitantes: alta, e-mail y ubicaciones') }}
       {% if puede('feriados') %}{{ acceso('usuarios.feriados', 'i-calendario', 'Feriados', 'Días no hábiles para los plazos') }}{% endif %}
     </div>
   </div>

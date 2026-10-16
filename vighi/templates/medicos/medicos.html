@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titulo %}Médicos{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Consultas</div>
+<h1>Médicos</h1>
+<p class="muted">Médicos solicitantes. Se sugieren al escribir el médico de un protocolo, se asocian a las ubicaciones y su e-mail se usa para enviarles el informe.</p>
+<form class="filtros" method="get">
+  <input name="q" value="{{ q }}" placeholder="Buscar por apellido, nombre o e-mail…" size="44" autofocus>
+  <button class="btn sec">Buscar</button>
+  {% if q %}<a href="{{ url_for('medicos.medicos_lista') }}">Ver todos</a>{% endif %}
+  {% if puede('ubicaciones') %}<span style="flex:1"></span><a class="btn" href="{{ url_for('medicos.medico_nuevo') }}">+ Nuevo médico</a>{% endif %}
+</form>
+<p class="muted">{% if total > medicos | length %}Se muestran {{ medicos | length }} de {{ total }}: escribí más letras para acotar.{% else %}{{ total }} médico(s){% endif %}</p>
+<table>
+  <tr><th>Nombre</th><th>E-mail</th><th>Ubicaciones</th><th>Protocolos</th></tr>
+  {% for m in medicos %}
+  <tr>
+    <td><a href="{{ url_for('medicos.medico', mid=m.id) }}"><b>{{ m.nombre }}</b></a></td>
+    <td>{{ m.email or '' }}</td>
+    <td>{{ ubicaciones.get(m.id, 0) }}</td>
+    <td>{% if protocolos.get(m.nombre) %}<a href="{{ url_for('tablero.tablero', ver='todos', q=m.nombre) }}" title="Ver sus estudios en el tablero">{{ protocolos[m.nombre] }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="4" class="muted">No hay médicos{% if q %} que coincidan con la búsqueda{% endif %}.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

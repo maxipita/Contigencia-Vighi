@@ -16,7 +16,7 @@ PERMISOS = {
     "etapas_deshacer": ("Etapas", "Deshacer etapas, incluso las propias (retrotraer; no viene en ningún perfil)"),
     "exportar": ("Consultas", "Exportar a Excel"),
     "usuarios": ("Administración", "Usuarios (crear y editar personas, claves y firmas; los perfiles siguen siendo del administrador)"),
-    "ubicaciones": ("Administración", "Ubicaciones (crear, editar, importar y asignar médicos)"),
+    "ubicaciones": ("Administración", "Ubicaciones y médicos (crear, editar, importar y asignar médicos)"),
     "feriados": ("Administración", "Feriados"),
     "facturacion": ("Administración", "Facturación y tarifario"),
 }
