@@ -140,21 +140,48 @@ def identificar(img):
     return {"protocolo_id": None, "numero": None, "metodo": None, "leido": None, "con_numero": False, "motivo": "No se encontró el número de protocolo"}
 
 
-def guardar_pagina(img, nombre, pagina, ident, yo):
+def guardar_pagina(img, nombre, pagina, ident, yo, grupo=None):
     grande, mini = reducir_a_jpeg(img)
     huella = hashlib.sha256(grande).hexdigest()
     if db.uno("SELECT 1 FROM ordenes WHERE huella=?", (huella,)):
         return None
     ahora = db.ahora()
-    oid = db.ex("INSERT INTO ordenes (protocolo_id, nombre, pagina, imagen, miniatura, huella, metodo, leido, motivo, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+    oid = db.ex("INSERT INTO ordenes (protocolo_id, nombre, pagina, imagen, miniatura, huella, metodo, leido, motivo, usuario_id, creado_en, grupo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (ident["protocolo_id"], nombre[:160], pagina, almacen.guardar("ordenes", grande, "image/jpeg"), almacen.guardar("ordenes", mini, "image/jpeg"), huella,
-                 ident["metodo"], (ident.get("leido") or ident.get("numero") or "")[:40] or None, ident["motivo"], yo, ahora))
+                 ident["metodo"], (ident.get("leido") or ident.get("numero") or "")[:40] or None, ident["motivo"], yo, ahora, grupo))
     if ident["protocolo_id"]:
         db.auditar(yo, ident["protocolo_id"], "orden", f"{nombre[:60]} (página {pagina}, {ident['metodo']})")
     return oid
 
 
-def procesar_archivo(nombre, contenido, yo, protocolo_id=None):
+def _clave_natural(texto):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", texto or "")]
+
+
+def _es_ancla(o):
+    return o["metodo"] in ("qr", "ocr", "manual") or (o["metodo"] is None and bool(o["leido"]))
+
+
+def reagrupar(grupo):
+    filas = sorted(db.q("SELECT id, protocolo_id, nombre, pagina, metodo, leido FROM ordenes WHERE grupo=?", (grupo,)),
+                   key=lambda o: (_clave_natural(o["nombre"]), o["pagina"], o["id"]))
+    actual, cambios, ahora = None, [], db.ahora()
+    for o in filas:
+        if _es_ancla(o):
+            actual = o["protocolo_id"]
+        elif actual:
+            if o["protocolo_id"] != actual or o["metodo"] != "continuacion":
+                cambios.append(("UPDATE ordenes SET protocolo_id=?, metodo='continuacion', motivo=NULL WHERE id=?", (actual, o["id"])))
+                if o["protocolo_id"] != actual:
+                    cambios.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)",
+                                    (ahora, None, actual, None, "orden", f"{(o['nombre'] or '')[:60]} (página {o['pagina']}, continuación)")))
+        elif o["protocolo_id"] is not None or o["metodo"] is not None or o["leido"]:
+            cambios.append(("UPDATE ordenes SET protocolo_id=NULL, metodo=NULL, leido=NULL, motivo=? WHERE id=?", ("No se encontró el número de protocolo", o["id"])))
+    if cambios:
+        db.lote_ex(cambios)
+
+
+def procesar_archivo(nombre, contenido, yo, protocolo_id=None, grupo=None):
     resultados = []
     anterior = None
     for pagina, img in enumerate(paginas_de(contenido), 1):
@@ -164,7 +191,7 @@ def procesar_archivo(nombre, contenido, yo, protocolo_id=None):
             ident = identificar(img)
             if not ident["protocolo_id"] and not ident["con_numero"] and anterior:
                 ident = {"protocolo_id": anterior["protocolo_id"], "numero": anterior["numero"], "metodo": "continuacion", "motivo": None}
-        oid = guardar_pagina(img, nombre, pagina, ident, yo)
+        oid = guardar_pagina(img, nombre, pagina, ident, yo, grupo)
         if oid is None:
             resultados.append({"pagina": pagina, "estado": "repetida", "numero": ident["numero"], "metodo": None, "motivo": "Ya estaba cargada"})
             continue
@@ -172,6 +199,13 @@ def procesar_archivo(nombre, contenido, yo, protocolo_id=None):
             anterior = ident
         resultados.append({"pagina": pagina, "id": oid, "estado": "adjunta" if ident["protocolo_id"] else "pendiente", "numero": ident["numero"],
                            "metodo": ident["metodo"], "motivo": ident["motivo"]})
+    if grupo and any("id" in r for r in resultados):
+        with db.bloqueo("ordenes-" + hashlib.sha1(grupo.encode("utf-8")).hexdigest()[:20]):
+            reagrupar(grupo)
+        for r in resultados:
+            if "id" in r:
+                o = db.uno("SELECT o.protocolo_id, o.metodo, o.motivo, p.numero FROM ordenes o LEFT JOIN protocolos p ON p.id=o.protocolo_id WHERE o.id=?", (r["id"],))
+                r.update(estado="adjunta" if o["protocolo_id"] else "pendiente", numero=o["numero"], metodo=o["metodo"], motivo=o["motivo"])
     return resultados
 
 

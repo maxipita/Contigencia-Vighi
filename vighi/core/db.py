@@ -189,7 +189,7 @@ CREATE TABLE IF NOT EXISTS ordenes (
     imagen BLOB NOT NULL, miniatura BLOB NOT NULL, huella VARCHAR(64),
     metodo VARCHAR(15), leido VARCHAR(40), motivo VARCHAR(160),
     usuario_id INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL,
-    asignado_por INTEGER REFERENCES usuarios(id), asignado_en VARCHAR(19)
+    asignado_por INTEGER REFERENCES usuarios(id), asignado_en VARCHAR(19), grupo VARCHAR(300)
 );
 CREATE INDEX IF NOT EXISTS ix_ordenes_protocolo ON ordenes(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_ordenes_huella ON ordenes(huella);
@@ -587,11 +587,13 @@ def preparar_esquema(c):
                                    ("micro", "pavimentosas", "VARCHAR(200)"), ("micro", "endocervicales", "VARCHAR(200)"),
                                    ("micro", "metaplasicas", "VARCHAR(200)"), ("micro", "endometriales", "VARCHAR(200)"), ("micro", "resultado", "VARCHAR(200)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
+                                   ("ordenes", "grupo", "VARCHAR(300)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
     c.execute("CREATE INDEX IF NOT EXISTS ix_estudios_flujo ON estudios(flujo_id)")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_ordenes_grupo ON ordenes(grupo)")
     migrar_a_flujos(c)
     c.execute("""UPDATE ihq SET pedido_en = (SELECT MAX(x.fecha_hora) FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia'),
                                 pedido_por = (SELECT x.usuario_id FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia' ORDER BY x.id DESC LIMIT 1)

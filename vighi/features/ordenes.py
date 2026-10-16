@@ -10,6 +10,13 @@ from vighi.servicios.protocolos import protocolo_o_404
 
 bp = Blueprint("ordenes", __name__)
 
+EXTENSIONES = (".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
+
+
+def grupo_de(ruta):
+    partes = [p for p in (ruta or "").replace("\\", "/").split("/") if p.strip()]
+    return "/".join(p.strip() for p in partes[:-1])[:300] if len(partes) >= 3 else None
+
 
 def volver(pid=None, ancla=""):
     destino = request.referrer if request.referrer and request.referrer.startswith(request.host_url) else (
@@ -106,8 +113,10 @@ def api_ordenes_automatico():
         contenido = request.get_data()
     if not nombre or not contenido:
         return jsonify(ok=False, error="No llegó ningún archivo: mandalo como formulario (campo archivo) o como cuerpo del pedido con ?nombre=archivo.pdf."), 400
+    if not nombre.lower().endswith(EXTENSIONES):
+        return jsonify(ok=True, archivo=nombre, clave=clave["nombre"], ignorado=True, paginas=[])
     try:
-        paginas = procesar_archivo(nombre, contenido, None)
+        paginas = procesar_archivo(nombre, contenido, None, grupo=grupo_de(request.args.get("ruta") or request.headers.get("X-Ruta-Archivo")))
     except ValueError as error:
         return jsonify(ok=False, archivo=nombre, error=str(error)), 400
     return jsonify(ok=True, archivo=nombre, clave=clave["nombre"], paginas=paginas)
