@@ -271,6 +271,17 @@ CREATE TABLE IF NOT EXISTS factura_archivos (
     subido_por INTEGER REFERENCES usuarios(id), subido_en VARCHAR(19)
 );
 CREATE INDEX IF NOT EXISTS ix_factura_archivos_factura ON factura_archivos(factura_id);
+CREATE TABLE IF NOT EXISTS factura_soportes (
+    factura_id INTEGER PRIMARY KEY REFERENCES facturas(id),
+    nombre VARCHAR(200) NOT NULL, subido_por INTEGER REFERENCES usuarios(id), subido_en VARCHAR(19)
+);
+CREATE TABLE IF NOT EXISTS factura_soporte_filas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factura_id INTEGER NOT NULL REFERENCES facturas(id), orden INTEGER NOT NULL,
+    fecha VARCHAR(10), protocolo VARCHAR(30), estudio VARCHAR(160), paciente VARCHAR(160), afiliado VARCHAR(40), codigo VARCHAR(20),
+    cantidad INTEGER NOT NULL DEFAULT 1, unitario REAL NOT NULL DEFAULT 0, iva VARCHAR(10) NOT NULL DEFAULT 'exento', importe REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_factura_soporte_filas_factura ON factura_soporte_filas(factura_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,

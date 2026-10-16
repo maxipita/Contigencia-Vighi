@@ -65,6 +65,43 @@
   <form id="quitar-{{ i.id }}" method="post" action="{{ url_for('facturacion.factura_quitar', fid=f.id, iid=i.id) }}" data-confirmar="¿Quitar {{ i.numero_protocolo }} · {{ i.estudio }} de la factura?">
     <input type="hidden" name="_csrf" value="{{ csrf }}"></form>
   {% endfor %}{% endif %}
+  {% if not items and f.estado != 'anulada' %}
+  <div class="tarjeta no-imprimir" id="soporte">
+    <h2>Soporte del sistema anterior</h2>
+    {% if soporte %}
+    {% set r = soporte.resumen %}
+    <p class="muted">Archivo <b>{{ soporte.cabecera.nombre }}</b> · cargado {{ soporte.cabecera.subido_en | fh }} por {{ soporte.cabecera.subio or '?' }}</p>
+    <div class="totales-fact">
+      <div><span>Filas</span><b>{{ r.filas }}</b></div>
+      <div><span>Protocolos</span><b>{{ r.protocolos }}</b></div>
+      <div><span>Período</span><b>{{ r.desde | f }} – {{ r.hasta | f }}</b></div>
+      <div><span>Total del soporte</span><b>{{ r.total | peso }}</b></div>
+      <div><span>Total de la factura</span><b>{{ f.total | peso }}</b></div>
+      <div class="{{ 'dif-cobro' if (f.total - r.total) | abs >= 0.01 }}"><span>Diferencia</span><b>{{ (f.total - r.total) | round(2) | peso }}</b></div>
+    </div>
+    {% if (f.total - r.total) | abs >= 0.01 %}<p class="muted">El total del soporte no coincide con el de la factura (el del soporte no suma IVA). Revisá que sea el soporte correcto.</p>{% endif %}
+    <table>
+      <tr><th>Fecha</th><th>Protocolo</th><th>Paciente</th><th>Estudio</th><th>Código</th><th class="num">Cant.</th><th class="num">Importe</th></tr>
+      {% for x in soporte.vista %}
+      <tr><td class="muted">{{ x.fecha | f }}</td><td>{{ x.protocolo }}</td><td>{{ x.paciente }}</td><td>{{ x.estudio }}</td><td>{{ x.codigo }}</td><td class="num">{{ x.cantidad }}</td><td class="num">{{ x.importe | peso }}</td></tr>
+      {% endfor %}
+    </table>
+    {% if r.filas > soporte.vista | length %}<p class="muted">Se muestran las primeras {{ soporte.vista | length }} de {{ r.filas }} filas; la planilla trae todas.</p>{% endif %}
+    <div class="acciones">
+      <a class="btn" href="{{ url_for('soporte_facturas.planilla', fid=f.id) }}">Descargar planilla</a>
+      <form method="post" action="{{ url_for('soporte_facturas.soporte_quitar', fid=f.id) }}" data-confirmar="¿Quitar el soporte de la factura?">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec">Quitar soporte</button></form>
+    </div>
+    {% else %}
+    <p class="muted">Esta factura no tiene el detalle de estudios. Subí el soporte extraído del sistema anterior (Excel o CSV) para generar la planilla de pacientes.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('soporte_facturas.soporte_subir', fid=f.id) }}" enctype="multipart/form-data" style="margin-top:10px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <input type="file" name="soporte" required accept=".xlsx,.xlsm,.csv,.txt">
+      <div class="acciones"><button class="btn sec">{{ 'Reemplazar soporte' if soporte else 'Subir soporte' }}</button></div>
+    </form>
+  </div>
+  {% endif %}
   <div class="tarjeta no-imprimir" id="archivos">
     <h2>Archivos adjuntos ({{ archivos | length }})</h2>
     {% if archivos %}
