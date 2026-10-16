@@ -140,8 +140,8 @@ def identificar(img):
     return {"protocolo_id": None, "numero": None, "metodo": None, "leido": None, "con_numero": False, "motivo": "No se encontró el número de protocolo"}
 
 
-def guardar_pagina(img, nombre, pagina, ident, yo, grupo=None):
-    grande, mini = reducir_a_jpeg(img)
+def guardar_pagina(img, nombre, pagina, ident, yo, grupo=None, reducida=None):
+    grande, mini = reducida or reducir_a_jpeg(img)
     huella = hashlib.sha256(grande).hexdigest()
     if db.uno("SELECT 1 FROM ordenes WHERE huella=?", (huella,)):
         return None
@@ -185,13 +185,17 @@ def procesar_archivo(nombre, contenido, yo, protocolo_id=None, grupo=None):
     resultados = []
     anterior = None
     for pagina, img in enumerate(paginas_de(contenido), 1):
+        reducida = reducir_a_jpeg(img)
+        if db.uno("SELECT 1 FROM ordenes WHERE huella=?", (hashlib.sha256(reducida[0]).hexdigest(),)):
+            resultados.append({"pagina": pagina, "estado": "repetida", "numero": None, "metodo": None, "motivo": "Ya estaba cargada"})
+            continue
         if protocolo_id:
             ident = {"protocolo_id": protocolo_id, "numero": None, "metodo": "manual", "motivo": None}
         else:
             ident = identificar(img)
             if not ident["protocolo_id"] and not ident["con_numero"] and anterior:
                 ident = {"protocolo_id": anterior["protocolo_id"], "numero": anterior["numero"], "metodo": "continuacion", "motivo": None}
-        oid = guardar_pagina(img, nombre, pagina, ident, yo, grupo)
+        oid = guardar_pagina(img, nombre, pagina, ident, yo, grupo, reducida)
         if oid is None:
             resultados.append({"pagina": pagina, "estado": "repetida", "numero": ident["numero"], "metodo": None, "motivo": "Ya estaba cargada"})
             continue
