@@ -9,6 +9,7 @@ from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
 from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
+from vighi.servicios.validacion import solo_pap
 from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.pap import aplicar_sospecha, contexto as contexto_pap, valores_de_formulario as valores_pap
@@ -231,7 +232,8 @@ def estudio(eid):
                                                 {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal)
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
-                            and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"]))
+                            and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"])
+                            and any(h["tipo"] != "PAP" for h in activos))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
     return render_template("estudios/estudio.html", ihq_confirmado=pedido_ihq_confirmado(micro, ihq), marcadores_ihq=lista_marcadores(ihq["marcadores"] if ihq else ""), INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
@@ -433,7 +435,7 @@ def marcar_listo(eid, etapa):
               + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
         if cerrar_por_etapa(e["protocolo_id"], etapa, NOMBRE_ETAPA[etapa], yo["id"]):
             flash("Se cerraron las tareas que esperaban esta etapa.", "ok")
-        if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]):
+        if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]) and not solo_pap(cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],))):
             db.ex("UPDATE protocolos SET firmante_id=? WHERE id=?", (yo["id"], e["protocolo_id"]))
             db.auditar(yo["id"], e["protocolo_id"], "firmante", f"{yo['iniciales']} firmará el informe", eid)
             flash("Vas a figurar como firmante del informe.", "ok")

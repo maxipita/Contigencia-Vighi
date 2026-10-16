@@ -104,7 +104,19 @@ def _etiqueta(e):
     return nombre if e["tipo"] == "PAP" or not e["sitio"] else f"{nombre} · {e['sitio']}"
 
 
+FIRMANTE_PAP = "paparatto"
+
+
+def _firmante_pap(estudios):
+    if not estudios or any(e["tipo"] != "PAP" for e in estudios):
+        return None
+    return db.uno("SELECT id, iniciales, nombre, titulo, mn, mp FROM usuarios WHERE LOWER(nombre) LIKE ? AND activo=1 ORDER BY id LIMIT 1", (f"%{FIRMANTE_PAP}%",))
+
+
 def _firmante(protocolo, estudios, cierre):
+    fija = _firmante_pap(estudios)
+    if fija:
+        return fija, "los PAP salen siempre a nombre de la patóloga a cargo"
     if protocolo["firmante_id"]:
         u = db.uno("SELECT id, iniciales, nombre, titulo, mn, mp FROM usuarios WHERE id=?", (protocolo["firmante_id"],))
         if u:

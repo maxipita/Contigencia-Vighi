@@ -7,7 +7,7 @@ from vighi.core import db
 from vighi.core.config import SEMAFOROS
 from vighi.core.fechas import fecha, fecha_hora
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
-from vighi.dominio import trazabilidad
+from vighi.dominio import informes, trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios.lotes import orden_numero
@@ -21,7 +21,7 @@ bp = Blueprint("tablero", __name__)
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion")}
+    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf")}
     f["ver"] = f["ver"] or "pendientes"
     grupos = {}
     for e in cargar_estudios():
@@ -66,11 +66,22 @@ def tablero():
         q = f["q"].lower()
         return any(q in " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower() for e in g)
 
+    firmantes = db.q("SELECT iniciales, nombre FROM usuarios WHERE activo=1 AND (',' || sectores || ',') LIKE '%,firmante,%' ORDER BY iniciales")
+    pap = db.uno("SELECT iniciales FROM usuarios WHERE LOWER(nombre) LIKE ? AND activo=1 ORDER BY id LIMIT 1", (f"%{informes.FIRMANTE_PAP}%",))
+
+    def firmante_de(g):
+        activos = [e for e in g if not e["anulado"]]
+        if pap and activos and all(e["tipo"] == "PAP" for e in activos):
+            return pap["iniciales"]
+        return next((e["responsable"] for e in activos if e["responsable"] in {u["iniciales"] for u in firmantes}), "")
+
     filas = []
     for g in grupos.values():
         if not del_ver(g) or (f["q"] and not con_texto(g)):
             continue
         if f["ubicacion"] and f["ubicacion"] not in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]):
+            continue
+        if f["mf"] and f["mf"] != firmante_de(g):
             continue
         elegidos = [e for e in g if estudio_ok(e)]
         if f["ver"] == "anulados":
@@ -100,7 +111,7 @@ def tablero():
     if f["semaforo"]:
         filas = [r for r in filas if r["semaforo"] == f["semaforo"]]
     lugares = sorted({l for g in grupos.values() for l in (g[0]["lugar_recoleccion"], g[0]["lugar_entrega"]) if l} | ({f["ubicacion"]} if f["ubicacion"] else set()), key=db.clave_nombre)
-    return render_template("tablero/tablero.html", filas=filas, f=f, conteo=conteo, por_semaforo=por_semaforo, lugares=lugares,
+    return render_template("tablero/tablero.html", filas=filas, f=f, conteo=conteo, por_semaforo=por_semaforo, lugares=lugares, firmantes=firmantes,
                            etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"])
 
 

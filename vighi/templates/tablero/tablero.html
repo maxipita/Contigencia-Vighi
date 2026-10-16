@@ -27,13 +27,14 @@
     <option value="">Pendiente en cualquier etapa</option>
     {% for k, n in etapas %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>Pendiente en {{ n }}</option>{% endfor %}
   </select>
-  <select name="semaforo">
-    <option value="">Cualquier semáforo</option>
-    {% for k, n in SEMAFOROS.items() %}<option value="{{ k }}" {{ 'selected' if f.semaforo == k }}>{{ n }}</option>{% endfor %}
-  </select>
+  {% if f.semaforo %}<input type="hidden" name="semaforo" value="{{ f.semaforo }}">{% endif %}
   <select name="ubicacion" title="Lugar de recolección o de entrega">
     <option value="">Cualquier ubicación</option>
     {% for l in lugares %}<option value="{{ l }}" {{ 'selected' if f.ubicacion == l }}>{{ l }}</option>{% endfor %}
+  </select>
+  <select name="mf" title="Médico firmante">
+    <option value="">Cualquier médico firmante</option>
+    {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>MF: {{ u.nombre or u.iniciales }}</option>{% endfor %}
   </select>
   <button class="btn sec">Filtrar</button>
 </form>
