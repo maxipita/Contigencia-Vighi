@@ -9,10 +9,12 @@ from vighi.core.fechas import fecha, fecha_hora
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import informes, trazabilidad
 from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
-from vighi.servicios.consultas import cargar_estudios
+from vighi.servicios.consultas import cargar_estudios, consultas_estudios
 from vighi.servicios.lotes import orden_numero
 from vighi.servicios.protocolos import ediciones_en_curso
 from vighi.servicios.validacion import pendientes as pendientes_de_validar
+
+SQL_FIRMANTES = "SELECT id, iniciales, nombre, sectores FROM usuarios WHERE activo=1 ORDER BY iniciales"
 
 bp = Blueprint("tablero", __name__)
 
@@ -24,6 +26,7 @@ def tablero():
     f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf")}
     f["ver"] = f["ver"] or "pendientes"
     grupos = {}
+    db.precargar(consultas_estudios() + [(SQL_FIRMANTES, ())])
     for e in cargar_estudios():
         grupos.setdefault(e["protocolo_id"], []).append(e)
     mis = set((yo["sectores"] or "").split(","))
@@ -66,10 +69,9 @@ def tablero():
         q = f["q"].lower()
         return any(q in " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower() for e in g)
 
-    usuarios = db.q("SELECT iniciales, nombre, sectores FROM usuarios WHERE activo=1 AND ((',' || sectores || ',') LIKE '%,firmante,%' OR LOWER(nombre) LIKE ?) ORDER BY id",
-                    (f"%{informes.FIRMANTE_PAP}%",))
-    firmantes = sorted((u for u in usuarios if "firmante" in (u["sectores"] or "").split(",")), key=lambda u: u["iniciales"])
-    pap = next((u for u in usuarios if informes.FIRMANTE_PAP in (u["nombre"] or "").lower()), None)
+    activos_u = db.q(SQL_FIRMANTES)
+    firmantes = [u for u in activos_u if "firmante" in (u["sectores"] or "").split(",")]
+    pap = next((u for u in activos_u if informes.FIRMANTE_PAP in (u["nombre"] or "").lower()), None)
 
     def firmante_de(g):
         activos = [e for e in g if not e["anulado"]]

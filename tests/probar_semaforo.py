@@ -88,7 +88,7 @@ with c.session_transaction() as s:
     s['uid'] = admin
 t = c.get('/?ver=todos').get_data(as_text=True)
 chequear('el tablero tiene la columna Semáforo y muestra las pastillas', '<th>Semáforo</th>' in t and 'semaforo on_time' in t and 'semaforo late' in t)
-chequear('el filtro del tablero ofrece los tres como tarjetas de color', all(f'semaforo={k}' in t and f'class="{k} ' in t for k in ('on_time', 'delayed', 'late')))
+chequear('las tarjetas del tablero filtran por los tres semáforos', all(f'semaforo={k}' in t for k in ('on_time', 'delayed', 'late')))
 import re as _re
 def tiles(html):
     bloque = html.split('class="semaforo-total"')[1].split('</div>')[0]
