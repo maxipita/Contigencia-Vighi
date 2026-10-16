@@ -52,7 +52,7 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   qué tipo es.
   - **Nomencladores:** cada tipo de muestra se asocia a un nomenclador (código y descripción). Se puede afinar por sitio; si no hay asignación para el sitio se usa la del tipo de muestra y, si no, la general del tipo de estudio (BP, CT, PAP).
   - **Tarifario:** una tarifa (por ejemplo TARIFA GENERAL, OSDE…) tiene un importe por nomenclador con "vigente desde". Se ve **Vigentes** o **Todas** (historial); **Cargar una nueva**, **Modificar** (un importe nuevo con su fecha, sin perder el
-    anterior) y **Modificar en bloque** (aumento en %). Cada tarifa tiene su IVA y las coberturas que la usan; las que no tienen una propia usan la TARIFA GENERAL, que también completa lo que le falte a otra tarifa.
+    anterior) y **Modificar en bloque** (aumento en %). Cada tarifa tiene su IVA y las coberturas que la usan; las que no tienen una propia usan la TARIFA GENERAL, que también completa lo que le falte a otra tarifa. Una cobertura nueva se da de alta en **Coberturas → Nueva cobertura** (después se le cargan el IVA, el plazo de cobro y la tarifa).
   - **Facturar:** la pantalla previa a generar la factura. Se busca por fecha de recolección (arranca con el mes en curso), cobertura, procedencia, IVA, flujo (BP, CT, PAP, IHQ), estudios (zona del cuerpo), tipo (biopsias, citologías, IHQ),
     informados o no, ya facturados o no y prioridad de técnicos (IHQ, técnicas especiales); se marcan y se genera el **borrador** de una factura (una sola cobertura). El importe es el vigente a la fecha del estudio.
     Los estudios sin nomenclador o sin importe se muestran con el motivo y no se pueden marcar. Nunca se factura dos veces el mismo estudio.

@@ -16,6 +16,20 @@ def coberturas():
     return render_template("coberturas/coberturas.html", filas=filas, q=q, tipos_iva=facturacion.TIPOS_IVA)
 
 
+@bp.route("/coberturas/nueva", methods=["POST"])
+@requiere_permiso("facturacion")
+def cobertura_nueva():
+    nombre = srv.limpiar_cobertura(request.form.get("nombre"))
+    error = srv.error_cobertura(nombre)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("coberturas.coberturas"))
+    srv.crear_cobertura(nombre)
+    db.auditar(usuario_actual()["id"], None, "cobertura", f"Alta: {nombre}")
+    flash(f"Cobertura «{nombre}» creada: completá su IVA, plazo de cobro y tarifa.", "ok")
+    return redirect(url_for("coberturas.cobertura", c=nombre))
+
+
 @bp.route("/cobertura", methods=["GET", "POST"])
 @requiere_permiso("facturacion")
 def cobertura():
