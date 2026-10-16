@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Migración del sistema anterior{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Sistema</div>
+<h1>Migración del sistema anterior</h1>
+<p class="muted">Carga los protocolos pendientes de informe de southernbits con su paciente, muestras, macro, micro y tracking. Conservan el número del sistema anterior (por ejemplo P1161715) y no reciben número C.
+  Se puede repetir sin duplicar: un protocolo ya cargado se saltea.</p>
+<div class="tarjeta">
+  <h2>Cargar</h2>
+  <p>Ya cargados del sistema anterior: <b>{{ importados }}</b>{% if tipos %} ({% for t in tipos %}{{ t.tipo }}: {{ t.n }}{{ ', ' if not loop.last }}{% endfor %}){% endif %}.</p>
+  <form id="form-migracion" data-por-pedido="{{ por_pedido }}">
+    <label>Archivo <b>protocolos_anterior.jsonl</b> (lo arma <code>py -m vighi.herramientas.preparar_anterior</code>)</label>
+    <input type="file" id="archivo-migracion" accept=".jsonl,.json,.txt" required>
+    <label class="check"><input type="checkbox" id="ensayo-migracion" checked> Solo ensayo: cuenta qué se cargaría y qué usuarios, médicos, ubicaciones y lotes se crearían, pero no escribe nada</label>
+    <div class="acciones"><button class="btn" id="boton-migracion">Procesar</button></div>
+  </form>
+  <progress id="avance-migracion" value="0" max="1" hidden style="width:100%"></progress>
+  <p class="muted" id="estado-migracion"></p>
+  <div id="resultado-migracion" hidden>
+    <table>
+      <tr><th>Cargados</th><th>Ya estaban</th><th>Con error</th></tr>
+      <tr><td id="r-importados">0</td><td id="r-existentes">0</td><td id="r-errores">0</td></tr>
+    </table>
+    <div id="r-detalle"></div>
+  </div>
+</div>
+<div class="tarjeta">
+  <h2>Imágenes y órdenes escaneadas</h2>
+  <p class="muted">Después de cargar los protocolos, se copian las imágenes de cada uno desde southernbits (las órdenes médicas quedan como órdenes escaneadas del protocolo y el resto como imágenes). Tarda: una imagen por vez, de a un protocolo. Se puede cortar y repetir; lo ya copiado se saltea.</p>
+  <form id="form-imagenes">
+    <label>El mismo archivo <b>protocolos_anterior.jsonl</b></label>
+    <input type="file" id="archivo-imagenes" accept=".jsonl,.json,.txt" required>
+    <label class="check"><input type="checkbox" id="ensayo-imagenes" checked> Solo ensayo: cuenta las imágenes que se copiarían, sin copiar nada</label>
+    <div class="acciones"><button class="btn" id="boton-imagenes">Copiar imágenes</button></div>
+  </form>
+  <progress id="avance-imagenes" value="0" max="1" hidden style="width:100%"></progress>
+  <p class="muted" id="estado-imagenes"></p>
+  <div id="r-imagenes"></div>
+</div>
+<div class="tarjeta">
+  <h2>Usuarios creados por la migración ({{ usuarios | length }})</h2>
+  <p class="muted">Aparecen con solo las iniciales que figuraban en el tracking del sistema anterior: completá su nombre, sector, perfil y clave en Usuarios (o desactivalos si ya no trabajan). Hasta entonces no pueden entrar.</p>
+  {% if usuarios %}
+  <div class="lista-medicos">
+    {% for u in usuarios %}<label><a href="{{ url_for('usuarios.usuario', uid=u.id) }}">{{ u.iniciales }}</a></label>{% endfor %}
+  </div>
+  {% else %}<p class="muted">No hay usuarios pendientes de completar.</p>{% endif %}
+</div>
+<script src="{{ url_for('static', filename='migracion.js') }}"></script>
+{% endblock %}
