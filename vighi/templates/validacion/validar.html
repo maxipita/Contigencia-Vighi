@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "estudios/_bloque.html" as b with context %}
+{% macro v(k) %}{{ p[k] if p and p[k] is not none else '' }}{% endmacro %}
+{% block titulo %}Validar {{ protocolo.numero }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Validación</div>
+<p><a href="{{ url_for('validacion.validacion') }}">← Pendientes de validación</a></p>
+<h1>Validar protocolo {{ protocolo.numero }}</h1>
+<p class="muted">Médico: <b>{{ protocolo.medico or '—' }}</b> · Cobertura: <b>{{ protocolo.cobertura or '—' }}</b> ·
+  {% for e in estudios %}{{ e.etiqueta }}{{ ', ' if not loop.last }}{% endfor %}</p>
+
+<div class="cols-mitad">
+  <div>
+    <form method="post" class="tarjeta">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <h2>Paciente</h2>
+      <div class="grilla">
+        <div><label>Apellido *</label><input name="apellido" value="{{ v('apellido') }}" required autofocus></div>
+        <div><label>Nombre *</label><input name="nombre" value="{{ v('nombre') }}" required></div>
+        <div><label>DNI</label><input name="dni" value="{{ v('dni') }}"></div>
+        <div><label>Sexo</label><select name="sexo">{{ b.opciones(listas.sexo, v('sexo')) }}</select></div>
+        <div><label>Fecha nacimiento</label><input type="date" name="fecha_nacimiento" value="{{ v('fecha_nacimiento') }}"></div>
+        <div><label>Cobertura</label><select name="cobertura">{{ b.opciones(listas.cobertura, v('cobertura')) }}</select></div>
+        {{ b.campo_plan(v('cobertura'), v('plan')) }}
+        <div><label>N° afiliado</label><input name="n_afiliado" value="{{ v('n_afiliado') }}"></div>
+        <div><label>Exento</label><select name="exento">{{ b.opciones(['Si', 'No'], v('exento')) }}</select></div>
+        <div><label>E-mail</label><input type="email" name="email" value="{{ v('email') }}"></div>
+        <div><label>Teléfono</label><input name="telefono" value="{{ v('telefono') }}"></div>
+      </div>
+      <div class="acciones">
+        <button class="btn">Validar</button>
+        {% if hay_siguiente %}<button class="btn sec" name="siguiente" value="1">Validar y pasar al siguiente</button>{% endif %}
+        <a class="btn sec" href="{{ url_for('validacion.validacion') }}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+  <div>
+    {% include "ordenes/_lateral.html" %}
+  </div>
+</div>
+{% endblock %}

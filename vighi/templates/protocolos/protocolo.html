@@ -7,6 +7,8 @@
 <h1>#{{ p.numero }}{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}</h1>
 {% if p.borrador %}<div class="aviso">Protocolo generado desde Recepción: faltan los datos del paciente y la cantidad de cada estudio.
   <a href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">Completar datos</a>.</div>{% endif %}
+{% if p.pendiente_validacion %}<div class="aviso">Los datos del paciente están pendientes de validación: el protocolo sigue su curso en el laboratorio, pero no se puede generar el informe ni facturar hasta validarlos.
+  {% if puede('validacion') %}<a href="{{ url_for('validacion.validar', pid=p.id) }}">Validar ahora</a>.{% endif %}</div>{% endif %}
 {% if puede('informe') and not p.borrador %}
 <div class="panel-informe" id="informe">
   <svg class="ic ic-grande"><use href="#i-informe"/></svg>
@@ -21,7 +23,7 @@
     <b>Listo para informar</b>
     {% else %}
     <b>Informe del protocolo</b>
-    <div class="muted">Se genera cuando todos los estudios están informados.{% if pendientes %} Falta:
+    <div class="muted">{% if p.pendiente_validacion %}Primero hay que validar los datos del paciente. {% endif %}Se genera cuando todos los estudios están informados.{% if pendientes %} Falta:
       {% for tp, paso, nombre in pendientes %}<b>{{ nombre }}</b> (pendiente {{ paso }}){{ '; ' if not loop.last }}{% endfor %}.{% endif %}</div>
     {% endif %}
   </div>

@@ -13,7 +13,7 @@
 <div class="acciones barra-lote no-imprimir">
   <button class="btn sec" type="button" onclick="window.print()">Imprimir</button>
   {% if etiquetas_lab and puede('etiquetas_lab') %}<a class="btn sec" href="{{ url_for('etiquetas.etiquetas', lote=l.id) }}">Etiquetas de laboratorio</a>{% endif %}
-  {% if avance and puede('etapas') and (yo.admin or avance.sector in mis_sectores) %}
+  {% if avance and puede('lotes_avanzar') and (yo.admin or avance.sector in mis_sectores) %}
   <form method="post" action="{{ url_for('lotes.lote_avanzar', lote_id=l.id) }}"
         data-confirmar="¿Marcar {{ NOMBRE_ETAPA[avance.etapa] }} como completada en los {{ avance.flujos | length }} protocolo(s) del lote {{ l.codigo }}?">
     <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="etapa" value="{{ avance.etapa }}">
@@ -31,7 +31,7 @@
 </div>
 {% if capacidad %}<p class="tacos-contador"><b>{{ tacos_total }} / {{ capacidad }} tacos</b>{% if tacos_total >= capacidad %} <span class="chip anulado">Completo</span>{% endif %}</p>
 {% if sin_dato %}<p class="lt aviso-avance">{{ sin_dato }} estudio(s) sin cantidad de tacos cargada para su órgano en este tipo de lote</p>{% endif %}{% endif %}
-{% if sin_avance and puede('etapas') and estudios %}<p class="muted no-imprimir aviso-avance">No se puede avanzar el lote: {{ sin_avance }}</p>{% endif %}
+{% if sin_avance and puede('lotes_avanzar') and estudios %}<p class="muted no-imprimir aviso-avance">No se puede avanzar el lote: {{ sin_avance }}</p>{% endif %}
 </div>
 
   <table>

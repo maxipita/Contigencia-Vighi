@@ -135,6 +135,8 @@ def armar(pid, comentario=""):
         raise InformeError("El protocolo no existe.")
     if p["borrador"]:
         raise InformeError("Primero hay que completar los datos del paciente de este protocolo.")
+    if p["pendiente_validacion"]:
+        raise InformeError("Primero hay que validar los datos del paciente (Por completar › Por validar).")
     estudios = db.q("SELECT * FROM estudios WHERE protocolo_id=? AND anulado=0 ORDER BY id", (pid,))
     if not estudios:
         raise InformeError("El protocolo no tiene estudios activos.")

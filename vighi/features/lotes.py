@@ -55,7 +55,7 @@ def nuevo_lote():
 
 
 @bp.route("/lotes/<int:lote_id>/avanzar", methods=["POST"])
-@requiere_permiso("etapas")
+@requiere_permiso("lotes_avanzar")
 def lote_avanzar(lote_id):
     yo = usuario_actual()
     l = lote_o_404(lote_id)

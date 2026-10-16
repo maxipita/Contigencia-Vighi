@@ -84,12 +84,19 @@
       <label data-tipos="bp" data-solo-paps>Citotécnico
         <select id="cito"></select>
       </label>
+      <label data-tipos="bp">Dirección
+        <select id="ubicacion"></select>
+      </label>
       <label data-tipos="bp">Fecha de recolección
         <input type="date" id="fecha">
       </label>
     </div>
     <div class="seleccion" data-tipos="pap lab">
       <div class="sel-cab">
+        <label>Fecha del lote
+          <input type="date" id="fechaLote" title="Muestra todos los lotes de esa fecha, con las etiquetas ya impresas, para reimprimirlas">
+        </label>
+        <button type="button" class="btn sec mini oculto" id="fechaLoteQuitar">Pendientes y recientes</button>
         <label>Lote
           <select id="origen"></select>
         </label>
@@ -196,6 +203,7 @@ window.ETIQUETAS = {{ datos|tojson }};
     var casos = DATOS.casos;
     var ESTUDIO = {pap: 'PAP', lab: 'BP'};
     var presetPendiente = DATOS.preset ? DATOS.preset.loteId : null;
+    var loteExtra = presetPendiente, filtroFecha = '';
 
     var elec = {pato: {}, muestra: {}, nro: {}};
     var seleccion = {};
@@ -238,13 +246,15 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
     function renderBp(d) {
         var html = '';
-        var linea2 = (d.lote === 'PAPS') ? d.cito : d.lote;
+        var paps = d.lote === 'PAPS';
+        var linea2 = paps ? (loteActual && loteActual.loteCodigo) || DATOS.listas.lotesHoy[d.cito] || d.cito : d.lote;
+        var linea3 = d.ubicacion;
         for (var i = 0; i < d.n; i++) {
             var proto = '#' + numero(d.inicio + i);
             html += '<div style="margin-top:20px;"></div>' +
                 '<table class="table-etiqueta" border="1"><tbody><tr>' +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQrProtocolo(85, numero(d.inicio + i)) +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
+                bpEtiqueta(proto, linea2, linea3, '') + bpQrProtocolo(85, numero(d.inicio + i)) +
+                bpEtiqueta(proto, linea2, linea3, 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
                 '</tr></tbody></table>';
         }
         return html;
@@ -304,6 +314,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         rellenar($('lote'), L.tiposLote);
         if (L.tiposLote.indexOf('ENDO') !== -1) $('lote').value = 'ENDO';
         rellenar($('cito'), L.citotecnicos, '(sin citotécnico)');
+        rellenar($('ubicacion'), L.ubicaciones, '(sin dirección)');
     }
 
     function ultimoUsado() {
@@ -343,7 +354,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         casos.forEach(function (c) {
             if (c.estudio === ESTUDIO[t] && c.loteId && !vistos[c.loteId]) {
                 vistos[c.loteId] = true;
-                h += '<option value="' + c.loteId + '">' + esc(c.loteCodigo) + '</option>';
+                h += '<option value="' + c.loteId + '">' + esc(c.loteCodigo) + (filtroFecha || !c.loteFecha ? '' : ' (' + formatearFecha(c.loteFecha) + ')') + '</option>';
             }
         });
         $('origen').innerHTML = h;
@@ -448,10 +459,32 @@ window.ETIQUETAS = {{ datos|tojson }};
         mostrarInfo();
     }
 
-    function refrescar(j) {
+    function urlEstado() {
+        var q = [];
+        if (filtroFecha) q.push('fecha=' + encodeURIComponent(filtroFecha));
+        if (loteExtra) q.push('lote=' + loteExtra);
+        return window.URLS.estado + (q.length ? '?' + q.join('&') : '');
+    }
+    function refrescar(j, yaFiltrado) {
         if (j.historial) historial = j.historial;
         if (j.casos) casos = j.casos;
         renderHistorial();
+        if (!yaFiltrado && (filtroFecha || loteExtra)) traerCasos();
+    }
+    function traerCasos() {
+        fetch(urlEstado(), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || !j.casos) return;
+            casos = j.casos;
+            if (!itemsFijos) { cargarOrigenes(); renderSeleccion(); generar(); }
+        }).catch(function () {});
+    }
+    function cambiarFechaLote() {
+        filtroFecha = $('fechaLote').value || '';
+        $('fechaLoteQuitar').classList.toggle('oculto', !filtroFecha);
+        seleccion = {};
+        $('origen').value = '';
+        loteExtra = null;
+        traerCasos();
     }
     function enviarConfirmacion(payload) {
         enviando = true;
@@ -492,8 +525,11 @@ window.ETIQUETAS = {{ datos|tojson }};
             if (d.lote === 'PAPS' && !d.cito) {
                 aviso('Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.', 'err'); return;
             }
+            if (!d.ubicacion) {
+                aviso('Elegí la dirección: va en la tercera línea de cada etiqueta.', 'err'); return;
+            }
             if (d.inicio + d.n - 1 > 999999) { aviso('El rango se pasa de ' + numero(999999) + '. Bajá la cantidad o el primer número.', 'err'); return; }
-            payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito}};
+            payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito, ubicacion: d.ubicacion}};
         } else {
             if (!d.n) { aviso('Marcá al menos un protocolo para etiquetar.', 'err'); return; }
             payload = {tipo: t, items: d.items.map(function (i) { return i.id; })};
@@ -536,7 +572,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         if (b.tipo === 'bp') {
             var p = b.params;
             $('cantidad').value = b.n; $('inicio').value = b.desde; $('fecha').value = p.fecha;
-            $('lote').value = p.lote; $('cito').value = p.cito || '';
+            $('lote').value = p.lote; $('cito').value = p.cito || ''; $('ubicacion').value = p.ubicacion || '';
         }
         loteActual = b;
         generar();
@@ -570,6 +606,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             fecha: $('fecha').value,
             lote: $('lote').value.trim().toUpperCase(),
             cito: $('cito').value,
+            ubicacion: $('ubicacion').value,
             items: items,
             pos: items ? posicionesDe(items) : null
         };
@@ -618,13 +655,15 @@ window.ETIQUETAS = {{ datos|tojson }};
         } catch (e) {}
     }
 
-    ['cantidad', 'inicio', 'lote', 'cito', 'fecha'].forEach(function (id) {
+    ['cantidad', 'inicio', 'lote', 'cito', 'ubicacion', 'fecha'].forEach(function (id) {
         $(id).addEventListener('input', generar);
     });
     Array.prototype.forEach.call(document.querySelectorAll('input[name=tipo]'), function (r) {
         r.addEventListener('change', cambiarTipo);
     });
     $('origen').addEventListener('change', function () { renderSeleccion(); generar(); });
+    $('fechaLote').addEventListener('change', cambiarFechaLote);
+    $('fechaLoteQuitar').addEventListener('click', function () { $('fechaLote').value = ''; cambiarFechaLote(); });
     $('selTodos').addEventListener('click', function () {
         candidatos(tipoActual()).forEach(function (c) { seleccion[c.id] = true; });
         renderSeleccion(); generar();
@@ -652,10 +691,10 @@ window.ETIQUETAS = {{ datos|tojson }};
     });
     document.addEventListener('visibilitychange', function () {
         if (document.hidden || loteActual || enviando) return;
-        fetch(window.URLS.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
+        fetch(urlEstado(), {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (j) {
             if (!j || !j.historial) return;
             var t = tipoActual(), antes = proximo();
-            refrescar(j);
+            refrescar(j, true);
             if (t === 'bp' && parseInt($('inicio').value, 10) === antes) $('inicio').value = proximo();
             cargarOrigenes(); renderSeleccion(); generar();
         }).catch(function () {});

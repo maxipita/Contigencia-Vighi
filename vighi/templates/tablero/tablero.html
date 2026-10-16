@@ -48,7 +48,7 @@
   <tr>
     <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.n_comentarios %} <a class="chip" href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}#comentarios" title="Comentarios del protocolo">{{ c.n_comentarios }} com.</a>{% endif %}{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
         {% if c.estudios > 1 %}<div class="muted">{{ c.estudios }} muestras</div>{% endif %}</td>
-    <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
+    <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}{% if c.validar %} <span class="chip" title="Datos del paciente pendientes de validación">A validar</span>{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
     <td>{% for sub, tipo in c.muestras %}<div>{{ sub }}{% if tipo %}<div class="muted">{{ tipo }}</div>{% endif %}</div>{% endfor %}</td>
     <td>{% if c.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=c.lote_id) }}">{{ c.lote }}</a>{% endif %}</td>
     <td>{{ c.responsables | join(', ') }}</td>

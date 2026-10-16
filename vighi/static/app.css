@@ -628,3 +628,12 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .chip.sospechoso[hidden] { display: none; }
 .chip.sospechoso { grid-column: 3; justify-self: start; background: #fff1c2; color: #7a5600; }
 @media (max-width: 640px) { .pap-fila, .pap-simple, .pap-obs { grid-template-columns: 1fr; } }
+
+.cols-mitad { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .cols-mitad { grid-template-columns: 1fr; } }
+.orden-lateral { position: sticky; top: 12px; background: var(--superficie); border: 1px solid var(--borde); border-radius: 8px; padding: 10px; }
+.orden-barra { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.orden-botones { margin-left: auto; display: flex; gap: 4px; }
+.orden-marco { height: calc(100vh - 110px); overflow: auto; background: #fff; border-radius: 4px; text-align: center; }
+.orden-marco img { max-width: 100%; transition: transform .15s; transform-origin: center; }
+.orden-marco img.girada { max-width: none; }

@@ -12,6 +12,7 @@ from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios.lotes import orden_numero
 from vighi.servicios.protocolos import ediciones_en_curso
+from vighi.servicios.validacion import pendientes as pendientes_de_validar
 
 bp = Blueprint("tablero", __name__)
 
@@ -86,7 +87,7 @@ def tablero():
         filas.append({
             "protocolo_id": primero["protocolo_id"], "numero": primero["numero"], "flujos": primero["flujos"],
             "n_comentarios": primero.get("n_comentarios"), "estudios": sum(1 for e in g if not e["anulado"]),
-            "apellido": primero["apellido"], "nombre": primero["nombre"], "dni": primero["dni"],
+            "apellido": primero["apellido"], "nombre": primero["nombre"], "dni": primero["dni"], "validar": primero["pendiente_validacion"],
             "muestras": list(dict.fromkeys((e["subcategoria"] or "", e["tipo_muestra"] or "") for e in vista)),
             "lote_id": primero["lote_id"], "lote": primero["lote"],
             "responsables": list(dict.fromkeys(e["responsable"] for e in vista if e["responsable"])),
@@ -115,7 +116,7 @@ def completar():
     lotes_con = db.q("""SELECT l.id, l.codigo, COUNT(DISTINCT p.id) AS n FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                         JOIN lotes l ON l.id=e.lote_id WHERE p.borrador=1 GROUP BY l.id, l.codigo, l.fecha ORDER BY l.fecha DESC, l.codigo""")
     return render_template("tablero/completar.html", protocolos=sorted(protocolos.values(), key=lambda x: x["numero"]),
-                           lotes_con=lotes_con, lote_sel=lote_sel, ediciones=ediciones_en_curso())
+                           lotes_con=lotes_con, lote_sel=lote_sel, ediciones=ediciones_en_curso(), n_validar=len(pendientes_de_validar()))
 
 
 @bp.route("/exportar")

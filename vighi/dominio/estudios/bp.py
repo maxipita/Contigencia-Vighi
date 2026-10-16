@@ -14,7 +14,7 @@ class Biopsia(Estudio):
     sector_responsable = "firmante"
     etiqueta_responsable = "Médico firmante"
     etiqueta_cantidad = "frascos"
-    lotes = ["NO ONCO", "ENDO", "ONCO", "PAPURG", "TACOS", "HPM"]
+    lotes = ["NO ONCO", "ENDO", "ONCO", "TACOS", "HPM"]
     tacos_por_lote = 120
     pide_tecnicas = True
 

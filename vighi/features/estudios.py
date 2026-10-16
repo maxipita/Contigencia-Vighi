@@ -441,15 +441,13 @@ def marcar_listo(eid, etapa):
 
 
 @bp.route("/estudio/<int:eid>/deshacer", methods=["POST"])
-@requiere_permiso("etapas")
+@requiere_permiso("etapas_deshacer")
 def deshacer(eid):
     yo = usuario_actual()
     e = ficha(eid)[0]
     ultima = db.uno("SELECT * FROM etapas WHERE flujo_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1", (e["flujo_id"],))
     if not ultima:
         flash("No hay etapas para deshacer.", "error")
-    elif ultima["usuario_id"] != yo["id"] and not puede("etapas_deshacer"):
-        flash("Solo quien la registró o alguien con permiso puede deshacer la etapa.", "error")
     else:
         db.ex("DELETE FROM etapas WHERE flujo_id=? AND etapa=?", (e["flujo_id"], ultima["etapa"]))
         db.ex("UPDATE protocolos SET firmante_id=NULL WHERE id=?", (e["protocolo_id"],))

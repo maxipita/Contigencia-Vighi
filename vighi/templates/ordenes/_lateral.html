@@ -1,0 +1,16 @@
+<div class="orden-lateral" data-orden-lateral>
+  <div class="orden-barra">
+    <b>Orden escaneada</b>
+    {% if ordenes %}
+    <span class="muted" data-orden-pie></span>
+    <span class="orden-botones">
+      {% if ordenes | length > 1 %}<button type="button" class="btn sec mini-btn" data-orden-ant title="Anterior">‹</button><button type="button" class="btn sec mini-btn" data-orden-sig title="Siguiente">›</button>{% endif %}
+      <button type="button" class="btn sec mini-btn" data-orden-girar title="Girar">⟳</button>
+    </span>
+    {% endif %}
+  </div>
+  {% if ordenes %}
+  <div class="orden-marco"><img alt="Orden" data-orden-img></div>
+  <script type="application/json" data-orden-datos>{{ ordenes | map(attribute='id') | list | tojson }}</script>
+  {% else %}<p class="muted">Todavía no hay órdenes escaneadas para este protocolo. Se adjuntan solas desde <a href="{{ url_for('ordenes.ordenes') }}">Órdenes</a>.</p>{% endif %}
+</div>

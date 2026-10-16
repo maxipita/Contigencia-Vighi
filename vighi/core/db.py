@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS protocolos (
     protocolo_sistema VARCHAR(40), cargado_sistema INTEGER NOT NULL DEFAULT 0,
     borrador INTEGER NOT NULL DEFAULT 0,
     etiqueta_lote_id INTEGER,
+    pendiente_validacion INTEGER NOT NULL DEFAULT 0, validado_por INTEGER, validado_en VARCHAR(19),
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
 CREATE TABLE IF NOT EXISTS flujos (
@@ -586,6 +587,8 @@ def preparar_esquema(c):
                                    ("micro", "flora", "VARCHAR(200)"), ("micro", "aspecto", "VARCHAR(200)"), ("micro", "otros", "VARCHAR(200)"),
                                    ("micro", "pavimentosas", "VARCHAR(200)"), ("micro", "endocervicales", "VARCHAR(200)"),
                                    ("micro", "metaplasicas", "VARCHAR(200)"), ("micro", "endometriales", "VARCHAR(200)"), ("micro", "resultado", "VARCHAR(200)"),
+                                   ("protocolos", "pendiente_validacion", "INTEGER NOT NULL DEFAULT 0"), ("protocolos", "validado_por", "INTEGER"),
+                                   ("protocolos", "validado_en", "VARCHAR(19)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("ordenes", "grupo", "VARCHAR(300)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
@@ -693,6 +696,8 @@ def inicializar():
     sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
     columnas_templates = {r["name"] for r in c.execute("PRAGMA table_info(templates)")}
     templates_sin_origen = bool(columnas_templates) and "sb_id" not in columnas_templates
+    columnas_protocolos = {r["name"] for r in c.execute("PRAGMA table_info(protocolos)")}
+    sin_validacion = bool(columnas_protocolos) and "pendiente_validacion" not in columnas_protocolos
     sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     antes_de_informes = preparar_esquema(c)
     if sin_destinos:
@@ -701,6 +706,9 @@ def inicializar():
             for correo in dict.fromkeys(x.lower() for x in re.split(r"[\s,;]+", r["emails"]) if "@" in x):
                 pasar.append((r["id"], "email", correo[:120]))
         c.executemany("INSERT INTO ubicacion_destinos (ubicacion_id, canal, destino) VALUES (?,?,?)", pasar)
+    if sin_validacion:
+        c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'validacion' ELSE permisos || ',validacion' END "
+                  "WHERE nombre = 'Ingreso' AND (',' || permisos || ',') NOT LIKE '%,validacion,%'")
     if sin_ubicaciones:
         c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN 'ubicaciones' ELSE permisos || ',ubicaciones' END "
                   "WHERE nombre = 'Ingreso' AND (',' || permisos || ',') NOT LIKE '%,ubicaciones,%'")
@@ -837,14 +845,14 @@ def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, para
                               f"VALUES (?,?,?,{lote_sql},?,?,?,?,?,?)",
                               [tipo, desde, hasta] + lote_param + [n, por_proto, etiquetas, params_json, usuario_id, ahora_]))
         if borradores:
-            fila_sql = "(?,?,1,(SELECT MAX(id) FROM etiquetas_lotes),?,?)"
-            por_sentencia = 22
+            fila_sql = "(?,?,?,1,(SELECT MAX(id) FROM etiquetas_lotes),?,?)"
+            por_sentencia = 18
             pedidos = borradores["protocolos"]
             for i in range(0, len(pedidos), por_sentencia):
                 trozo = pedidos[i:i + por_sentencia]
-                declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
+                declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, lugar_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
                                       + ",".join([fila_sql] * len(trozo)),
-                                      [v for p in trozo for v in (p, borradores["fecha_rec"], usuario_id, ahora_)]))
+                                      [v for p in trozo for v in (p, borradores["fecha_rec"], borradores.get("lugar"), usuario_id, ahora_)]))
             declaraciones.append(("INSERT INTO flujos (protocolo_id, tipo, creado_en) "
                                   "SELECT p.id, ?, ? FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
                                   [borradores["estudio"], ahora_]))

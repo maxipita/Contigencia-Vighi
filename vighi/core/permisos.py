@@ -3,6 +3,7 @@ PERMISOS = {
     "protocolo_editar": ("Ingreso", "Editar protocolos y estudios, agregar estudios"),
     "estudio_anular": ("Ingreso", "Anular y reactivar estudios"),
     "sistema": ("Ingreso", "Marcar \"cargado en sistema\""),
+    "validacion": ("Ingreso", "Validar los datos de los pacientes de los PAP"),
     "etiquetas_recepcion": ("Etiquetas", "Recepción (genera numeración y protocolos)"),
     "etiquetas_lab": ("Etiquetas", "Laboratorio (PAP y BP)"),
     "lotes_armar": ("Lotes", "Armar lotes (crear, agregar, quitar, observaciones)"),
@@ -11,7 +12,8 @@ PERMISOS = {
     "micro": ("Diagnóstico", "Cargar microscopía e IHQ"),
     "informe": ("Diagnóstico", "Generar informes en PDF (llevan la firma del médico)"),
     "etapas": ("Etapas", "Marcar etapas como listas (las de su sector)"),
-    "etapas_deshacer": ("Etapas", "Deshacer etapas registradas por otros"),
+    "lotes_avanzar": ("Etapas", "Avanzar un lote completo (marca la etapa en todos sus protocolos a la vez; no viene en ningún perfil)"),
+    "etapas_deshacer": ("Etapas", "Deshacer etapas, incluso las propias (retrotraer; no viene en ningún perfil)"),
     "exportar": ("Consultas", "Exportar a Excel"),
     "usuarios": ("Administración", "Usuarios (crear y editar personas, claves y firmas; los perfiles siguen siendo del administrador)"),
     "ubicaciones": ("Administración", "Ubicaciones (crear, editar, importar y asignar médicos)"),
@@ -23,7 +25,7 @@ GRUPOS = list(dict.fromkeys(g for g, _ in PERMISOS.values()))
 
 PERFILES_INICIALES = {
     "Ingreso": ("ingreso", ["protocolo_crear", "protocolo_editar", "estudio_anular", "sistema", "etiquetas_recepcion",
-                            "lotes_armar", "etapas", "exportar", "ubicaciones"]),
+                            "lotes_armar", "etapas", "exportar", "ubicaciones", "validacion"]),
     "Laboratorio": ("laboratorio", ["etiquetas_lab", "lotes_armar", "lotes_cerrar", "etapas"]),
     "Macroscopía": ("macroscopia", ["macro", "lotes_armar", "etapas"]),
     "Traslados": ("traslados", ["etapas"]),

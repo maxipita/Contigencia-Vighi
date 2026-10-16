@@ -137,7 +137,7 @@
     {% endfor %}
   </table>
   </div>
-  {% if ultima and puede('etapas') and (ultima.usuario_id == yo.id or puede('etapas_deshacer')) %}
+  {% if ultima and puede('etapas_deshacer') %}
   <form method="post" action="{{ url_for('estudios.deshacer', eid=e.id) }}" class="acciones" data-confirmar="¿Deshacer la última etapa registrada ({{ NOMBRE_ETAPA[ultima.etapa] }})?">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <button class="btn sec">Deshacer última etapa ({{ NOMBRE_ETAPA[ultima.etapa] }})</button>

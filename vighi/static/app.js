@@ -776,7 +776,9 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
   ["dragover", "dragenter"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.add("encima"); }));
   ["dragleave", "drop"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.remove("encima"); }));
   zona.addEventListener("drop", e => procesar([...e.dataTransfer.files]));
+})();
 
+(function () {
   const todos = document.querySelector("[data-marcar-protocolos]");
   const cuenta = document.querySelector("[data-cuenta-marcados]");
   const cajas = () => [...document.querySelectorAll("input[data-protocolo]")];
@@ -893,3 +895,28 @@ document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
   sel.addEventListener("change", reflejar);
   reflejar();
 });
+
+(function () {
+  const panel = document.querySelector("[data-orden-lateral]");
+  const datos = panel && panel.querySelector("[data-orden-datos]");
+  if (!datos) return;
+  const ids = JSON.parse(datos.textContent), img = panel.querySelector("[data-orden-img]"), pie = panel.querySelector("[data-orden-pie]");
+  let actual = 0, giro = 0;
+  const mostrar = i => {
+    actual = (i + ids.length) % ids.length;
+    giro = 0;
+    img.style.transform = "";
+    img.classList.remove("girada");
+    img.src = "/orden/" + ids[actual];
+    pie.textContent = ids.length > 1 ? (actual + 1) + "/" + ids.length : "";
+  };
+  const ant = panel.querySelector("[data-orden-ant]"), sig = panel.querySelector("[data-orden-sig]");
+  if (ant) ant.addEventListener("click", () => mostrar(actual - 1));
+  if (sig) sig.addEventListener("click", () => mostrar(actual + 1));
+  panel.querySelector("[data-orden-girar]").addEventListener("click", () => {
+    giro = (giro + 90) % 360;
+    img.style.transform = "rotate(" + giro + "deg)";
+    img.classList.toggle("girada", giro % 180 !== 0);
+  });
+  mostrar(0);
+})();

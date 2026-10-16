@@ -36,6 +36,7 @@ class Pap(Estudio):
     citologia_hormonal = True
     micro_pap = True
     lote_por_citotecnico = True
+    lotes = ["PAPURG"]
 
     def requisito(self, etapa, macro, micro, ihq):
         if etapa == "microscopia":

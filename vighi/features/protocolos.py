@@ -16,6 +16,7 @@ from vighi.servicios.ordenes import SQL_ORDENES, ordenes_de
 from vighi.servicios.tareas import SQL_TAREAS, SQL_USUARIOS_SECTORES, tareas_de, usuarios_con_sectores
 from vighi.servicios.protocolos import CAMPOS_ESTUDIO, CAMPOS_PACIENTE, CAMPOS_PROTOCOLO, CAMPOS_RAPIDOS, SQL_COMENTARIOS, SQL_HISTORIAL_PROTOCOLO, SQL_PROTOCOLO, comentarios_de, completo, contexto_formulario, crear_estudio, dni_valido, edicion_propia, edicion_vigente, error_plan, estudios_del_formulario, leer_protocolo, protocolo_o_404, protocolos_del_paciente, recordar_tecnicas, sincronizar_paciente, soltar_edicion, tomar_edicion, validar_estudios, volver_a_comentarios
 from vighi.servicios.ubicaciones import error_ubicaciones, ubicaciones_del_protocolo
+from vighi.servicios.validacion import CAMPOS_ACTIVACION, activar, faltantes_activacion, solo_pap
 
 bp = Blueprint("protocolos", __name__)
 
@@ -101,8 +102,9 @@ def _protocolo_editar(pid):
         return redirect(url_for("protocolos.protocolo", pid=pid))
     actuales = {e["id"]: e for e in db.q("SELECT * FROM estudios WHERE protocolo_id=? ORDER BY id", (pid,))}
     lista = [{**dict(e), "lote_sel": str(e["lote_id"] or "")} for e in actuales.values() if not e["anulado"]] if borrador else []
+    modo_pap = borrador and solo_pap(list(actuales.values()))
     if request.method == "POST":
-        d = leer_protocolo()
+        d = {**{k: request.form.get(k, "").strip() for k in CAMPOS_ACTIVACION}, "numero": p["numero"]} if modo_pap else leer_protocolo()
         error = None
         if borrador:
             lista = [e for e in estudios_del_formulario() if e["id"] is None or e["id"] in actuales]
@@ -119,10 +121,10 @@ def _protocolo_editar(pid):
         if error:
             flash(error, "error")
         else:
-            cols = ["numero"] + CAMPOS_PROTOCOLO
+            cols = CAMPOS_ACTIVACION if modo_pap else ["numero"] + CAMPOS_PROTOCOLO
             db.ex(f"UPDATE protocolos SET {', '.join(c + '=?' for c in cols)} WHERE id=?", [d[c] for c in cols] + [pid])
             db.auditar(yo["id"], pid, "editar_protocolo")
-            if not p["dni"] or p["dni"] == d["dni"]:
+            if not modo_pap and (not p["dni"] or p["dni"] == d["dni"]):
                 sincronizar_paciente(pid, d["dni"], [c for c in CAMPOS_PACIENTE if d[c] != (p[c] or "")] if p["dni"] else None)
             if not borrador:
                 flash("Datos del protocolo actualizados.", "ok")
@@ -139,8 +141,19 @@ def _protocolo_editar(pid):
             asignar_lote(pid, lote, yo["id"])
             quitados = [k for k, e in actuales.items() if k not in {x["id"] for x in lista} and not e["anulado"]]
             for k in quitados:
-                db.ex("UPDATE estudios SET anulado=1, motivo_anulacion=? WHERE id=?", ("Quitado al completar el protocolo", k))
-                db.auditar(yo["id"], pid, "anular", "Quitado al completar el protocolo", k)
+                db.ex("DELETE FROM estudios WHERE id=?", (k,))
+            if quitados:
+                db.ex("DELETE FROM flujos WHERE protocolo_id=? AND NOT EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=flujos.id)", (pid,))
+                db.auditar(yo["id"], pid, "quitar_muestra", f"{len(quitados)} muestra(s) quitada(s) al completar el protocolo")
+            if modo_pap:
+                falta = faltantes_activacion(d, [dict(x) for x in db.q("SELECT cantidad, anulado FROM estudios WHERE protocolo_id=?", (pid,))])
+                if not falta:
+                    activar(pid, yo)
+                    avisar_lote_lleno(ubicar_en_lote(pid, yo["id"]))
+                    flash(f"Protocolo {d['numero']} activado: sigue su curso en el laboratorio y queda pendiente de validar los datos del paciente.", "ok")
+                    return redirect(url_for("protocolos.protocolo", pid=pid))
+                flash("Datos guardados. Para activar el protocolo falta: " + ", ".join(falta) + ".", "ok")
+                return redirect(url_for("protocolos.protocolo_editar", pid=pid))
             if completo(d, [dict(x) for x in db.q("SELECT cantidad, anulado FROM estudios WHERE protocolo_id=?", (pid,))]):
                 db.ex("UPDATE protocolos SET borrador=0 WHERE id=?", (pid,))
                 db.auditar(yo["id"], pid, "completar", d["numero"])
@@ -161,7 +174,7 @@ def _protocolo_editar(pid):
     for e in actuales.values():
         if e["lote_id"] and all(l["id"] != e["lote_id"] for l in ctx["lotes_abiertos"][e["tipo"]]):
             ctx["lotes_abiertos"][e["tipo"]].insert(0, db.uno("SELECT * FROM lotes WHERE id=?", (e["lote_id"],)))
-    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, edicion=token, ultimos=[], **ctx)
+    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, pap=modo_pap, ordenes=ordenes_de(pid) if modo_pap else [], edicion=token, ultimos=[], **ctx)
 
 
 @bp.route("/paciente/<int:pid>/datos", methods=["POST"])
@@ -271,7 +284,7 @@ def protocolo(pid):
                            ubicaciones=ubicaciones_del_protocolo(p), flujos_malignidad=malignidad_por_flujo(estudios), malignidades=mensajeria.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),
-                           informe_listo=bool(estudios) and not p["borrador"] and not pendientes and any(not x["anulado"] for x in estudios),
+                           informe_listo=bool(estudios) and not p["borrador"] and not p["pendiente_validacion"] and not pendientes and any(not x["anulado"] for x in estudios),
                            pendientes=pendientes, informe_vigente=informe_vigente(pid, informe_emitido(pid)))
 
 

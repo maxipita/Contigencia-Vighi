@@ -4,6 +4,7 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from vighi.core import db
+from vighi.core.fechas import hoy
 from vighi.servicios.consultas import tipos_lote_fijos
 from vighi.servicios.lotes import orden_numero
 
@@ -35,7 +36,7 @@ def qrs_protocolos(inicio, n):
 
 
 def estudio_de_lote(tipo_lote):
-    return {"PAPS": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
+    return {"PAPS": "PAP", "PAPURG": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
 
 
 def numero_emitido(protocolo):
@@ -56,8 +57,25 @@ def tipos_lote_etiqueta():
     return sorted(set(tipos_lote_fijos()) | set(LOTES_ETIQUETA_EXTRA), key=str.casefold)
 
 
+def ubicaciones_abreviaturas():
+    return [r["abreviatura"] for r in db.q("SELECT abreviatura FROM ubicaciones ORDER BY abreviatura")]
+
+
+def lotes_de_hoy():
+    hoy_ = hoy()
+    out = {}
+    for u in personal("citotecnico"):
+        abierto = db.uno("SELECT codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1", (u["iniciales"], hoy_))
+        if abierto:
+            out[u["iniciales"]] = abierto["codigo"]
+            continue
+        n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (u["iniciales"], hoy_))["m"] or 0) + 1
+        out[u["iniciales"]] = f"{u['iniciales']}-{hoy_[5:7]}{hoy_[8:10]}.{n}"
+    return out
+
+
 def listas_etiquetas():
-    return {"tiposLote": tipos_lote_etiqueta(), "muestrasPap": MUESTRAS_PAP,
+    return {"tiposLote": tipos_lote_etiqueta(), "muestrasPap": MUESTRAS_PAP, "ubicaciones": ubicaciones_abreviaturas(), "lotesHoy": lotes_de_hoy(),
             "citotecnicos": personal("citotecnico"), "patologos": personal("firmante")}
 
 
@@ -107,20 +125,25 @@ def rotulos_cassettes(tecnicas):
     return out
 
 
-def etiquetas_casos():
-    limite = (datetime.now() - timedelta(days=DIAS_ETIQUETADOS)).strftime("%Y-%m-%d")
-    filas = db.q("""SELECT e.id, e.tipo, p.numero, p.apellido, p.nombre, e.cantidad, e.lote_id, l.codigo AS lote,
+def etiquetas_casos(fecha=None, lote_id=None):
+    if fecha:
+        filtro, params = "l.fecha=?", [fecha]
+    else:
+        filtro, params = "(e.lab_etiquetado_en IS NULL OR e.lab_etiquetado_en >= ?)", [(datetime.now() - timedelta(days=DIAS_ETIQUETADOS)).strftime("%Y-%m-%d")]
+    if lote_id:
+        filtro, params = f"({filtro} OR e.lote_id=?)", params + [lote_id]
+    filas = db.q(f"""SELECT e.id, e.tipo, p.numero, p.apellido, p.nombre, e.cantidad, e.lote_id, l.codigo AS lote, l.fecha AS lote_fecha,
                            p.fecha_recoleccion, e.lab_etiquetado_en, e.tipo_muestra, u.iniciales AS resp
                     FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                     LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                     WHERE p.borrador=0 AND e.anulado=0 AND e.tipo IN ('BP','PAP') AND e.cantidad IS NOT NULL AND e.cantidad<>''
-                      AND (e.lab_etiquetado_en IS NULL OR e.lab_etiquetado_en >= ?) ORDER BY e.lote_id, e.id""", (limite,))
+                      AND {filtro} ORDER BY e.lote_id, e.id""", params)
     tecnicas = tecnicas_por_estudio()
     rotulos = {f["id"]: rotulos_cassettes(tecnicas.get(f["id"], [])) if f["tipo"] == "BP" else [] for f in filas}
     return [{"id": f["id"], "estudio": f["tipo"], "protocolo": f["numero"], "apellido": f["apellido"] or "",
              "nombre": f["nombre"] or "", "cantidad": len(rotulos[f["id"]]) or etiquetas_cantidad(f["cantidad"]),
              "nros": rotulos[f["id"]], "frascos": etiquetas_cantidad(f["cantidad"]), "loteId": f["lote_id"],
-             "loteCodigo": f["lote"] or "", "fechaRec": f["fecha_recoleccion"] or "", "resp": f["resp"] or "",
+             "loteCodigo": f["lote"] or "", "loteFecha": f["lote_fecha"] or "", "fechaRec": f["fecha_recoleccion"] or "", "resp": f["resp"] or "",
              "muestra": codigo_muestra_pap(f["tipo_muestra"], f["cantidad"]) if f["tipo"] == "PAP" else "",
              "etiquetado": bool(f["lab_etiquetado_en"])}
             for f in sorted(filas, key=lambda f: (f["lote_id"] or 0, orden_numero(f["numero"]), f["id"]))]

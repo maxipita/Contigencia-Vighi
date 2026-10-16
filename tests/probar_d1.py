@@ -41,7 +41,9 @@ def uno(sql, params=()):
 
 
 def confirmar(cl, inicio, n, lote='ENDO'):
-    return cl.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': inicio, 'n': n, 'params': {'fecha': '2026-10-09', 'lote': lote, 'cito': ''}},
+    if not uno("SELECT 1 FROM ubicaciones WHERE abreviatura='UB'"):
+        F.con.execute("INSERT INTO ubicaciones (abreviatura) VALUES ('UB')")
+    return cl.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': inicio, 'n': n, 'params': {'fecha': '2026-10-09', 'lote': lote, 'cito': '', 'ubicacion': 'UB'}},
                    headers={'X-CSRF': tok(cl)})
 
 
