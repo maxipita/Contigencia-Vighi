@@ -103,7 +103,7 @@ py tests/correr.py --solo facturacion                # solo las que contienen es
 - `informes.py` — **informe en PDF de un PROTOCOLO** (junta todos sus estudios; título histopatológico si son todos BP, citológico si no hay BP,
   "de anatomía patológica" si hay de los dos), con el diseño de la maqueta `vighi-sistema`: `armar(pid)` junta lo cargado (paciente, médico
   solicitante y, por estudio, material, macro, micro, diagnóstico, IHQ) y `generar_pdf(datos)` lo dibuja con reportlab. Solo se genera con el protocolo
-  completo y **todos** sus estudios informados, y con el permiso `informe`. **Firmante** (`informes._firmante`): 1) `protocolos.firmante_id` si quien cerró
+  completo y **todos** sus estudios informados, y con el permiso `informe`. **Firmante** (`informes._firmante`): un protocolo **solo de PAP** sale siempre a nombre del usuario activo cuyo nombre contiene «Paparatto» (Andrea Paparatto; los citotécnicos no firman; `tests/probar_firmante_pap.py`; si no existe ese usuario cae a lo siguiente); si no, 1) `protocolos.firmante_id` si quien cerró
   lo último marcó "Quiero firmar el informe yo" (`firmar_yo` en `marcar_listo`; `deshacer` lo borra), 2) el responsable asignado (primer estudio cuyo
   responsable tiene el sector `firmante`), 3) quien cerró la última etapa. Rutas: `/protocolo/<id>/informe` (revisión; `/estudio/<id>/informe` redirige acá)
   y `POST /protocolo/<id>/informe.pdf`, que **guarda el PDF** en `informes_emitidos` (BLOB, **una sola fila por protocolo**: generar de nuevo la
