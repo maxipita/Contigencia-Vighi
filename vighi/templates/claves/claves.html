@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block titulo %}Claves de integración{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Administración</div>
+<h1>Claves de integración</h1>
+<p class="muted">Una clave le permite a un programa (por ejemplo, el que sube solo los escaneos desde la carpeta de OneDrive) hablar con el sistema sin usuario ni contraseña. Cada programa debería tener su propia clave, para poder revocarla sin afectar a los demás.</p>
+{% if nueva %}
+<div class="tarjeta clave-nueva">
+  <h2>Clave «{{ nueva.nombre }}» creada</h2>
+  <p><b>Copiala ahora: no se vuelve a mostrar.</b> Si la perdés, revocá esta y creá otra.</p>
+  <input class="clave-texto" value="{{ nueva.token }}" readonly onclick="this.select()">
+  <p class="muted">Dirección del sistema para el programa: <code>{{ url }}</code></p>
+</div>
+{% endif %}
+<div class="tarjeta">
+  <h2>Nueva clave</h2>
+  <form method="post" class="asignar-orden">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <input name="nombre" placeholder="Para qué se usa (ej.: PC del escáner)" maxlength="60" required>
+    <button class="btn">Crear clave</button>
+  </form>
+</div>
+<div class="tarjeta">
+  <h2>Claves</h2>
+  <table>
+    <tr><th>Nombre</th><th>Creada</th><th>Último uso</th><th>Estado</th><th></th></tr>
+    {% for k in claves %}
+    <tr class="{{ 'cerrada' if not k.activa }}">
+      <td>{{ k.nombre }}</td>
+      <td class="muted">{{ k.iniciales or '?' }} · {{ k.creada_en | fh }}</td>
+      <td class="muted">{{ k.ultimo_uso | fh if k.ultimo_uso else 'Nunca' }}</td>
+      <td>{{ 'Activa' if k.activa else 'Revocada' }}</td>
+      <td>{% if k.activa %}<form method="post" action="{{ url_for('claves.clave_revocar', kid=k.id) }}" data-confirmar="¿Revocar la clave «{{ k.nombre }}»? El programa que la usa va a dejar de funcionar.">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Revocar</button></form>{% endif %}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" class="muted">Todavía no hay claves.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

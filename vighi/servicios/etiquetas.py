@@ -29,6 +29,11 @@ def numero_protocolo(n):
     return f"C{n:06d}"
 
 
+def qrs_protocolos(inicio, n):
+    import segno
+    return {numero_protocolo(k): segno.make(numero_protocolo(k), error="m").svg_data_uri(scale=4, border=1) for k in range(inicio, inicio + n)}
+
+
 def estudio_de_lote(tipo_lote):
     return {"PAPS": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
 

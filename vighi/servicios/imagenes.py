@@ -30,6 +30,10 @@ def procesar_imagen(contenido):
     except Exception:
         raise ValueError("no es una imagen JPG, PNG o WEBP válida")
 
+    return reducir_a_jpeg(img)
+
+
+def reducir_a_jpeg(img):
     def jpeg(lado, calidad):
         chica = img.copy()
         chica.thumbnail((lado, lado))

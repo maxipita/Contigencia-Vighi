@@ -14,6 +14,16 @@ resource "aws_ssm_parameter" "clave_sesion" {
   value = random_id.clave_sesion.hex
 }
 
+resource "aws_ssm_parameter" "smtp" {
+  for_each = toset(var.smtp)
+  name     = "${local.parametros}/${each.key}"
+  type     = "SecureString"
+  value    = "sin-configurar"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 resource "aws_ssm_parameter" "smtp_clave" {
   name  = "${local.parametros}/SMTP_CLAVE"
   type  = "SecureString"
@@ -24,9 +34,9 @@ resource "aws_ssm_parameter" "smtp_clave" {
 }
 
 locals {
-  secretos = {
+  secretos = merge({
     DATABASE_URL            = aws_ssm_parameter.database_url.arn
     CONTINGENCIA_SECRET_KEY = aws_ssm_parameter.clave_sesion.arn
     SMTP_CLAVE              = aws_ssm_parameter.smtp_clave.arn
-  }
+  }, { for k, p in aws_ssm_parameter.smtp : k => p.arn })
 }

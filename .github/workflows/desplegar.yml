@@ -85,4 +85,23 @@ jobs:
         run: |
           aws ecs update-service --cluster "$CLUSTER" --service "$SERVICIO" --force-new-deployment >/dev/null
           aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICIO"
-          echo "Servicio estable." >> "$GITHUB_STEP_SUMMARY"
+      - name: Verificar la versión en servicio
+        run: |
+          set -euo pipefail
+          esperado="$(aws ecr describe-images --repository-name "$REPOSITORIO" --image-ids imageTag="$TAG_PRODUCCION" \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          read -r -a tareas <<< "$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICIO" --desired-status RUNNING \
+            --query 'taskArns' --output text)"
+          if [ "${#tareas[@]}" -eq 0 ]; then
+            echo "El servicio no tiene tareas (tareas = 0): no hay versión que verificar." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          corriendo="$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "${tareas[@]}" \
+            --query 'tasks[].containers[0].imageDigest' --output text | tr '\t' '\n' | sort -u)"
+          if [ "$corriendo" != "$esperado" ]; then
+            echo "::error::La versión nueva no quedó en servicio: ECS volvió a la anterior. Ver los logs en CloudWatch (/ecs/vighi-contingencia)."
+            echo "Desplegada: $esperado"
+            echo "En servicio: $corriendo"
+            exit 1
+          fi
+          echo "En servicio: ${GITHUB_SHA::12} ($esperado)" >> "$GITHUB_STEP_SUMMARY"

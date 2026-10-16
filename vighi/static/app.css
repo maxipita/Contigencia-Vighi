@@ -600,3 +600,17 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .lista-ihq-caja .lista-ihq li:last-child { border-bottom: 0; }
 .lista-ihq-caja .lista-ihq li span { flex: 1; }
 .flujo-estado { float: right; display: inline-flex; gap: 8px; align-items: center; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.zona-soltar { display: block; padding: 28px 16px; text-align: center; border: 2px dashed var(--borde); border-radius: 8px; cursor: pointer; color: var(--pizarra); }
+.zona-soltar.encima, .zona-soltar:hover { border-color: var(--acento); background: var(--superficie); }
+.resultados-orden { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; font-size: 13px; }
+.resultados-orden .ok { color: #2a7a4b; }
+.resultados-orden .aviso { color: #8a5a00; }
+.resultados-orden .error { color: #b42318; }
+.aviso-orden { margin: 8px 0 16px; padding: 10px 14px; border-left: 3px solid #d99a00; background: #fff8e6; border-radius: 6px; font-size: 13px; }
+.orden-pendiente { display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--borde); }
+.orden-pendiente:first-of-type { border-top: 0; }
+.orden-pendiente img { width: 110px; border: 1px solid var(--borde); border-radius: 4px; }
+.asignar-orden { display: flex; gap: 8px; margin: 8px 0 4px; flex-wrap: wrap; }
+.asignar-orden input { max-width: 240px; }
+.clave-nueva { border-left: 3px solid #2a7a4b; }
+.clave-texto { width: 100%; font-family: var(--mono, monospace); font-size: 14px; padding: 8px 10px; }

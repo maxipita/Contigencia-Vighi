@@ -3,7 +3,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8 CONTINGENCIA_PUERTO=8080 CONTINGEN
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata fonts-liberation && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && pip uninstall -y opencv-python && pip install --no-cache-dir opencv-python-headless
 COPY . .
 RUN useradd --system --uid 10001 vighi && mkdir -p data && chown vighi data
 USER vighi
