@@ -145,7 +145,8 @@ with A.app.app_context():
 print('5) flujo real: completar protocolos que vienen de Recepción')
 with A.app.app_context():
     db.ex("UPDATE lotes SET cerrado=1 WHERE tipo_lote='ONCO'")
-r = c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 1200, 'n': 5, 'params': {'fecha': db.ahora()[:10], 'lote': 'ONCO', 'cito': ''}}, headers={'X-CSRF': tok(c)}).get_json()
+    db.ex("INSERT INTO ubicaciones (abreviatura) VALUES ('UB')")
+r = c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 1200, 'n': 5, 'params': {'fecha': db.ahora()[:10], 'lote': 'ONCO', 'cito': '', 'ubicacion': 'UB'}}, headers={'X-CSRF': tok(c)}).get_json()
 chequear('se generan 5 protocolos a completar en un lote ONCO', r.get('ok'), r)
 with A.app.app_context():
     filas = [dict(x) for x in db.q("SELECT p.id, p.numero, e.id AS eid, e.lote_id FROM protocolos p JOIN estudios e ON e.protocolo_id=p.id WHERE p.numero BETWEEN 'C001200' AND 'C001204' ORDER BY p.numero")]

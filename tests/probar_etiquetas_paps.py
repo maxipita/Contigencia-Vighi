@@ -34,7 +34,7 @@ def confirmar(**extra):
     return c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 700, 'n': 3, 'params': p}, headers={'X-CSRF': tk})
 
 
-print('1) con lote PAPS la dirección es obligatoria')
+print('1) la dirección es obligatoria')
 r = confirmar()
 chequear('sin dirección no confirma', r.status_code == 400 and 'dirección' in r.get_json()['error'], r.get_json())
 r = confirmar(ubicacion='NO-EXISTE')
@@ -51,12 +51,14 @@ chequear('el lote creado coincide con el previsto para la etiqueta', lote['codig
 hist = c.get('/api/etiquetas/estado').get_json()['historial'][-1]
 chequear('la tanda guarda la ubicación para reimprimir', hist['params']['ubicacion'] == 'SAN-A' and hist['loteCodigo'] == previsto, hist)
 
-print('3) otros lotes no piden dirección')
+print('3) los demás lotes también llevan dirección')
 r = c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 710, 'n': 1, 'params': {'fecha': '2026-10-16', 'lote': 'ENDO'}}, headers={'X-CSRF': tk})
-chequear('un lote común confirma sin dirección', r.get_json().get('ok'), r.get_json())
+chequear('un lote común sin dirección no confirma', r.status_code == 400, r.get_json())
+r = c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 710, 'n': 1, 'params': {'fecha': '2026-10-16', 'lote': 'ENDO', 'ubicacion': 'SAN-A'}}, headers={'X-CSRF': tk})
+chequear('con dirección confirma', r.get_json().get('ok'), r.get_json())
 with A.app.app_context():
     p = db.uno("SELECT lugar_recoleccion FROM protocolos WHERE numero='C000710'")
-chequear('y el protocolo queda sin lugar', not p['lugar_recoleccion'])
+chequear('y el protocolo queda con el lugar', p['lugar_recoleccion'] == 'SAN-A')
 
 print('4) la pantalla ofrece la dirección')
 h = c.get('/etiquetas').get_data(as_text=True)

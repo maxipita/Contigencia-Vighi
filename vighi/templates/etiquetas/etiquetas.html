@@ -84,7 +84,7 @@
       <label data-tipos="bp" data-solo-paps>Citotécnico
         <select id="cito"></select>
       </label>
-      <label data-tipos="bp" data-solo-paps>Dirección
+      <label data-tipos="bp">Dirección
         <select id="ubicacion"></select>
       </label>
       <label data-tipos="bp">Fecha de recolección
@@ -243,7 +243,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         var html = '';
         var paps = d.lote === 'PAPS';
         var linea2 = paps ? (loteActual && loteActual.loteCodigo) || DATOS.listas.lotesHoy[d.cito] || d.cito : d.lote;
-        var linea3 = paps ? d.ubicacion : formatearFecha(d.fecha);
+        var linea3 = d.ubicacion;
         for (var i = 0; i < d.n; i++) {
             var proto = '#' + numero(d.inicio + i);
             html += '<div style="margin-top:20px;"></div>' +
@@ -498,8 +498,8 @@ window.ETIQUETAS = {{ datos|tojson }};
             if (d.lote === 'PAPS' && !d.cito) {
                 aviso('Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.', 'err'); return;
             }
-            if (d.lote === 'PAPS' && !d.ubicacion) {
-                aviso('Elegí la dirección: con lote PAPS va en la tercera línea de cada etiqueta.', 'err'); return;
+            if (!d.ubicacion) {
+                aviso('Elegí la dirección: va en la tercera línea de cada etiqueta.', 'err'); return;
             }
             if (d.inicio + d.n - 1 > 999999) { aviso('El rango se pasa de ' + numero(999999) + '. Bajá la cantidad o el primer número.', 'err'); return; }
             payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito, ubicacion: d.ubicacion}};

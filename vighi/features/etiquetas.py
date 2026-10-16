@@ -88,9 +88,9 @@ def api_etiquetas_confirmar():
         if paps and p.get("cito") not in citos:
             return error("Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.")
         cito = p["cito"] if paps else ""
-        ubicacion = p.get("ubicacion") if paps else ""
-        if paps and ubicacion not in ubicaciones_abreviaturas():
-            return error("Elegí la dirección: con lote PAPS va en la tercera línea de cada etiqueta y deja asociado el protocolo a esa ubicación.")
+        ubicacion = p.get("ubicacion")
+        if ubicacion not in ubicaciones_abreviaturas():
+            return error("Elegí la dirección: va en la tercera línea de cada etiqueta y deja asociados los protocolos a esa ubicación.")
         params = {"fecha": p["fecha"], "lote": p["lote"], "cito": cito, "ubicacion": ubicacion}
         est = REGISTRO[estudio_de_lote(p["lote"])]
         borradores = {"estudio": est.clave, "categoria": est.categoria, "subcategoria": est.subcategoria_fija,
