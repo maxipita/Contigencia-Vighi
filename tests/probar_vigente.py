@@ -53,9 +53,9 @@ chequear('ni forzando el POST', r.mimetype != 'application/pdf')
 
 print('3) el estudio nuevo se informa: igual hay que regenerar (no estaba en el informe)')
 with A.app.app_context():
-    db.ex("INSERT INTO micro (estudio_id, descripcion, conclusion) VALUES (?,?,?)", (nuevo, 'Sin atipia.', 'Negativo.'))
+    db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?)", (nuevo, 'Sin atipia.', 'Negativo.'))
     for et in ('coloreado', 'microscopia'):
-        db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (nuevo, et, ids['med'], '2026-10-04 10:00:00'))
+        db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (nuevo, et, ids['med'], '2026-10-04 10:00:00'))
 t, cab = panel()
 chequear('completo pero desactualizado: ofrece generar, pero no ver el viejo', 'Informe desactualizado' in cab and 'Generar de nuevo' in cab and 'Ver informe' not in cab and 'Cambiaron los estudios' in cab, cab[-500:])
 chequear('el PDF viejo sigue sin entregarse', c.get(f'/informe/{iid["id"]}.pdf').status_code == 302)

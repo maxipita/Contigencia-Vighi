@@ -62,9 +62,16 @@ CREATE TABLE IF NOT EXISTS protocolos (
     etiqueta_lote_id INTEGER,
     creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19)
 );
+CREATE TABLE IF NOT EXISTS flujos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    tipo VARCHAR(3) NOT NULL, creado_en VARCHAR(19),
+    UNIQUE (protocolo_id, tipo)
+);
 CREATE TABLE IF NOT EXISTS estudios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
+    flujo_id INTEGER REFERENCES flujos(id),
     tipo VARCHAR(3) NOT NULL,
     categoria VARCHAR(40), subcategoria VARCHAR(60), sitio VARCHAR(80), tipo_muestra VARCHAR(80),
     cantidad VARCHAR(5), citologia_hormonal VARCHAR(3), observaciones TEXT,
@@ -76,29 +83,37 @@ CREATE TABLE IF NOT EXISTS estudios (
 );
 CREATE TABLE IF NOT EXISTS etapas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    estudio_id INTEGER NOT NULL REFERENCES estudios(id),
+    flujo_id INTEGER NOT NULL REFERENCES flujos(id),
     etapa VARCHAR(30) NOT NULL,
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
     fecha_hora VARCHAR(19) NOT NULL,
-    UNIQUE (estudio_id, etapa)
+    UNIQUE (flujo_id, etapa)
 );
 CREATE TABLE IF NOT EXISTS macro (
-    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
+    flujo_id INTEGER PRIMARY KEY REFERENCES flujos(id),
     template VARCHAR(120), descripcion TEXT, cassettes INTEGER, decal INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS micro (
-    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
+    flujo_id INTEGER PRIMARY KEY REFERENCES flujos(id),
     template VARCHAR(120), descripcion TEXT, conclusion TEXT,
-    bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0
+    bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0,
+    leucocitos VARCHAR(40), hematies VARCHAR(40), flora VARCHAR(200), aspecto VARCHAR(200), otros VARCHAR(200),
+    pavimentosas VARCHAR(200), endocervicales VARCHAR(200), metaplasicas VARCHAR(200), endometriales VARCHAR(200), resultado VARCHAR(200)
+);
+CREATE TABLE IF NOT EXISTS abreviaturas_pap (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo VARCHAR(20) NOT NULL, orden INTEGER NOT NULL, abreviatura VARCHAR(20) NOT NULL, descripcion VARCHAR(200) NOT NULL,
+    sospechoso INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (tipo, orden)
 );
 CREATE TABLE IF NOT EXISTS ihq (
-    estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id),
-    marcadores TEXT, resultado TEXT
+    flujo_id INTEGER PRIMARY KEY REFERENCES flujos(id),
+    marcadores TEXT, resultado TEXT, pedido_en VARCHAR(19), pedido_por INTEGER REFERENCES usuarios(id)
 );
 CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     clase VARCHAR(10) NOT NULL, titulo VARCHAR(120) NOT NULL, tipo_biopsia VARCHAR(40),
-    texto TEXT, conclusion TEXT, organo VARCHAR(80), tipo_muestra VARCHAR(80),
+    texto TEXT, conclusion TEXT, organo VARCHAR(80), tipo_muestra VARCHAR(80), sb_id INTEGER,
     UNIQUE (clase, titulo)
 );
 CREATE TABLE IF NOT EXISTS catalogo (
@@ -138,7 +153,6 @@ CREATE TABLE IF NOT EXISTS informes_emitidos (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_informes_protocolo ON informes_emitidos(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_protocolo ON estudios(protocolo_id);
 CREATE INDEX IF NOT EXISTS ix_estudios_lote ON estudios(lote_id);
-CREATE INDEX IF NOT EXISTS ix_etapas_estudio ON etapas(estudio_id);
 CREATE INDEX IF NOT EXISTS ix_auditoria_protocolo ON auditoria(protocolo_id);
 CREATE TABLE IF NOT EXISTS comentarios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -362,7 +376,7 @@ def cerrar(_=None):
         c.close()
 
 
-REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo", "tarifario_coberturas")
+REFERENCIA = ("feriados", "listas", "templates", "catalogo", "perfiles", "tacos_organo", "tarifario_coberturas", "abreviaturas_pap")
 VIGENCIA_REFERENCIA = 120
 _fijas = {}
 
@@ -424,6 +438,13 @@ def uno(sql, params=()):
     return filas[0] if filas else None
 
 
+def asegurar_flujo(c, estudio_id):
+    c.execute("INSERT INTO flujos (protocolo_id, tipo, creado_en) SELECT e.protocolo_id, e.tipo, ? FROM estudios e WHERE e.id=? AND NOT EXISTS "
+              "(SELECT 1 FROM flujos f WHERE f.protocolo_id=e.protocolo_id AND f.tipo=e.tipo)", (ahora(), estudio_id))
+    c.execute("UPDATE estudios SET flujo_id=(SELECT f.id FROM flujos f WHERE f.protocolo_id=estudios.protocolo_id AND f.tipo=estudios.tipo) WHERE id=?", (estudio_id,))
+    c.commit()
+
+
 def ex(sql, params=()):
     c = con()
     cur = c.execute(sql, params)
@@ -432,6 +453,8 @@ def ex(sql, params=()):
     escrita = re.match(r"\s*(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE|DELETE\s+FROM)\s+(\w+)", sql, re.I)
     if escrita and escrita.group(1).lower() in REFERENCIA:
         _fijas.clear()
+    if escrita and escrita.group(1).lower() == "estudios" and re.match(r"\s*INSERT", sql, re.I) and "flujo_id" not in sql and cur.lastrowid:
+        asegurar_flujo(c, cur.lastrowid)
     return cur.lastrowid
 
 
@@ -556,73 +579,118 @@ def preparar_esquema(c):
                                    ("templates", "tipo_muestra", "VARCHAR(80)"),
                                    ("ubicaciones", "nombre", "VARCHAR(200)"),
                                    ("facturas", "cobrado", "REAL"),
+                                   ("ihq", "pedido_en", "VARCHAR(19)"),
+                                   ("ihq", "pedido_por", "INTEGER"),
+                                   ("estudios", "flujo_id", "INTEGER"),
+                                   ("micro", "leucocitos", "VARCHAR(40)"), ("micro", "hematies", "VARCHAR(40)"),
+                                   ("micro", "flora", "VARCHAR(200)"), ("micro", "aspecto", "VARCHAR(200)"), ("micro", "otros", "VARCHAR(200)"),
+                                   ("micro", "pavimentosas", "VARCHAR(200)"), ("micro", "endocervicales", "VARCHAR(200)"),
+                                   ("micro", "metaplasicas", "VARCHAR(200)"), ("micro", "endometriales", "VARCHAR(200)"), ("micro", "resultado", "VARCHAR(200)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_estudios_flujo ON estudios(flujo_id)")
+    migrar_a_flujos(c)
+    c.execute("""UPDATE ihq SET pedido_en = (SELECT MAX(x.fecha_hora) FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia'),
+                                pedido_por = (SELECT x.usuario_id FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia' ORDER BY x.id DESC LIMIT 1)
+                 WHERE pedido_en IS NULL
+                   AND flujo_id IN (SELECT m.flujo_id FROM micro m WHERE m.solicita_ihq=1)
+                   AND EXISTS (SELECT 1 FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia')""")
     return antes_de_informes
 
 
-SECCIONES_FLUJO = (("macro", ("template", "descripcion"), ("descripcion",)),
-                   ("micro", ("template", "descripcion", "conclusion", "bethesda", "tecnicas_especiales"), ("descripcion", "conclusion")),
-                   ("ihq", ("marcadores", "resultado"), ("marcadores", "resultado")))
-
-
-def consolidar_diagnosticos(c, protocolo_id=None, tipo=None, extra=()):
-    filtro, par = "", []
-    if protocolo_id is not None:
-        filtro, par = " AND protocolo_id=? AND tipo=?", [protocolo_id, tipo]
-    grupos = {}
-    for r in c.execute(f"SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0{filtro} ORDER BY id", par).fetchall():
-        grupos.setdefault((r["protocolo_id"], r["tipo"]), []).append(r["id"])
-    for ids in grupos.values():
-        cabecera = ids[0]
-        todos = list(ids) + [i for i in extra if i not in ids]
-        if len(todos) < 2:
-            continue
-        marcas = ",".join("?" * len(todos))
-        for tabla, textos, largos in SECCIONES_FLUJO:
-            filas = {r["estudio_id"]: dict(r) for r in c.execute(f"SELECT * FROM {tabla} WHERE estudio_id IN ({marcas})", todos).fetchall()}
-            if not filas or set(filas) == {cabecera}:
-                continue
-            base = dict(filas.get(cabecera) or {})
-            for eid in sorted(filas):
-                if eid == cabecera:
-                    continue
-                otra = filas[eid]
-                if not base:
-                    base = dict(otra)
-                    continue
-                for campo in textos:
-                    nuevo_, actual = (otra.get(campo) or "").strip(), (base.get(campo) or "").strip()
-                    if nuevo_ and nuevo_ != actual:
-                        base[campo] = actual + "\n\n" + nuevo_ if actual and campo in largos else (actual or nuevo_)
-                if tabla == "macro":
-                    base["cassettes"] = (base.get("cassettes") or 0) + (otra.get("cassettes") or 0) or None
-                    base["decal"] = max(base.get("decal") or 0, otra.get("decal") or 0)
-                if tabla == "micro":
-                    base["solicita_ihq"] = max(base.get("solicita_ihq") or 0, otra.get("solicita_ihq") or 0)
-            columnas = [k for k in base if k != "estudio_id"]
-            if cabecera in filas:
-                c.execute(f"UPDATE {tabla} SET {', '.join(k + '=?' for k in columnas)} WHERE estudio_id=?", [base[k] for k in columnas] + [cabecera])
-            else:
-                c.execute(f"INSERT INTO {tabla} (estudio_id, {', '.join(columnas)}) VALUES (?,{','.join('?' * len(columnas))})", [cabecera] + [base[k] for k in columnas])
-            otros = [i for i in filas if i != cabecera]
-            if otros:
-                c.execute(f"DELETE FROM {tabla} WHERE estudio_id IN ({','.join('?' * len(otros))})", otros)
+def migrar_a_flujos(c):
+    cols = lambda t: {r["name"] for r in c.execute(f"PRAGMA table_info({t})")}
+    c.execute("INSERT INTO flujos (protocolo_id, tipo, creado_en) SELECT e.protocolo_id, e.tipo, MIN(e.creado_en) FROM estudios e "
+              "WHERE NOT EXISTS (SELECT 1 FROM flujos f WHERE f.protocolo_id=e.protocolo_id AND f.tipo=e.tipo) GROUP BY e.protocolo_id, e.tipo")
+    c.execute("UPDATE estudios SET flujo_id=(SELECT f.id FROM flujos f WHERE f.protocolo_id=estudios.protocolo_id AND f.tipo=estudios.tipo) WHERE flujo_id IS NULL")
+    pendientes = [t for t in ("etapas", "macro", "micro", "ihq") if "flujo_id" not in cols(t)]
+    if not pendientes:
+        c.commit()
+        return
+    cabecera = ("(SELECT COALESCE(MIN(CASE WHEN x.anulado=0 THEN x.id END), MIN(x.id)) FROM estudios x WHERE x.flujo_id=e.flujo_id)")
+    pasos = [(f"ALTER TABLE {t} RENAME TO {t}_vieja", ()) for t in pendientes]
+    pasos += [(s, ()) for s in d1.dividir_script(SCHEMA) if any(re.match(rf"\s*CREATE TABLE IF NOT EXISTS {t}\b", s) for t in pendientes)]
+    if "etapas" in pendientes:
+        pasos.append(("""INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora)
+                     SELECT e.flujo_id, x.etapa, x.usuario_id, x.fecha_hora FROM etapas_vieja x JOIN estudios e ON e.id=x.estudio_id
+                     WHERE x.id IN (SELECT MIN(x2.id) FROM etapas_vieja x2 JOIN estudios e2 ON e2.id=x2.estudio_id GROUP BY e2.flujo_id, x2.etapa)
+                     ORDER BY x.id""", ()))
+    columnas = {"macro": "template, descripcion, cassettes, decal",
+                "micro": "template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq",
+                "ihq": "marcadores, resultado, pedido_en, pedido_por"}
+    for t in ("macro", "micro", "ihq"):
+        if t in pendientes:
+            origen = ", ".join("m." + k.strip() for k in columnas[t].split(","))
+            pasos.append((f"""INSERT INTO {t} (flujo_id, {columnas[t]}) SELECT e.flujo_id, {origen} FROM {t}_vieja m JOIN estudios e ON e.id=m.estudio_id
+                          WHERE m.estudio_id={cabecera}""", ()))
+    pasos += [(f"DROP TABLE {t}_vieja", ()) for t in pendientes]
+    try:
+        c.lote(pasos)
+    except Exception:
+        if [t for t in ("etapas", "macro", "micro", "ihq") if "flujo_id" not in cols(t)]:
+            raise
     c.commit()
 
 
-def flujos_por_consolidar(c):
-    return any(c.execute(f"SELECT 1 FROM {tabla} m JOIN estudios e ON e.id=m.estudio_id WHERE e.anulado=0 AND e.id <> "
-                         "(SELECT MIN(x.id) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.tipo=e.tipo AND x.anulado=0) LIMIT 1").fetchone()
-               for tabla, _, _ in SECCIONES_FLUJO)
+def _clave_template(texto):
+    sin = "".join(ch for ch in unicodedata.normalize("NFD", texto or "") if unicodedata.category(ch) != "Mn")
+    return re.sub(r"\s+", " ", sin).casefold().strip()
+
+
+def _clave_titulo(clase, titulo):
+    return clase, _clave_template(re.sub(r"\s*\(\d+\)$", "", titulo or "")[:30])
+
+
+def sincronizar_templates(c, nuevos):
+    viejos = [dict(r) for r in c.execute("SELECT id, clase, titulo, tipo_biopsia, organo, texto FROM templates ORDER BY id").fetchall()]
+    por_clave, grupos = {}, {}
+    for r in viejos:
+        por_clave.setdefault(_clave_titulo(r["clase"], r["titulo"]), []).append(r)
+    for n in sorted(nuevos, key=lambda x: x["sb_id"]):
+        grupos.setdefault(_clave_titulo(n["clase"], n["titulo"]), []).append(n)
+    pares, altas = [], []
+    for clave, ns in grupos.items():
+        libres, restantes = list(por_clave.get(clave, [])), []
+        for n in ns:
+            igual = next((o for o in libres if n["texto"] and _clave_template(o["texto"]) == _clave_template(n["texto"])), None)
+            if igual:
+                pares.append((igual, n))
+                libres.remove(igual)
+            else:
+                restantes.append(n)
+        for n in restantes:
+            if libres:
+                pares.append((libres.pop(0), n))
+            else:
+                altas.append(n)
+    emparejados = {o["id"] for o, _ in pares}
+    ocupados = {(r["clase"], r["titulo"]) for r in viejos if r["id"] not in emparejados}
+
+    def titulo_final(n):
+        titulo = n["titulo"]
+        while (n["clase"], titulo) in ocupados:
+            titulo = f"{n['titulo']} [{n['sb_id']}]"
+        ocupados.add((n["clase"], titulo))
+        return titulo
+    sentencias = [("ALTER TABLE templates ADD COLUMN sb_id INTEGER", ())]
+    sentencias += [("UPDATE templates SET titulo=? WHERE id=?", (f"~{o['id']}", o["id"])) for o, _ in pares]
+    for o, n in pares:
+        sentencias.append(("UPDATE templates SET titulo=?, texto=?, conclusion=?, sb_id=?, tipo_biopsia=?, organo=? WHERE id=?",
+                           (titulo_final(n), n["texto"], n["conclusion"], n["sb_id"], o["tipo_biopsia"] or n["tipo_biopsia"] or None, o["organo"] or n["organo"] or None, o["id"])))
+    for n in altas:
+        sentencias.append(("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion, organo, sb_id) VALUES (?,?,?,?,?,?,?)",
+                           (n["clase"], titulo_final(n), n["tipo_biopsia"] or None, n["texto"], n["conclusion"], n["organo"] or None, n["sb_id"])))
+    c.lote(sentencias)
 
 
 def inicializar():
     c = _conectar()
     sin_ubicaciones = not c.execute("PRAGMA table_info(ubicaciones)").fetchall()
+    columnas_templates = {r["name"] for r in c.execute("PRAGMA table_info(templates)")}
+    templates_sin_origen = bool(columnas_templates) and "sb_id" not in columnas_templates
     sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     antes_de_informes = preparar_esquema(c)
     if sin_destinos:
@@ -660,6 +728,12 @@ def inicializar():
     if not c.execute("SELECT 1 FROM listas LIMIT 1").fetchone():
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [(n, i, v) for n, vals in cargar("listas.json").items() for i, v in enumerate(vals)])
+    if not c.execute("SELECT 1 FROM abreviaturas_pap LIMIT 1").fetchone() and os.path.exists(os.path.join(seed, "abreviaturas_pap.json")):
+        try:
+            c.executemany("INSERT INTO abreviaturas_pap (tipo, orden, abreviatura, descripcion, sospechoso) VALUES (?,?,?,?,?)",
+                          [(x["tipo"], x["orden"], x["abreviatura"], x["descripcion"], 1 if x["sospechoso"] else 0) for x in cargar("abreviaturas_pap.json")])
+        except sqlite3.IntegrityError:
+            pass
     actuales = [r[0] for r in c.execute("SELECT valor FROM listas WHERE nombre='cobertura' ORDER BY orden")]
     if actuales in ([], ["Particular", "Obra Social", "Prepaga"]):
         c.execute("DELETE FROM listas WHERE nombre='cobertura'")
@@ -667,9 +741,11 @@ def inicializar():
                       [("cobertura", i, v) for i, v in enumerate(cargar("listas.json")["cobertura"])])
     if not c.execute("SELECT 1 FROM templates LIMIT 1").fetchone():
         for clase in ("macro", "micro"):
-            c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion) VALUES (?,?,?,?,?)",
-                          [(t["clase"], t["titulo"], t["tipo_biopsia"], t["texto"], t["conclusion"])
+            c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion, organo, sb_id) VALUES (?,?,?,?,?,?,?)",
+                          [(t["clase"], t["titulo"], t["tipo_biopsia"] or None, t["texto"], t["conclusion"], t.get("organo") or None, t.get("sb_id"))
                            for t in cargar(f"templates_{clase}.json")])
+    if templates_sin_origen:
+        sincronizar_templates(c, cargar("templates_micro.json") + cargar("templates_macro.json"))
     if not c.execute("SELECT 1 FROM usuarios LIMIT 1").fetchone():
         c.executemany("INSERT INTO usuarios (iniciales, nombre, sectores) VALUES (?,?,?)",
                       [(u["iniciales"], u["iniciales"], ",".join(u["sectores"])) for u in cargar("usuarios.json")])
@@ -693,8 +769,6 @@ def inicializar():
     if hasattr(c, "_cx"):
         from vighi.core import pg
         pg.reiniciar_secuencias(c, ("medicos",))
-    if flujos_por_consolidar(c):
-        consolidar_diagnosticos(c)
     c.close()
 
 
@@ -769,9 +843,13 @@ def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, para
                 declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
                                       + ",".join([fila_sql] * len(trozo)),
                                       [v for p in trozo for v in (p, borradores["fecha_rec"], usuario_id, ahora_)]))
-            declaraciones.append((f"INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, responsable_id, lote_id, creado_por, creado_en) "
-                                  f"SELECT p.id, ?, ?, ?, ?, ?, {lote_sql}, ?, ? FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
-                                  [borradores["estudio"], borradores["categoria"], borradores["subcategoria"], borradores["sitio"], borradores["responsable_id"]]
+            declaraciones.append(("INSERT INTO flujos (protocolo_id, tipo, creado_en) "
+                                  "SELECT p.id, ?, ? FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
+                                  [borradores["estudio"], ahora_]))
+            declaraciones.append((f"INSERT INTO estudios (protocolo_id, flujo_id, tipo, categoria, subcategoria, sitio, responsable_id, lote_id, creado_por, creado_en) "
+                                  f"SELECT p.id, (SELECT f.id FROM flujos f WHERE f.protocolo_id=p.id AND f.tipo=?), ?, ?, ?, ?, ?, {lote_sql}, ?, ? "
+                                  "FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
+                                  [borradores["estudio"], borradores["estudio"], borradores["categoria"], borradores["subcategoria"], borradores["sitio"], borradores["responsable_id"]]
                                   + lote_param + [usuario_id, ahora_]))
         if etiquetados:
             for i in range(0, len(etiquetados), 89):

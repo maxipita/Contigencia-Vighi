@@ -69,14 +69,14 @@ def lote_avanzar(lote_id):
         flash(error, "error")
         return redirect(destino)
     etapa = plan["etapa"]
-    db.precargar([(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,)) for t in ("macro", "micro", "ihq")]
+    sql_seccion = "SELECT m.* FROM {} m WHERE m.flujo_id IN (SELECT e.flujo_id FROM estudios e WHERE e.lote_id=?)"
+    db.precargar([(sql_seccion.format(t), (lote_id,)) for t in ("macro", "micro", "ihq")]
                  + [("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))])
-    por_tabla = {t: {r["estudio_id"]: r for r in db.q(f"SELECT m.* FROM {t} m JOIN estudios e ON e.id=m.estudio_id WHERE e.lote_id=?", (lote_id,))}
-                 for t in ("macro", "micro", "ihq")}
+    por_tabla = {t: {r["flujo_id"]: r for r in db.q(sql_seccion.format(t), (lote_id,))} for t in ("macro", "micro", "ihq")}
     con_tecnicas = {r["estudio_id"] for r in db.q("SELECT DISTINCT t.estudio_id FROM tecnicas t JOIN estudios e ON e.id=t.estudio_id WHERE e.lote_id=?", (lote_id,))}
     problemas = []
     for flujo in plan["flujos"]:
-        cabecera = min(m["id"] for m in flujo)
+        cabecera = flujo[0]["flujo_id"]
         primero = flujo[0]
         sin = [m for m in flujo if m["id"] not in con_tecnicas] if etapa == "macroscopia" and "macro" in REGISTRO[primero["tipo"]].secciones else []
         motivo = motivo_no_listo(yo, primero["tipo"], etapa, primero["proxima"], Variante(primero["solicita_ihq"], primero["decal"]),
@@ -88,11 +88,12 @@ def lote_avanzar(lote_id):
         return redirect(destino)
     ahora_ = db.ahora()
     estudios = [m for f in plan["flujos"] for m in f]
+    flujos_ids = list(dict.fromkeys(f[0]["flujo_id"] for f in plan["flujos"]))
     sentencias = []
-    for i in range(0, len(estudios), 25):
-        grupo = estudios[i:i + 25]
-        sentencias.append(("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES " + ",".join(["(?,?,?,?)"] * len(grupo)),
-                           tuple(v for m in grupo for v in (m["id"], etapa, yo["id"], ahora_))))
+    for i in range(0, len(flujos_ids), 25):
+        grupo = flujos_ids[i:i + 25]
+        sentencias.append(("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES " + ",".join(["(?,?,?,?)"] * len(grupo)),
+                           tuple(v for fid in grupo for v in (fid, etapa, yo["id"], ahora_))))
     for i in range(0, len(plan["flujos"]), 16):
         grupo = plan["flujos"][i:i + 16]
         sentencias.append(("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES " + ",".join(["(?,?,?,?,?,?)"] * len(grupo)),
@@ -123,7 +124,8 @@ def lote(lote_id):
     compatibles = {t for x in del_lote for t in tipos_lote(x["tipo"])}
     destinos = [d for d in db.q("SELECT id, codigo, tipo_lote, fecha FROM lotes WHERE cerrado=0 AND id<>? ORDER BY fecha DESC, tipo_lote, numero LIMIT 120", (lote_id,))
                 if d["tipo_lote"] in compatibles]
-    return render_template("lotes/lote.html", destinos=destinos, avance=avance, sin_avance=sin_avance, l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
+    tipos_nuevo = list(dict.fromkeys(t for x in del_lote for t in tipos_lote(x["tipo"])))
+    return render_template("lotes/lote.html", destinos=destinos, tipos_nuevo=tipos_nuevo, avance=avance, sin_avance=sin_avance, l=l, estudios=del_lote, sin_lote=sin_lote, capacidad=REGISTRO["BP"].tacos_por_lote if en_bp else None,
                            tacos_total=tacos_total, sin_dato=sin_dato,
                            etiquetas_lab=(l["tipo_lote"] in tipos_lote("BP") or l["tipo_lote"] in tipos_lote("PAP"))
                            and any(not x["anulado"] and not x["borrador"] for x in del_lote))
@@ -170,46 +172,57 @@ def lote_mover(lote_id):
     yo = usuario_actual()
     origen = lote_o_404(lote_id)
     destino_id = request.form.get("destino", "")
+    nuevo = destino_id == "nuevo"
     destino = db.uno("SELECT * FROM lotes WHERE id=?", (int(destino_id),)) if destino_id.isdigit() else None
     marcados = {int(x) for x in request.form.getlist("eids") if x.isdigit()}
     volver = url_for("lotes.lote", lote_id=lote_id)
-    if not destino:
+    tipo_nuevo = request.form.get("tipo_lote", "") or origen["tipo_lote"]
+    fecha_nuevo = request.form.get("fecha", "").strip() or hoy()
+    if not destino and not nuevo:
         flash("Elegí el lote de destino.", "error")
-    elif destino["id"] == lote_id:
+    elif destino and destino["id"] == lote_id:
         flash("El lote de destino es el mismo.", "error")
-    elif origen["cerrado"] or destino["cerrado"]:
+    elif origen["cerrado"] or (destino and destino["cerrado"]):
         flash("Un lote cerrado no admite movimientos: reabrilo primero.", "error")
     elif not marcados:
         flash("Marcá al menos un protocolo para mover.", "error")
+    elif nuevo and (tipo_nuevo not in tipos_lote() or not fecha_valida(fecha_nuevo)):
+        flash("Para crear el lote elegí un tipo y una fecha válida.", "error")
     else:
         filas = db.q("""SELECT e.id, e.protocolo_id, e.tipo, p.numero FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                         WHERE e.lote_id=? AND e.anulado=0 ORDER BY e.id""", (lote_id,))
         protocolos = {}
         for r in filas:
             protocolos.setdefault(r["protocolo_id"], []).append(r)
-        elegidos = [pid for pid, g in protocolos.items() if any(x["id"] in marcados for x in g)]
-        movidos, problemas, sentencias = [], [], []
-        ahora_ = db.ahora()
-        for pid in elegidos:
-            primero = min(protocolos[pid], key=lambda x: x["id"])
-            if destino["tipo_lote"] not in tipos_lote(primero["tipo"]):
-                problemas.append(f"{primero['numero']} no va en un lote {destino['tipo_lote']}")
+        tipo_destino = tipo_nuevo if nuevo else destino["tipo_lote"]
+        elegidos, problemas = [], []
+        for pid, g in protocolos.items():
+            if not any(x["id"] in marcados for x in g):
                 continue
-            movidos.append(primero["numero"])
+            primero = min(g, key=lambda x: x["id"])
+            if tipo_destino not in tipos_lote(primero["tipo"]):
+                problemas.append(f"{primero['numero']} no va en un lote {tipo_destino}")
+            else:
+                elegidos.append((pid, primero["numero"]))
+        if elegidos and nuevo:
+            destino = crear_lote(tipo_nuevo, yo["id"], fecha_nuevo)
+            flash(f"Lote {destino['codigo']} creado con fecha {fecha_nuevo[8:]}/{fecha_nuevo[5:7]}/{fecha_nuevo[:4]}.", "ok")
+        sentencias, ahora_ = [], db.ahora()
+        for pid, _ in elegidos:
             sentencias += [("UPDATE estudios SET lote_id=? WHERE protocolo_id=? AND anulado=0", (destino["id"], pid)),
                            ("INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, accion, detalle) VALUES (?,?,?,?,?)",
                             (ahora_, yo["id"], pid, "lote", f"{origen['codigo']} → {destino['codigo']}"))]
-        for i in range(0, len(sentencias), 40):
-            db.lote_ex(sentencias[i:i + 40])
-        if movidos:
-            flash(f"{len(movidos)} protocolo(s) movidos de {origen['codigo']} a {destino['codigo']}.", "ok")
+        for k in range(0, len(sentencias), 40):
+            db.lote_ex(sentencias[k:k + 40])
+        if elegidos:
+            flash(f"{len(elegidos)} protocolo(s) movidos de {origen['codigo']} a {destino['codigo']}.", "ok")
             capacidad = REGISTRO["BP"].tacos_por_lote
             total = tacos_de_lote(destino["id"])[0] if destino["tipo_lote"] in REGISTRO["BP"].lotes else 0
             if total > capacidad:
                 flash(f"Atención: el lote {destino['codigo']} queda en {total}/{capacidad} tacos.", "error")
         if problemas:
             flash("No se movieron: " + " · ".join(problemas[:6]) + ".", "error")
-        if not movidos and not problemas:
+        if not elegidos and not problemas:
             flash("Los protocolos marcados ya no están en este lote.", "error")
     return redirect(volver)
 

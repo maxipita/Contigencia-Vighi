@@ -52,7 +52,7 @@
       <td>{{ x.medico or '' }}</td>
       <td>{% if x.borrador %}<span class="chip">A completar</span>{% endif %}
         {% for e in estudios.get(x.id, []) %}
-        <div class="{{ 'bloqueado' if e.anulado }}"><a href="{{ url_for('estudios.estudio', eid=e.id) }}">{{ e.etiqueta }}</a>
+        <div class="{{ 'bloqueado' if e.anulado }}"><a href="{{ url_for('estudios.flujo', pid=e.protocolo_id, tipo=e.tipo) }}">{{ e.etiqueta }}</a>
           <span class="chip {{ 'anulado' if e.anulado else ('informado' if not e.proxima) }}">{{ e.estado }}</span>
           {% if e.lote_id %}<a class="muted" href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</div>
         {% endfor %}</td>

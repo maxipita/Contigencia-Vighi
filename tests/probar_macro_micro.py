@@ -26,20 +26,20 @@ pasos = [p[0] for p in dom_estudios.REGISTRO['BP'].flujo(False)]
 print(pasos)
 e = F.con.execute("SELECT id, protocolo_id FROM estudios WHERE tipo='BP' AND anulado=0 ORDER BY id LIMIT 1").fetchone()
 eid = e['id']
-F.con.execute('DELETE FROM etapas WHERE estudio_id=?', (eid,))
+F.con.execute('DELETE FROM etapas WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)', (eid,))
 
 
 def cargar_hasta(etapa):
-    F.con.execute('DELETE FROM etapas WHERE estudio_id=?', (eid,))
+    F.con.execute('DELETE FROM etapas WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)', (eid,))
     for p in pasos:
         if p == etapa:
             break
-        F.con.execute("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,'2026-10-01 10:00:00')", (eid, p, admin))
+        F.con.execute("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,'2026-10-01 10:00:00')", (eid, p, admin))
 
 
 def guardar(texto):
     c.post(f'/estudio/{eid}/macro', data={'_csrf': csrf, 'descripcion': texto, 'cassettes': '2'})
-    r = F.con.execute('SELECT descripcion FROM macro WHERE estudio_id=?', (eid,)).fetchone()
+    r = F.con.execute('SELECT descripcion FROM macro WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)', (eid,)).fetchone()
     return r['descripcion'] if r else None
 
 
@@ -54,7 +54,7 @@ cargar_hasta('informe') if 'informe' in pasos else None
 siguiente = pasos[pasos.index('microscopia') + 1] if 'microscopia' in pasos and pasos.index('microscopia') + 1 < len(pasos) else None
 if siguiente:
     cargar_hasta(siguiente)
-    F.con.execute("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,'2026-10-01 10:00:00')", (eid, 'microscopia', admin))
+    F.con.execute("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,'2026-10-01 10:00:00')", (eid, 'microscopia', admin))
     chequear('pasada la micro vuelve a bloquear', guardar('tres') == 'dos')
 cargar_hasta('lote') if 'lote' in pasos else None
 print('FALLAS:', fallas)

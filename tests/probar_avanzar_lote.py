@@ -36,7 +36,7 @@ est = F.con.execute("SELECT id, protocolo_id, tipo FROM estudios WHERE lote_id=?
 pids = sorted({e['protocolo_id'] for e in est})
 print('estudios del lote:', len(est), 'protocolos:', pids)
 F.con.execute("UPDATE protocolos SET borrador=0 WHERE id IN (%s)" % ','.join(map(str, pids)))
-F.con.execute("DELETE FROM etapas WHERE estudio_id IN (SELECT id FROM estudios WHERE lote_id=?)", (lid,))
+F.con.execute("DELETE FROM etapas WHERE flujo_id IN (SELECT flujo_id FROM estudios WHERE lote_id=?)", (lid,))
 F.con.execute('DELETE FROM tecnicas')
 F.con.execute('DELETE FROM macro')
 F.con.execute('DELETE FROM micro')
@@ -46,16 +46,16 @@ chequear('el lote muestra el botón de avanzar (macroscopía)', 'Avanzar lote: c
 
 h = post(f'/lotes/{lid}/avanzar', etapa='macroscopia')
 chequear('sin macro cargada no avanza y dice cuál falta', 'No se avanzó el lote' in h and 'descripción macroscópica' in h)
-chequear('no se registró nada', F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE estudio_id IN (SELECT id FROM estudios WHERE lote_id=?)", (lid,)).fetchone()['n'] == 0)
+chequear('no se registró nada', F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE flujo_id IN (SELECT flujo_id FROM estudios WHERE lote_id=?)", (lid,)).fetchone()['n'] == 0)
 
 duenos = {}
 for e in est:
     duenos.setdefault((e['protocolo_id'], e['tipo']), []).append(e['id'])
 for ids_ in duenos.values():
     cab = min(ids_)
-    F.con.execute("INSERT INTO macro (estudio_id, descripcion) VALUES (?, 'macro de prueba')", (cab,))
+    F.con.execute("INSERT INTO macro (flujo_id, descripcion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?), 'macro de prueba')", (cab,))
 h = post(f'/lotes/{lid}/avanzar', etapa='macroscopia')
-chequear('sin técnicas tampoco avanza', 'Faltan las técnicas' in h and F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE estudio_id IN (SELECT id FROM estudios WHERE lote_id=?)", (lid,)).fetchone()['n'] == 0)
+chequear('sin técnicas tampoco avanza', 'Faltan las técnicas' in h and F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE flujo_id IN (SELECT flujo_id FROM estudios WHERE lote_id=?)", (lid,)).fetchone()['n'] == 0)
 for e in est:
     F.con.execute("INSERT INTO tecnicas (estudio_id, numero, fragmentos, inclusion, tacos, cassettes, comentarios, usuario_id, creado_en) VALUES (?, 'A', 1, 'Reserva', 1, 1, '', ?, '2026-10-01 10:00:00')", (e['id'], admin))
 
@@ -64,19 +64,19 @@ chequear('rechaza si la etapa no coincide con la actual', 'cambió de etapa' in 
 
 h = post(f'/lotes/{lid}/avanzar', etapa='macroscopia')
 n = F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE etapa='macroscopia'").fetchone()['n']
-chequear('avanza todos los estudios del lote', n == len(est) and 'registrada' in h)
+chequear('avanza todos los estudios del lote', n == len(duenos) and 'registrada' in h)
 chequear('audita una línea por protocolo', F.con.execute("SELECT COUNT(*) AS n FROM auditoria WHERE accion='listo' AND detalle LIKE '%(lote %'").fetchone()['n'] == len(duenos))
 h = c.get(f'/lotes/{lid}').get_data(as_text=True)
 chequear('ahora ofrece la etapa siguiente', 'Avanzar lote: completar Procesamiento' in h)
 
 h = post(f'/lotes/{lid}/avanzar', etapa='procesamiento')
-chequear('avanza otra vez (procesamiento)', F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE etapa='procesamiento'").fetchone()['n'] == len(est))
+chequear('avanza otra vez (procesamiento)', F.con.execute("SELECT COUNT(*) AS n FROM etapas WHERE etapa='procesamiento'").fetchone()['n'] == len(duenos))
 
 if len(duenos) > 1:
     un_flujo = list(duenos.values())[0]
-    F.con.execute("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?, 'inclusion', ?, '2026-10-02 10:00:00')", (un_flujo[0], admin))
+    F.con.execute("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?), 'inclusion', ?, '2026-10-02 10:00:00')", (un_flujo[0], admin))
     for x in un_flujo[1:]:
-        F.con.execute("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?, 'inclusion', ?, '2026-10-02 10:00:00')", (x, admin))
+        F.con.execute("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?), 'inclusion', ?, '2026-10-02 10:00:00')", (x, admin))
     h = c.get(f'/lotes/{lid}').get_data(as_text=True)
     chequear('con etapas distintas no ofrece el botón y explica por qué', 'Avanzar lote: completar' not in h and 'no están todas en la misma etapa' in h)
     h = post(f'/lotes/{lid}/avanzar', etapa='inclusion')

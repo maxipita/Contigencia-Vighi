@@ -15,7 +15,7 @@ from reportlab.platypus import (BaseDocTemplate, Frame, HRFlowable, Image, KeepT
 
 from vighi.core import almacen
 from vighi.core import db
-from vighi.dominio.estudios import REGISTRO, Variante
+from vighi.dominio.estudios import REGISTRO, Variante, pap
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGO = os.path.join(BASE, "static", "img", "logo.png")
@@ -125,6 +125,10 @@ def _institucion(abreviatura):
     return (u["nombre"] if u and u["nombre"] else abreviatura)
 
 
+def _letra(i):
+    return "abcdefghijklmnopqrstuvwxyz"[i % 26] * (i // 26 + 1)
+
+
 def armar(pid, comentario=""):
     p = db.uno("SELECT * FROM protocolos WHERE id=?", (pid,))
     if not p:
@@ -136,13 +140,13 @@ def armar(pid, comentario=""):
         raise InformeError("El protocolo no tiene estudios activos.")
 
     etapas = {}
-    for x in db.q("SELECT x.* FROM etapas x JOIN estudios e ON e.id=x.estudio_id WHERE e.protocolo_id=?", (pid,)):
-        etapas.setdefault(x["estudio_id"], {})[x["etapa"]] = x
-    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE estudio_id=? AND solicita_ihq=1", (e["id"],))}
-    decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE estudio_id=? AND decal=1", (e["id"],))}
+    for x in db.q("SELECT x.* FROM etapas x JOIN flujos f ON f.id=x.flujo_id WHERE f.protocolo_id=?", (pid,)):
+        etapas.setdefault(x["flujo_id"], {})[x["etapa"]] = x
+    ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE flujo_id=? AND solicita_ihq=1", (e["flujo_id"],))}
+    decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE flujo_id=? AND decal=1", (e["flujo_id"],))}
     pendientes = []
     for e in estudios:
-        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
+        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["flujo_id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
         if proxima and (_etiqueta(e), proxima[1]) not in pendientes:
             pendientes.append((_etiqueta(e), proxima[1]))
     if pendientes:
@@ -161,12 +165,15 @@ def armar(pid, comentario=""):
     for miembros in flujos.values():
         e = miembros[0]
         tipo = REGISTRO[e["tipo"]]
-        macro = db.uno("SELECT * FROM macro WHERE estudio_id=?", (e["id"],))
-        micro = db.uno("SELECT * FROM micro WHERE estudio_id=?", (e["id"],))
-        ihq = db.uno("SELECT * FROM ihq WHERE estudio_id=?", (e["id"],))
+        macro = db.uno("SELECT * FROM macro WHERE flujo_id=?", (e["flujo_id"],))
+        micro = db.uno("SELECT * FROM micro WHERE flujo_id=?", (e["flujo_id"],))
+        ihq = db.uno("SELECT * FROM ihq WHERE flujo_id=?", (e["flujo_id"],))
         cuerpo = _t(micro, "conclusion")
-        if tipo.bethesda and _t(micro, "bethesda"):
-            diag, detalle = _t(micro, "bethesda"), cuerpo or _t(micro, "descripcion")
+        estructura = tipo.micro_pap and pap.tiene_estructura(micro)
+        if estructura:
+            diag, detalle = pap.resultado_de(micro), ""
+        elif tipo.micro_pap and pap.resultado_de(micro):
+            diag, detalle = pap.resultado_de(micro), cuerpo or _t(micro, "descripcion")
         elif cuerpo:
             primera, _, resto = cuerpo.partition("\n")
             diag, detalle = primera.strip(), resto.strip()
@@ -175,22 +182,20 @@ def armar(pid, comentario=""):
         else:
             diag, detalle = "", ""
         materiales = []
-        for m in miembros:
-            cant = (m["cantidad"] or "").strip()
+        for i, m in enumerate(miembros):
             material = " · ".join(x for x in (m["sitio"], m["tipo_muestra"]) if x)
-            if cant:
-                material += f" ({cant} {tipo.etiqueta_cantidad})" if material else f"{cant} {tipo.etiqueta_cantidad}"
             if material:
-                materiales.append(material)
+                materiales.append(f"{_letra(i)}) {material}" if len(miembros) > 1 else material)
         ihq_txt = ""
         if "ihq" in tipo.secciones and ihq and (_t(ihq, "marcadores") or _t(ihq, "resultado")):
             ihq_txt = "\n".join(x for x in (("Marcadores: " + _t(ihq, "marcadores")) if _t(ihq, "marcadores") else "", _t(ihq, "resultado")) if x)
         etiqueta = _etiqueta(e) if len(miembros) == 1 else f"{tipo.nombre} · " + ", ".join(dict.fromkeys(m["sitio"] for m in miembros if m["sitio"]))
         if not diag:
-            avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico final.")
-        secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "material": "\n".join(materiales),
+            avisos.append(f"{etiqueta}: no hay diagnóstico cargado, el informe saldría sin diagnóstico.")
+        secciones.append({"eid": e["id"], "eids": [m["id"] for m in miembros], "tipo": e["tipo"], "etiqueta": etiqueta, "titulo": tipo.nombre, "material": "\n".join(materiales),
                           "diagnostico": diag, "detalle": detalle,
-                          "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": _t(micro, "descripcion"),
+                          "macroscopia": _t(macro, "descripcion") if "macro" in tipo.secciones else "", "microscopia": "" if estructura else _t(micro, "descripcion"),
+                          "hallazgos": pap.hallazgos(micro) if estructura else [], "observaciones": cuerpo if estructura else "",
                           "tecnicas": "; ".join(dict.fromkeys(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";") if x.strip()))
                           or _t(micro, "tecnicas_especiales"), "ihq": ihq_txt})
     if not tiene_firma:
@@ -280,9 +285,8 @@ def _construir(d, total, firma_png):
                 Paragraph(c, s["etiqueta"]) if c else "", _p(d_, s["valor"]) if d_ else ""]
     filas = [fila("Paciente:", d["paciente"], "Protocolo:", d["numero"]),
              fila("Médico solicitante:", d["medico_solicitante"], "Fecha:", d["fecha"]),
-             fila("Institución:", d["institucion"], "Página:", f"1 de {total or 1}"),
-             fila("Cobertura:", d["cobertura"], "", "")]
-    cw = [106, util - 106 - 62 - 100, 62, 100]
+             fila("Institución:", d["institucion"], "Cobertura:", d["cobertura"])]
+    cw = [106, util - 106 - 62 - 150, 62, 150]
     flujo.append(Table(filas, colWidths=cw, style=TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 2),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2), ("LINEBELOW", (0, -1), (-1, -1), 0.6, BORDE)])))
@@ -296,11 +300,11 @@ def _construir(d, total, firma_png):
     varios = len(d["estudios"]) > 1
     for est in d["estudios"]:
         if varios:
-            flujo.append(Table([[Paragraph(escape(est["etiqueta"]).upper(), s["estudio"])]], colWidths=[util], style=TableStyle([
+            flujo.append(Table([[Paragraph(escape(est["titulo"]).upper(), s["estudio"])]], colWidths=[util], style=TableStyle([
                 ("LINEBELOW", (0, 0), (-1, -1), 1.2, ACENTO), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)])))
             flujo.append(Spacer(1, 6))
         if est["diagnostico"]:
-            partes = [Paragraph("DIAGNÓSTICO FINAL", s["seccion"]), _p(est["diagnostico"], s["diagnostico"])]
+            partes = [Paragraph("DIAGNÓSTICO", s["seccion"]), _p(est["diagnostico"], s["diagnostico"])]
             if est["detalle"]:
                 partes.append(_p(est["detalle"], s["texto"]))
             flujo.append(Table([[partes]], colWidths=[util], style=TableStyle([
@@ -308,6 +312,13 @@ def _construir(d, total, firma_png):
                 ("RIGHTPADDING", (0, 0), (-1, -1), 12), ("TOPPADDING", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 11)])))
             flujo.append(Spacer(1, 8))
         seccion("MATERIAL", est["material"])
+        for b in est["hallazgos"]:
+            filas_b = [[Paragraph(escape(a), s["etiqueta"]), _p(v, s["valor"])] for a, v in b["filas"]]
+            tabla = Table(filas_b, colWidths=[110, util - 110], style=TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
+            cabecera = [HRFlowable(width="100%", thickness=0.6, color=BORDE, spaceBefore=2, spaceAfter=7), Paragraph(b["titulo"].upper(), s["seccion"])] if b["titulo"] else []
+            flujo.append(KeepTogether(cabecera + [tabla, Spacer(1, 6)]))
+        seccion("OBSERVACIONES", est["observaciones"])
         seccion("MACROSCOPÍA", est["macroscopia"])
         seccion("MICROSCOPÍA" if est["tipo"] == "BP" else "DESCRIPCIÓN", est["microscopia"])
         seccion("TÉCNICAS ESPECIALES", est["tecnicas"])

@@ -16,7 +16,7 @@
   <input type="hidden" name="ver" value="{{ f.ver }}">
   <input name="q" value="{{ f.q }}" placeholder="Buscar protocolo, paciente, DNI, lote, sitio…" size="36">
   <select name="tipo">
-    <option value="">Todos los estudios</option>
+    <option value="">Todas las muestras</option>
     {% for k, n in TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ n }}</option>{% endfor %}
   </select>
   <select name="sector">
@@ -47,7 +47,7 @@
   {% for c in filas %}
   <tr>
     <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.n_comentarios %} <a class="chip" href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}#comentarios" title="Comentarios del protocolo">{{ c.n_comentarios }} com.</a>{% endif %}{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}
-        {% if c.estudios > 1 %}<div class="muted">{{ c.estudios }} estudios</div>{% endif %}</td>
+        {% if c.estudios > 1 %}<div class="muted">{{ c.estudios }} muestras</div>{% endif %}</td>
     <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}<div class="muted">{{ c.dni or '' }}</div></td>
     <td>{% for sub, tipo in c.muestras %}<div>{{ sub }}{% if tipo %}<div class="muted">{{ tipo }}</div>{% endif %}</div>{% endfor %}</td>
     <td>{% if c.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=c.lote_id) }}">{{ c.lote }}</a>{% endif %}</td>

@@ -41,7 +41,7 @@
       {% if not l.cerrado and puede('lotes_armar') %}<td class="no-imprimir">{% if loop.first or estudios[loop.index0 - 1].protocolo_id != c.protocolo_id %}<input type="checkbox" name="eids" value="{{ c.id }}" form="form-mover" data-protocolo>{% endif %}</td>{% endif %}
       <td class="muted">{{ loop.index }}</td>
       <td><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.numero }}</b></a>{% if c.flujos %} <span class="chip flujos">{{ c.flujos }}</span>{% endif %}{% if c.borrador %} <a class="mini" href="{{ url_for('protocolos.protocolo_editar', pid=c.protocolo_id) }}">a completar</a>{% endif %}</td>
-      <td><a href="{{ url_for('estudios.estudio', eid=c.id) }}">{{ c.etiqueta }}</a></td>
+      <td><a href="{{ url_for('estudios.flujo', pid=c.protocolo_id, tipo=c.tipo) }}">{{ c.etiqueta }}</a></td>
       <td>{{ c.apellido or '' }}{% if c.nombre %}, {{ c.nombre }}{% endif %}</td>
       <td>{{ c.subcategoria or '' }}<div class="muted">{{ c.tipo_muestra or '' }}</div></td>
       <td>{{ c.tacos if c.tacos is not none else '' }}</td>
@@ -75,15 +75,23 @@
   </div>
   {% endif %}
 
-  {% if not l.cerrado and puede('lotes_armar') and estudios and destinos %}
+  {% if not l.cerrado and puede('lotes_armar') and estudios %}
   <div class="tarjeta">
     <h2>Mover protocolos</h2>
     <form method="post" id="form-mover" action="{{ url_for('lotes.lote_mover', lote_id=l.id) }}" data-confirmar-mover>
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <p class="muted" style="margin-top:0">Marcá protocolos en la tabla y elegí a qué lote van. Entran todos sus estudios; el lote de destino tiene que servir a su primer flujo.</p>
       <label>Lote de destino</label>
-      <select name="destino" required><option value="" hidden>Seleccionar…</option>
+      <select name="destino" required data-destino-lote><option value="" hidden>Seleccionar…</option>
+        <option value="nuevo">＋ Crear un lote nuevo…</option>
         {% for d in destinos %}<option value="{{ d.id }}">{{ d.codigo }} · {{ d.fecha | f }}</option>{% endfor %}</select>
+      {% if not destinos %}<p class="muted">No hay otro lote abierto de un tipo que sirva: elegí «Crear un lote nuevo».</p>{% endif %}
+      <div data-nuevo-lote hidden>
+        <label style="margin-top:8px">Tipo del lote nuevo</label>
+        <select name="tipo_lote">{% for t in tipos_nuevo %}<option {{ 'selected' if t == l.tipo_lote }}>{{ t }}</option>{% endfor %}</select>
+        <label style="margin-top:8px">Fecha del lote nuevo</label>
+        <input type="date" name="fecha" value="{{ l.fecha }}">
+      </div>
       <div class="acciones"><button class="btn">Mover los marcados</button><span class="muted" data-cuenta-marcados></span></div>
     </form>
   </div>

@@ -20,7 +20,7 @@ for ver in ('pendientes', 'informados', 'todos', 'anulados', 'mios', 'sin_cargar
     chequear(f'{ver}: una sola fila por protocolo', len(nums) == len(set(nums)))
     chequear(f'{ver}: sin columna Estudio', '<th>Estudio</th>' not in h and '<th>Protocolo</th><th>Paciente</th>' in h)
 h, f = filas('/?ver=todos')
-chequear('hay protocolos con varios estudios y lo indican', re.search(r'\d+ estudios</div>', h) is not None)
+chequear('hay protocolos con varias muestras y lo indican', re.search(r'\d+ muestras</div>', h) is not None)
 tot = len(f)
 n_est = F.con.execute("SELECT COUNT(DISTINCT e.protocolo_id) AS n FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id WHERE p.borrador=0").fetchone()['n']
 chequear('todos = cantidad de protocolos no borrador', tot == n_est)

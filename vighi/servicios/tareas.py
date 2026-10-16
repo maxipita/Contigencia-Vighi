@@ -1,4 +1,5 @@
 from vighi.core import db
+from vighi.core.texto import sin_acentos
 from vighi.dominio.estudios import ETAPAS, SECTORES
 
 ENTREGA = "entrega"
@@ -13,6 +14,14 @@ def tipos_de_tarea():
 
 def usuarios_para_tareas():
     return db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 ORDER BY iniciales")
+
+
+def tipo_solicitud_ihq():
+    for t in db.q("SELECT * FROM tarea_tipos ORDER BY id"):
+        if sin_acentos(t["titulo"]) in ("solicitud de ihq", "solicitud ihq"):
+            return t
+    tid = db.ex("INSERT INTO tarea_tipos (titulo, cierre) VALUES ('Solicitud de IHQ', NULL)")
+    return db.uno("SELECT * FROM tarea_tipos WHERE id=?", (tid,))
 
 
 URGENCIAS = {"regular": "Regular", "urgente": "Urgente"}

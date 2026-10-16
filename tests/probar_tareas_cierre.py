@@ -47,10 +47,10 @@ with A.app.app_context():
     p2, e2 = protocolo("C000602")
     p3, e3 = protocolo("C000603", "ana@correo.com")
     for eid in (e1, e2):
-        db.ex("INSERT INTO macro (estudio_id, descripcion) VALUES (?, 'macro de prueba')", (eid,))
+        db.ex("INSERT INTO macro (flujo_id, descripcion) VALUES ((SELECT flujo_id FROM estudios WHERE id=?), 'macro de prueba')", (eid,))
         db.ex("INSERT INTO tecnicas (estudio_id, numero, fragmentos, inclusion, tacos, cassettes, comentarios, usuario_id, creado_en) VALUES (?, 'A', 1, 'Reserva', 1, 1, '', ?, '2026-10-14 10:00:00')", (eid, admin))
     for clave, _, _ in REGISTRO["BP"].flujo(0):
-        db.ex("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (e3, clave, admin, db.ahora()))
+        db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e3, clave, admin, db.ahora()))
     db.ex("INSERT INTO informes_emitidos (protocolo_id, version, usuario_id, firmante_id, creado_en, archivo, pdf) VALUES (?,?,?,?,?,?,?)",
           (p3, 1, admin, ids["med"], "2026-10-15 10:00:00", "Informe.pdf", b"%PDF-1.4 prueba"))
     db.ex("INSERT INTO tarea_tipos (titulo, cierre) VALUES ('T macro','macroscopia'), ('T proc','procesamiento'), ('T entrega','entrega'), ('T manual', NULL)")

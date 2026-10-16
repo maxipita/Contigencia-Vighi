@@ -649,7 +649,8 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
 });
 
 (function () {
-  const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado"];
+  const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado", "leucocitos", "hematies", "flora", "aspecto", "otros",
+                  "pavimentosas", "endocervicales", "metaplasicas", "endometriales"];
   document.querySelectorAll("form[data-autoguardar]").forEach((form) => {
     const estado = form.querySelector("[data-autoestado]");
     const csrf = form.querySelector("[name=_csrf]").value;
@@ -788,9 +789,107 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
   if (form) form.addEventListener("submit", (ev) => {
     const n = cajas().filter((c) => c.checked).length;
     const destino = form.querySelector("select[name=destino]");
-    const rotulo = destino.selectedOptions[0] ? destino.selectedOptions[0].textContent.trim() : "";
+    const nuevo = destino.value === "nuevo";
+    const rotulo = nuevo ? "nuevo (" + form.querySelector("select[name=tipo_lote]").value + ", " + form.querySelector("input[name=fecha]").value + ")"
+      : (destino.selectedOptions[0] ? destino.selectedOptions[0].textContent.trim() : "");
     if (!n) { ev.preventDefault(); alert("Marcá al menos un protocolo para mover."); return; }
     if (!confirm("¿Mover " + n + " protocolo(s) al lote " + rotulo + "?")) ev.preventDefault();
   });
   contar();
 })();
+
+(function () {
+  const destino = document.querySelector("[data-destino-lote]");
+  const nuevo = document.querySelector("[data-nuevo-lote]");
+  if (!destino || !nuevo) return;
+  const alternar = () => { nuevo.hidden = destino.value !== "nuevo"; };
+  destino.addEventListener("change", alternar);
+  alternar();
+})();
+
+(function () {
+  const solicita = document.querySelector("[data-ihq-toggle]");
+  const tarjeta = document.getElementById("ihq");
+  if (!solicita || !tarjeta) return;
+  solicita.addEventListener("change", () => {
+    tarjeta.hidden = solicita.value !== "1";
+    if (!tarjeta.hidden) tarjeta.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+})();
+
+(function () {
+  const area = document.getElementById("ihq_marc");
+  const lista = document.querySelector("[data-lista-ihq]");
+  if (!area || !lista) return;
+  const confirmar = document.querySelector("[data-ihq-confirmar]");
+  const otro = document.querySelector("[data-ihq-otro]");
+  const leer = () => area.value.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+  const escribir = (items) => { area.value = items.join(", "); area.dispatchEvent(new Event("input", { bubbles: true })); };
+  const pintar = () => {
+    const items = leer();
+    lista.innerHTML = "";
+    if (!items.length) {
+      const li = document.createElement("li");
+      li.className = "muted";
+      li.textContent = "Todavía no elegiste marcadores.";
+      lista.append(li);
+    }
+    items.forEach((m) => {
+      const li = document.createElement("li");
+      const txt = document.createElement("span");
+      txt.textContent = m;
+      const quitar = document.createElement("button");
+      quitar.type = "button";
+      quitar.className = "lapiz";
+      quitar.textContent = "✕";
+      quitar.title = "Quitar " + m;
+      quitar.addEventListener("click", () => escribir(leer().filter((x) => x !== m)));
+      li.append(txt, " ", quitar);
+      lista.append(li);
+    });
+    if (confirmar) confirmar.disabled = !items.length;
+    const cuenta = document.querySelector("[data-ihq-cuenta]");
+    if (cuenta) cuenta.textContent = items.length ? "(" + items.length + ")" : "";
+  };
+  const agregar = () => {
+    const v = otro.value.replace(/[,;]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!v) return;
+    const items = leer();
+    if (!items.some((x) => x.toLowerCase() === v.toLowerCase())) items.push(v);
+    otro.value = "";
+    escribir(items);
+  };
+  area.addEventListener("input", pintar);
+  const boton = document.querySelector("[data-ihq-agregar]");
+  if (boton) boton.addEventListener("click", agregar);
+  if (otro) otro.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); agregar(); } });
+  if (confirmar) confirmar.addEventListener("click", (ev) => {
+    if (!confirm(confirmar.dataset.pregunta)) { ev.preventDefault(); return; }
+    setTimeout(() => { confirmar.disabled = true; });
+  });
+  pintar();
+})();
+
+document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
+  const sel = document.getElementById(caja.dataset.abrevDe);
+  if (!sel) return;
+  const marca = document.querySelector('[data-sospecha-de="' + sel.id + '"]');
+  const reflejar = () => {
+    const o = sel.selectedOptions[0];
+    caja.value = o && o.dataset.abrev ? o.dataset.abrev : "";
+    caja.classList.remove("invalida");
+    if (marca) marca.hidden = !(o && o.dataset.sospechoso);
+  };
+  const aplicar = () => {
+    const t = caja.value.trim().toLowerCase();
+    if (!t) { caja.classList.remove("invalida"); if (sel.value !== "") { sel.value = ""; sel.dispatchEvent(new Event("change", { bubbles: true })); } return; }
+    const o = [...sel.options].find((x) => (x.dataset.abrev || "").toLowerCase() === t);
+    if (!o) { caja.classList.add("invalida"); return; }
+    if (sel.value !== o.value) { sel.value = o.value; sel.dispatchEvent(new Event("change", { bubbles: true })); } else reflejar();
+  };
+  caja.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); aplicar(); } });
+  caja.addEventListener("change", aplicar);
+  caja.addEventListener("input", () => caja.classList.remove("invalida"));
+  sel.addEventListener("change", reflejar);
+  reflejar();
+});

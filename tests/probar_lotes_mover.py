@@ -91,6 +91,30 @@ with A.app.app_context():
     lote_final = db.uno("SELECT lote_id FROM estudios WHERE id=?", (primeros[2][1],))['lote_id']
 chequear('un lote de otro tipo compatible también sirve', lote_final == onco, lote_final)
 
+print('3) mover a un lote nuevo, con su fecha, desde la misma tarjeta')
+with A.app.app_context():
+    ahora = db.ahora()
+    lote_o = db.ex("INSERT INTO lotes (codigo, tipo_lote, fecha, numero) VALUES ('NO ONCO-0905.1','NO ONCO','2026-09-05',1)")
+    ps = []
+    for n in ('C000811', 'C000812'):
+        pid = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, borrador, creado_por, creado_en) VALUES (?,?,?,?,0,?,?)", (n, '2026-09-05', 'Nuevo', n, admin, ahora))
+        e1 = db.ex("INSERT INTO estudios (protocolo_id, tipo, categoria, subcategoria, sitio, tipo_muestra, cantidad, lote_id, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (pid, 'BP', 'Biopsias', 'Digestiva', 'Colon', 'Biopsia', '1', lote_o, admin, ahora))
+        ps.append((pid, e1))
+h = c.get(f'/lotes/{lote_o}').get_data(as_text=True)
+chequear('sin otro lote igual abierto la tarjeta igual aparece y ofrece crear uno', 'Mover protocolos' in h and 'value="nuevo"' in h and 'name="fecha"' in h)
+h = post(f'/lotes/{lote_o}/mover', {'destino': 'nuevo', 'tipo_lote': 'NO ONCO', 'fecha': '2026-09-06', 'eids': [str(ps[0][1]), str(ps[1][1])]})
+with A.app.app_context():
+    nuevo_lote = db.uno("SELECT * FROM lotes WHERE fecha='2026-09-06' AND tipo_lote='NO ONCO'")
+    lotes_nuevos = {r['lote_id'] for r in db.q("SELECT lote_id FROM estudios WHERE protocolo_id IN (?,?)", (ps[0][0], ps[1][0]))}
+chequear('crea el lote con la fecha elegida y mueve los protocolos', nuevo_lote is not None and lotes_nuevos == {nuevo_lote['id']} and '2 protocolo(s) movidos' in h, (dict(nuevo_lote) if nuevo_lote else None, lotes_nuevos))
+h = post(f'/lotes/{nuevo_lote["id"]}/mover', {'destino': 'nuevo', 'tipo_lote': 'NO ONCO', 'fecha': 'mal', 'eids': [str(ps[0][1])]})
+chequear('con una fecha inválida no crea nada', 'fecha válida' in h)
+h = post(f'/lotes/{nuevo_lote["id"]}/mover', {'destino': 'nuevo', 'tipo_lote': 'NO ONCO', 'fecha': '2026-09-07'})
+with A.app.app_context():
+    n_7 = db.uno("SELECT COUNT(*) AS n FROM lotes WHERE fecha='2026-09-07'")['n']
+chequear('sin protocolos marcados no deja un lote vacío', n_7 == 0 and 'al menos un protocolo' in h)
+
 print()
 print('FALLAS:', 'ninguna' if not fallas else fallas)
 sys.exit(1 if fallas else 0)

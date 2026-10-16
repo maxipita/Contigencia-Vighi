@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta
 
 from flask import abort
@@ -6,26 +7,24 @@ from vighi.core import db
 from vighi.core.fechas import fecha_hora
 from vighi.core.sesion import puede
 from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, Variante
-from vighi.servicios.consultas import cargar_estudios, etiqueta, protocolo_cerrado, variante_de
+from vighi.servicios.consultas import cargar_estudios, etiqueta, protocolo_cerrado
 
 
-DUENO = ("(SELECT CASE WHEN d.anulado=1 THEN d.id ELSE (SELECT MIN(x.id) FROM estudios x WHERE x.protocolo_id=d.protocolo_id "
-         "AND x.tipo=d.tipo AND x.anulado=0) END FROM estudios d WHERE d.id=?)")
+FLUJO_DE = "(SELECT flujo_id FROM estudios WHERE id=?)"
 SQL_FICHA = """SELECT e.*, p.numero, p.borrador, p.fecha_recoleccion, p.apellido, p.nombre, p.dni, p.medico, p.cobertura,
-                         u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote, """ + DUENO.replace("?", "e.id") + """ AS dueno
+                         u.iniciales AS responsable, u2.iniciales AS creador, l.codigo AS lote
                   FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                   LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN usuarios u2 ON u2.id=e.creado_por
                   LEFT JOIN lotes l ON l.id=e.lote_id WHERE e.id=?"""
 SQL_ETAPAS_FICHA = """SELECT x.*, u.iniciales, u.nombre FROM etapas x
-                                            JOIN usuarios u ON u.id=x.usuario_id WHERE estudio_id=?"""
-SQL_ULTIMA_ETAPA = "SELECT * FROM etapas WHERE estudio_id=? ORDER BY fecha_hora DESC, id DESC LIMIT 1"
+                                            JOIN usuarios u ON u.id=x.usuario_id WHERE x.flujo_id=""" + FLUJO_DE
+SQL_ULTIMA_ETAPA = "SELECT * FROM etapas WHERE flujo_id=" + FLUJO_DE + " ORDER BY fecha_hora DESC, id DESC LIMIT 1"
 SQL_HISTORIAL_ESTUDIO = """SELECT a.*, u.iniciales FROM auditoria a LEFT JOIN usuarios u ON u.id=a.usuario_id
-                        WHERE a.estudio_id IN (SELECT x.id FROM estudios x JOIN estudios d ON d.protocolo_id=x.protocolo_id AND d.tipo=x.tipo
-                                               WHERE d.id=? AND (d.anulado=1 AND x.id=d.id OR d.anulado=0 AND x.anulado=0))
+                        WHERE a.estudio_id IN (SELECT x.id FROM estudios x WHERE x.flujo_id=""" + FLUJO_DE + """)
                         ORDER BY a.id DESC"""
-SQL_MACRO = "SELECT * FROM macro WHERE estudio_id=" + DUENO
-SQL_MICRO = "SELECT * FROM micro WHERE estudio_id=" + DUENO
-SQL_IHQ = "SELECT * FROM ihq WHERE estudio_id=" + DUENO
+SQL_MACRO = "SELECT * FROM macro WHERE flujo_id=" + FLUJO_DE
+SQL_MICRO = "SELECT * FROM micro WHERE flujo_id=" + FLUJO_DE
+SQL_IHQ = "SELECT * FROM ihq WHERE flujo_id=" + FLUJO_DE
 SQL_TEMPLATES = "SELECT id, titulo, tipo_biopsia AS zona, organo, tipo_muestra AS tipo FROM templates WHERE clase=? ORDER BY titulo"
 
 
@@ -42,8 +41,7 @@ def ficha(eid):
     micro = db.uno(SQL_MICRO, (eid,))
     ihq = db.uno(SQL_IHQ, (eid,))
     etapas = {x["etapa"]: x for x in db.q(SQL_ETAPAS_FICHA, (eid,))}
-    solicita = (Variante(micro and micro["solicita_ihq"], macro and macro["decal"]) if e["anulado"]
-                else variante_de(e["protocolo_id"], e["tipo"]))
+    solicita = Variante(micro and micro["solicita_ihq"], macro and macro["decal"])
     return e, macro, micro, ihq, etapas, solicita
 
 
@@ -108,15 +106,23 @@ def estudios_sin_tecnicas(miembros):
 def sumar_cassettes(e):
     total = db.uno("""SELECT SUM(t.cassettes) AS n FROM tecnicas t JOIN estudios x ON x.id=t.estudio_id
                       WHERE x.protocolo_id=? AND x.tipo=? AND x.anulado=0""", (e["protocolo_id"], e["tipo"]))["n"]
-    guardar_seccion("macro", e["dueno"], {"cassettes": total})
+    guardar_seccion("macro", e["flujo_id"], {"cassettes": total})
 
 
-def guardar_seccion(tabla, eid, valores):
-    if db.uno(f"SELECT 1 FROM {tabla} WHERE estudio_id=?", (eid,)):
-        db.ex(f"UPDATE {tabla} SET {', '.join(k + '=?' for k in valores)} WHERE estudio_id=?", list(valores.values()) + [eid])
+def lista_marcadores(texto):
+    return list(dict.fromkeys(x.strip() for x in re.split(r"[,;\n]+", texto or "") if x.strip()))
+
+
+def pedido_ihq_confirmado(micro, ihq):
+    return bool(ihq and ihq["pedido_en"])
+
+
+def guardar_seccion(tabla, flujo_id, valores):
+    if db.uno(f"SELECT 1 FROM {tabla} WHERE flujo_id=?", (flujo_id,)):
+        db.ex(f"UPDATE {tabla} SET {', '.join(k + '=?' for k in valores)} WHERE flujo_id=?", list(valores.values()) + [flujo_id])
     else:
-        db.ex(f"INSERT INTO {tabla} (estudio_id, {', '.join(valores)}) VALUES (?,{','.join('?' * len(valores))})",
-              [eid] + list(valores.values()))
+        db.ex(f"INSERT INTO {tabla} (flujo_id, {', '.join(valores)}) VALUES (?,{','.join('?' * len(valores))})",
+              [flujo_id] + list(valores.values()))
 
 
 def entero_positivo(valor, maximo=999):
@@ -126,6 +132,8 @@ def entero_positivo(valor, maximo=999):
 
 def motivo_no_listo(yo, tipo, etapa, prox, solicita, macro, micro, ihq, sin_tecnicas):
     falta = None if etapa in PASOS_IHQ and not solicita else REGISTRO[tipo].requisito(etapa, macro, micro, ihq)
+    if not falta and solicita and (etapa == "microscopia" or etapa in PASOS_IHQ) and not pedido_ihq_confirmado(micro, ihq):
+        falta = "Falta confirmar el pedido de IHQ: cargá los marcadores y apretá «Confirmar pedido de IHQ»."
     if not falta and sin_tecnicas:
         falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin_tecnicas) + "."
     if not prox or prox[0] != etapa:

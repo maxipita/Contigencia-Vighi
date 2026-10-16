@@ -58,7 +58,7 @@ class Estudio:
     subcategoria_fija = None
     sitio_fijo = None
     citologia_hormonal = False
-    bethesda = False
+    micro_pap = False
     lotes = []
     lote_por_citotecnico = False
     tacos_por_lote = None

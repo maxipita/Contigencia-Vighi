@@ -126,11 +126,11 @@ def exportar():
     from openpyxl.utils import get_column_letter
 
     etapas = {}
-    for x in db.q("SELECT x.estudio_id, x.etapa, x.fecha_hora, u.iniciales FROM etapas x JOIN usuarios u ON u.id=x.usuario_id"):
-        etapas.setdefault(x["estudio_id"], {})[x["etapa"]] = x
-    macro = {r["estudio_id"]: r for r in db.q("SELECT * FROM macro")}
-    micro = {r["estudio_id"]: r for r in db.q("SELECT * FROM micro")}
-    ihq = {r["estudio_id"]: r for r in db.q("SELECT * FROM ihq")}
+    for x in db.q("SELECT x.flujo_id, x.etapa, x.fecha_hora, u.iniciales FROM etapas x JOIN usuarios u ON u.id=x.usuario_id"):
+        etapas.setdefault(x["flujo_id"], {})[x["etapa"]] = x
+    macro = {r["flujo_id"]: r for r in db.q("SELECT * FROM macro")}
+    micro = {r["flujo_id"]: r for r in db.q("SELECT * FROM micro")}
+    ihq = {r["flujo_id"]: r for r in db.q("SELECT * FROM ihq")}
     protocolos = {r["id"]: r for r in db.q("SELECT * FROM protocolos")}
     orden_etapas = [k for k in NOMBRE_ETAPA if k != "ingreso"]
 
@@ -146,13 +146,9 @@ def exportar():
             "Bethesda", "Técnicas especiales", "Solicita IHQ", "Marcadores IHQ", "Resultado IHQ"]
            + [f"{NOMBRE_ETAPA[k]} - {x}" for k in orden_etapas for x in ("usuario", "fecha/hora")])
     ws.append(cab)
-    cabecera = {}
-    for r in db.q("SELECT id, protocolo_id, tipo FROM estudios WHERE anulado=0 ORDER BY id"):
-        cabecera.setdefault((r["protocolo_id"], r["tipo"]), r["id"])
     for e in cargar_estudios():
         p = protocolos[e["protocolo_id"]]
-        dueno = e["id"] if e["anulado"] else cabecera.get((e["protocolo_id"], e["tipo"]), e["id"])
-        ma, mi, ih, et = macro.get(dueno), micro.get(dueno), ihq.get(dueno), etapas.get(e["id"], {})
+        ma, mi, ih, et = macro.get(e["flujo_id"]), micro.get(e["flujo_id"]), ihq.get(e["flujo_id"]), etapas.get(e["flujo_id"], {})
         g = lambda r, k: (r[k] if r else "") or ""
         fila = [p["numero"], e["etiqueta"], e["estado"], e["lote"], "Si" if e["anulado"] else "", p["protocolo_sistema"],
                 "Si" if p["cargado_sistema"] else "No", e["responsable"], fecha_hora(e["creado_en"]),
@@ -161,7 +157,7 @@ def exportar():
                 p["lugar_entrega"], p["observaciones"], e["categoria"], e["subcategoria"], e["sitio"], e["tipo_muestra"],
                 e["cantidad"], e["citologia_hormonal"], e["observaciones"],
                 g(ma, "template"), g(ma, "descripcion"), g(ma, "cassettes"),
-                g(mi, "template"), g(mi, "descripcion"), g(mi, "conclusion"), g(mi, "bethesda"),
+                g(mi, "template"), g(mi, "descripcion"), g(mi, "conclusion"), g(mi, "resultado") or g(mi, "bethesda"),
                 e["tecnicas_especiales"] or g(mi, "tecnicas_especiales"), "Si" if mi and mi["solicita_ihq"] else "", g(ih, "marcadores"), g(ih, "resultado")]
         for k in orden_etapas:
             x = et.get(k)

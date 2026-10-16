@@ -57,7 +57,7 @@ chequear("la crea con sus datos y vuelve a la ficha", len(t) == 1 and t[0]["titu
          and t[0]["responsable_id"] == ids["med"] and t[0]["estado"] == "abierta" and t[0]["cierre"] == "procesamiento" and t[0]["creado_por"] == admin
          and "Tarea «Macro urgente» creada" in r.get_data(as_text=True))
 h = r.get_data(as_text=True)
-chequear("la tarjeta la lista", "Macro urgente" in h and "Para hoy a la tarde" in h and "Urgente" in h and "Prioridad alta" in h and "Cerrar tarea" in h)
+chequear("la tarjeta la lista", "Macro urgente" in h and "Urgente" in h and "Responsable:" in h and "Cerrar tarea" in h and "Para hoy a la tarde" not in h and "Prioridad alta" not in h)
 chequear("queda en el historial", len(auditorias("tarea_nueva")) == 1 and "Macro urgente" in auditorias("tarea_nueva")[0])
 chequear("no aparece en otro protocolo", "Macro urgente" not in c.get(f"/protocolo/{pid2}").get_data(as_text=True))
 
