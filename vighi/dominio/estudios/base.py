@@ -103,3 +103,8 @@ class Estudio:
         if self.lote_por_citotecnico:
             return list(citotecnicos) + [t for t in fijos if t in self.lotes and t not in citotecnicos]
         return [t for t in fijos if t in self.lotes]
+
+
+def sector_marca(sectores, tipo, etapa, sector):
+    sectores = set(sectores)
+    return sector in sectores or (tipo == "PAP" and etapa == "microscopia" and "citotecnico" in sectores)

@@ -2,15 +2,16 @@ import io
 import re
 from datetime import datetime, timedelta
 
-from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, send_file, url_for
 
-from vighi.core import db
+from vighi.core import almacen, db
 from vighi.core.fechas import MESES, MESES_CORTOS, hoy
 from vighi.core.sesion import requiere_permiso, usuario_actual
 from vighi.core.texto import sin_acentos
 from vighi.dominio import facturacion
 from vighi.servicios.catalogo import tipos_de_muestra, tipos_de_muestra_bp
 from vighi.servicios.consultas import cargar_estudios
+from vighi.servicios import factura_archivos as adjuntos
 from vighi.servicios.coberturas import contexto_cobertura
 from vighi.servicios.facturas import (coberturas_lista, dos_decimales, factura_o_404, facturacion_buscar, items_de_factura,
                                      planilla_de_tarifa, sentencias_asignacion, tarifa_elegida)
@@ -159,7 +160,8 @@ def facturar():
 @requiere_permiso("facturacion")
 def factura(fid):
     return render_template("facturacion/factura.html", f=factura_o_404(fid), items=items_de_factura(fid), estados=facturacion.ESTADOS,
-                           clases=facturacion.CLASES_ESTADO, tipos_iva=facturacion.TIPOS_IVA, hoy=hoy(), tipos_fec=facturacion.TIPOS_FEC, dos=dos_decimales)
+                           clases=facturacion.CLASES_ESTADO, tipos_iva=facturacion.TIPOS_IVA, hoy=hoy(), tipos_fec=facturacion.TIPOS_FEC, dos=dos_decimales,
+                           archivos=adjuntos.archivos_de(fid), tamano=adjuntos.tamano_legible, visibles=adjuntos.VISIBLES)
 
 
 @bp.route("/facturacion/<int:fid>/guardar", methods=["POST"])
@@ -317,6 +319,52 @@ def factura_anular(fid):
         db.auditar(yo["id"], None, "factura_anulada", f"{f['numero'] or 'borrador ' + str(fid)} · {motivo}")
         flash("Factura anulada: sus estudios vuelven a estar disponibles para facturar.", "ok")
     return redirect(url_for("facturacion.factura", fid=fid))
+
+
+@bp.route("/facturacion/<int:fid>/archivos", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_archivos_subir(fid):
+    yo = usuario_actual()
+    f = factura_o_404(fid)
+    subidos = [x for x in request.files.getlist("archivos") if x and x.filename]
+    if not subidos:
+        flash("Elegí al menos un archivo.", "error")
+    elif adjuntos.cantidad(fid) + len(subidos) > adjuntos.MAX_POR_FACTURA:
+        flash(f"Una factura admite hasta {adjuntos.MAX_POR_FACTURA} archivos.", "error")
+    else:
+        leidos = [(x.filename, x.read()) for x in subidos]
+        errores = [e for e in (adjuntos.validar(n, d) for n, d in leidos) if e]
+        if errores:
+            flash(" ".join(errores) + " No se subió ninguno.", "error")
+        else:
+            for nombre, datos in leidos:
+                adjuntos.guardar(fid, nombre, datos, yo["id"])
+            db.auditar(yo["id"], None, "factura_archivo", f"{f['numero'] or 'borrador ' + str(fid)} · " + ", ".join(adjuntos.nombre_seguro(n) for n, _ in leidos))
+            flash(f"Se subió {len(leidos)} archivo(s) a la factura.", "ok")
+    return redirect(url_for("facturacion.factura", fid=fid) + "#archivos")
+
+
+@bp.route("/facturacion/archivo/<int:aid>")
+@requiere_permiso("facturacion")
+def factura_archivo(aid):
+    a = adjuntos.archivo_o_none(aid) or abort(404)
+    r = send_file(io.BytesIO(almacen.leer(a["datos"])), mimetype=adjuntos.EXTENSIONES.get(a["extension"], "application/octet-stream"),
+                  as_attachment=a["extension"] not in adjuntos.VISIBLES, download_name=a["nombre"], conditional=False)
+    r.headers["X-Content-Type-Options"] = "nosniff"
+    r.headers["Cache-Control"] = "private"
+    return r
+
+
+@bp.route("/facturacion/archivo/<int:aid>/borrar", methods=["POST"])
+@requiere_permiso("facturacion")
+def factura_archivo_borrar(aid):
+    yo = usuario_actual()
+    a = adjuntos.archivo_o_none(aid) or abort(404)
+    f = factura_o_404(a["factura_id"])
+    adjuntos.quitar(a)
+    db.auditar(yo["id"], None, "factura_archivo_borrado", f"{f['numero'] or 'borrador ' + str(f['id'])} · {a['nombre']}")
+    flash("Archivo quitado de la factura.", "ok")
+    return redirect(url_for("facturacion.factura", fid=f["id"]) + "#archivos")
 
 
 @bp.route("/facturacion/<int:fid>.csv")

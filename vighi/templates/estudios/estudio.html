@@ -10,7 +10,7 @@
   {% endif %}
 {% endmacro %}
 {% macro listo_toggle(etapa) %}
-  {% if prox and prox[0] == etapa and puede('etapas') and (yo.admin or prox[2] in mis_sectores) %}
+  {% if prox and prox[0] == etapa and puede('etapas') and (yo.admin or sector_marca(mis_sectores, e.tipo, prox[0], prox[2])) %}
     <label style="display:inline-flex;gap:6px;align-items:center;margin:0">
       <input type="checkbox" name="y_listo" value="1"> y marcar <b>{{ NOMBRE_ETAPA[etapa] }}</b> como lista ({{ yo.iniciales }})
     </label>
@@ -126,7 +126,7 @@
       <td>{% if f.estado == 'OT' %}<span class="ot">◷ OT</span>{% elif f.estado == 'LT' %}<span class="lt">◷ LT {{ f.atraso }}</span>{% endif %}</td>
       <td class="muted">{{ f.demora }}</td>
       <td>{% if f.proxima and not e.anulado %}
-        {% if puede('etapas') and (yo.admin or prox[2] in mis_sectores) %}
+        {% if puede('etapas') and (yo.admin or sector_marca(mis_sectores, e.tipo, prox[0], prox[2])) %}
         <form method="post" action="{{ url_for('estudios.marcar_listo', eid=e.id, etapa=f.clave) }}">
           <input type="hidden" name="_csrf" value="{{ csrf }}">
           <button class="btn listo" style="padding:4px 10px">✔ Completar ({{ yo.iniciales }})</button>

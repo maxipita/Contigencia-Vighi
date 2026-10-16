@@ -20,6 +20,7 @@ SQL_RECIENTES = """SELECT o.id, o.protocolo_id, o.nombre, o.pagina, o.metodo, o.
 PATRON_NUMERO = re.compile(r"(?<![A-Za-z0-9])[Cc]\s*#?\s*([0-9OoQDIl|SsBZ]{6})(?![0-9A-Za-z])")
 _modulos = {}
 _candado_ocr = threading.Lock()
+_cupo_archivos = threading.BoundedSemaphore(2)
 
 
 def _modulo(nombre):
@@ -73,22 +74,23 @@ def paginas_de(contenido):
         try:
             if len(pdf) > MAX_PAGINAS:
                 raise ValueError(f"tiene más de {MAX_PAGINAS} páginas")
-            paginas = []
             for i in range(len(pdf)):
                 pagina = pdf[i]
                 ancho, alto = pagina.get_size()
                 escala = min(DPI / 72, 3300 / max(ancho, alto, 1))
-                paginas.append(pagina.render(scale=escala).to_pil().convert("RGB"))
-            return paginas
+                yield pagina.render(scale=escala).to_pil().convert("RGB")
         finally:
             pdf.close()
+        return
     try:
         img = Image.open(io.BytesIO(contenido))
         if img.format not in ("JPEG", "PNG", "WEBP", "TIFF"):
             raise ValueError
-        return [ImageOps.exif_transpose(f.copy()).convert("RGB") for _, f in zip(range(MAX_PAGINAS), ImageSequence.Iterator(img))]
+        cuadros = zip(range(MAX_PAGINAS), ImageSequence.Iterator(img))
     except Exception:
         raise ValueError("no es un PDF ni una imagen JPG, PNG, WEBP o TIFF válida")
+    for _, f in cuadros:
+        yield ImageOps.exif_transpose(f.copy()).convert("RGB")
 
 
 def leer_qr(img):
@@ -182,6 +184,11 @@ def reagrupar(grupo):
 
 
 def procesar_archivo(nombre, contenido, yo, protocolo_id=None, grupo=None):
+    with _cupo_archivos:
+        return _procesar_archivo(nombre, contenido, yo, protocolo_id, grupo)
+
+
+def _procesar_archivo(nombre, contenido, yo, protocolo_id, grupo):
     resultados = []
     anterior = None
     for pagina, img in enumerate(paginas_de(contenido), 1):

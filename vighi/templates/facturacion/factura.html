@@ -65,6 +65,28 @@
   <form id="quitar-{{ i.id }}" method="post" action="{{ url_for('facturacion.factura_quitar', fid=f.id, iid=i.id) }}" data-confirmar="¿Quitar {{ i.numero_protocolo }} · {{ i.estudio }} de la factura?">
     <input type="hidden" name="_csrf" value="{{ csrf }}"></form>
   {% endfor %}{% endif %}
+  <div class="tarjeta no-imprimir" id="archivos">
+    <h2>Archivos adjuntos ({{ archivos | length }})</h2>
+    {% if archivos %}
+    <table>
+      <tr><th>Archivo</th><th>Tamaño</th><th>Subido</th><th></th></tr>
+      {% for a in archivos %}
+      <tr>
+        <td><a href="{{ url_for('facturacion.factura_archivo', aid=a.id) }}" {% if a.extension in visibles %}target="_blank" rel="noopener"{% endif %}>{{ a.nombre }}</a></td>
+        <td class="muted">{{ tamano(a.tamano) }}</td>
+        <td class="muted">{{ a.subido_en | fh }} · {{ a.subio or '?' }}</td>
+        <td><form method="post" action="{{ url_for('facturacion.factura_archivo_borrar', aid=a.id) }}" data-confirmar="¿Quitar «{{ a.nombre }}» de la factura?">
+          <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="lapiz">Quitar</button></form></td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}<p class="muted">Todavía no hay archivos. Podés subir el comprobante emitido, la orden de la cobertura, planillas de débitos, etc.</p>{% endif %}
+    <form method="post" action="{{ url_for('facturacion.factura_archivos_subir', fid=f.id) }}" enctype="multipart/form-data" style="margin-top:10px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <input type="file" name="archivos" multiple required accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.docx,.doc,.txt">
+      <div class="acciones"><button class="btn sec">Subir archivos</button><span class="muted">PDF, imágenes, Excel, CSV, Word o texto; hasta 15 MB cada uno. Se pueden subir en cualquier estado de la factura.</span></div>
+    </form>
+  </div>
 </div>
 
 <div class="no-imprimir">

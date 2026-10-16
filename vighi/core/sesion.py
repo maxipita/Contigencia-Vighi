@@ -6,7 +6,7 @@ from flask import abort, flash, g, jsonify, redirect, request, session, url_for
 from vighi.core import db, permisos
 from vighi.core.config import SEMAFOROS
 from vighi.core.opcionales import informes
-from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, TIPOS
+from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, TIPOS, sector_marca
 
 
 SQL_USUARIO = """SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
@@ -117,7 +117,7 @@ def globales():
             vista = {"admin": real, "otros": db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 AND id<>? ORDER BY iniciales", (real["id"],))}
     return {"vista_como": vista, "yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
             "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS, "nombre_base": db.nombre_base(),
-            "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
+            "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "sector_marca": sector_marca, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 
 def es_local():

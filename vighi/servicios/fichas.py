@@ -6,7 +6,7 @@ from flask import abort
 from vighi.core import db
 from vighi.core.fechas import fecha_hora
 from vighi.core.sesion import puede
-from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, Variante
+from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, SECTORES, Variante, sector_marca
 from vighi.servicios.consultas import cargar_estudios, etiqueta, protocolo_cerrado
 
 
@@ -138,7 +138,7 @@ def motivo_no_listo(yo, tipo, etapa, prox, solicita, macro, micro, ihq, sin_tecn
         falta = "Faltan las técnicas de: " + ", ".join(etiqueta(m) for m in sin_tecnicas) + "."
     if not prox or prox[0] != etapa:
         return "Esa etapa no es la próxima pendiente de este estudio."
-    if not yo["admin"] and prox[2] not in (yo["sectores"] or "").split(","):
+    if not yo["admin"] and not sector_marca((yo["sectores"] or "").split(","), tipo, etapa, prox[2]):
         return f"La etapa {prox[1]} la marca el sector {SECTORES[prox[2]]}."
     return falta
 
