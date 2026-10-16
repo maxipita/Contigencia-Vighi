@@ -776,7 +776,9 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
   ["dragover", "dragenter"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.add("encima"); }));
   ["dragleave", "drop"].forEach(n => zona.addEventListener(n, e => { e.preventDefault(); zona.classList.remove("encima"); }));
   zona.addEventListener("drop", e => procesar([...e.dataTransfer.files]));
+})();
 
+(function () {
   const todos = document.querySelector("[data-marcar-protocolos]");
   const cuenta = document.querySelector("[data-cuenta-marcados]");
   const cajas = () => [...document.querySelectorAll("input[data-protocolo]")];
