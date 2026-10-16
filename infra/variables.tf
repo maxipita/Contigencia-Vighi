@@ -35,7 +35,7 @@ variable "cpu" {
 
 variable "memoria" {
   type    = number
-  default = 1024
+  default = 2048
 }
 
 variable "rds_clase" {
