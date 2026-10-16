@@ -264,6 +264,13 @@ CREATE TABLE IF NOT EXISTS factura_items (
 );
 CREATE INDEX IF NOT EXISTS ix_factura_items_factura ON factura_items(factura_id);
 CREATE INDEX IF NOT EXISTS ix_factura_items_estudio ON factura_items(estudio_id);
+CREATE TABLE IF NOT EXISTS factura_archivos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    factura_id INTEGER NOT NULL REFERENCES facturas(id),
+    nombre VARCHAR(160) NOT NULL, extension VARCHAR(8) NOT NULL, tamano INTEGER NOT NULL DEFAULT 0, datos BLOB,
+    subido_por INTEGER REFERENCES usuarios(id), subido_en VARCHAR(19)
+);
+CREATE INDEX IF NOT EXISTS ix_factura_archivos_factura ON factura_archivos(factura_id);
 CREATE TABLE IF NOT EXISTS etiquetas_lotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tipo VARCHAR(10) NOT NULL,
