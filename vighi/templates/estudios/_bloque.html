@@ -56,10 +56,10 @@
 </div>
 {% endmacro %}
 
-{% macro agregar_estudios() %}
+{% macro agregar_estudios(solo=None) %}
 <div class="acciones agregar-estudio">
   <span class="muted">Agregar estudio:</span>
-  {% for k, t in REGISTRO.items() %}<button type="button" class="btn sec" data-agregar-estudio="{{ k }}">+ {{ t.nombre }}</button>{% endfor %}
+  {% for k, t in REGISTRO.items() if not solo or k == solo %}<button type="button" class="btn sec" data-agregar-estudio="{{ k }}">+ {{ t.nombre }}</button>{% endfor %}
 </div>
 {% for k in REGISTRO %}<template id="tpl-estudio-{{ k }}">{{ bloque(k, '__N__', {}) }}</template>{% endfor %}
 {% endmacro %}

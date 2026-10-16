@@ -31,7 +31,7 @@ SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 
 
 def consultas_estudios(where="1=1", params=(), borradores=False):
-    principal = f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador,
+    principal = f"""SELECT e.*, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.borrador, p.pendiente_validacion,
                             p.lugar_recoleccion, p.lugar_entrega, u.iniciales AS responsable, l.codigo AS lote, l.tipo_lote AS tipo_lote, t.tacos AS tacos_muestra,
                             (SELECT COUNT(*) FROM estudios x WHERE x.protocolo_id=e.protocolo_id AND x.anulado=0) AS hermanos,
                             (SELECT COUNT(*) FROM comentarios c WHERE c.protocolo_id=e.protocolo_id) AS n_comentarios

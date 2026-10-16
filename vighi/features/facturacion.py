@@ -88,7 +88,7 @@ def facturar():
             flash("Marcá al menos un estudio para facturar.", "error")
             return redirect(volver)
         with db.bloqueo("facturas"):
-            proto = {r["id"]: r for r in db.q("SELECT id, cobertura, plan, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
+            proto = {r["id"]: r for r in db.q("SELECT id, cobertura, plan, n_afiliado, exento, lugar_recoleccion, pendiente_validacion FROM protocolos")}
             ya = facturacion.ids_facturados()
             ctx = facturacion.contexto()
             elegidos = [e for e in cargar_estudios() if e["id"] in set(ids)]
@@ -102,6 +102,9 @@ def facturar():
                     continue
                 if e["id"] in ya:
                     problemas.append(f"{e['numero']} · {e['etiqueta']}: ya está en la factura N° {ya[e['id']]}.")
+                    continue
+                if p["pendiente_validacion"]:
+                    problemas.append(f"{e['numero']}: los datos del paciente están sin validar.")
                     continue
                 if not (p["cobertura"] or "").strip():
                     problemas.append(f"{e['numero']}: el protocolo no tiene cobertura.")

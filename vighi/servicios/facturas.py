@@ -24,7 +24,7 @@ def items_de_factura(fid):
 
 
 def facturacion_buscar(f):
-    proto = {r["id"]: r for r in db.q("SELECT id, cobertura, plan, n_afiliado, exento, lugar_recoleccion FROM protocolos")}
+    proto = {r["id"]: r for r in db.q("SELECT id, cobertura, plan, n_afiliado, exento, lugar_recoleccion, pendiente_validacion FROM protocolos")}
     facturados = facturacion.ids_facturados()
     ctx = facturacion.contexto()
     q = f["q"].strip().lower()
@@ -70,6 +70,8 @@ def facturacion_buscar(f):
         if q and q not in " ".join(str(x or "") for x in (e["numero"], e["apellido"], e["nombre"], e["dni"], p["n_afiliado"])).lower():
             continue
         tarifa = facturacion.resolver(ctx, p["cobertura"], e["tipo"], e["sitio"], e["tipo_muestra"], fecha_e or hoy(), p["plan"] or "")
+        if p["pendiente_validacion"]:
+            tarifa = {"ok": False, "motivo": "datos del paciente sin validar"}
         iva = facturacion.iva_de(tarifa, p["exento"])
         if f["iva"] and iva != f["iva"]:
             continue

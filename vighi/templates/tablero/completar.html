@@ -3,6 +3,11 @@
 {% block contenido %}
 <div class="eyebrow">Recepción</div>
 <h1>Protocolos por completar</h1>
+{% set activa = 'completar' %}
+<div class="tabs">
+  <a class="{{ 'activo' if activa == 'completar' }}" href="{{ url_for('tablero.completar') }}">Por completar ({{ n_borradores }})</a>
+  {% if puede('validacion') %}<a class="{{ 'activo' if activa == 'validar' }}" href="{{ url_for('validacion.validacion') }}">Por validar ({{ n_validar }})</a>{% endif %}
+</div>
 <p class="muted">Son los protocolos generados al confirmar las etiquetas de Recepción. Abrí cada uno y cargá el paciente y los datos
   de sus estudios (cantidad: frascos en biopsias, vidrios en PAP). Con apellido, nombre y la cantidad de cada estudio el protocolo queda
   completo: aparece en el tablero y se habilitan las <a href="{{ url_for('etiquetas.etiquetas') }}">etiquetas de laboratorio</a>.</p>
@@ -25,7 +30,7 @@
     <td>{% for e in p.estudios %}{{ e.responsable or '' }}{{ ' ' if not loop.last }}{% endfor %}</td>
     <td>{{ p.fecha_recoleccion | f if p.fecha_recoleccion else '' }}</td>
     <td>{% set en = ediciones.get(p.id) %}{% if en and en.usuario_id != yo.id %}<span class="muted">Lo está completando {{ en.nombre }}</span>
-      {% else %}<a class="btn mini-btn" href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">Completar</a>{% endif %}</td>
+      {% else %}<a class="btn mini-btn" href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">{{ 'Activar' if p.estudios | rejectattr('tipo', 'equalto', 'PAP') | list | length == 0 else 'Completar' }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>

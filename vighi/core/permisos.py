@@ -3,6 +3,7 @@ PERMISOS = {
     "protocolo_editar": ("Ingreso", "Editar protocolos y estudios, agregar estudios"),
     "estudio_anular": ("Ingreso", "Anular y reactivar estudios"),
     "sistema": ("Ingreso", "Marcar \"cargado en sistema\""),
+    "validacion": ("Ingreso", "Validar los datos de los pacientes de los PAP"),
     "etiquetas_recepcion": ("Etiquetas", "Recepción (genera numeración y protocolos)"),
     "etiquetas_lab": ("Etiquetas", "Laboratorio (PAP y BP)"),
     "lotes_armar": ("Lotes", "Armar lotes (crear, agregar, quitar, observaciones)"),
@@ -23,7 +24,7 @@ GRUPOS = list(dict.fromkeys(g for g, _ in PERMISOS.values()))
 
 PERFILES_INICIALES = {
     "Ingreso": ("ingreso", ["protocolo_crear", "protocolo_editar", "estudio_anular", "sistema", "etiquetas_recepcion",
-                            "lotes_armar", "etapas", "exportar", "ubicaciones"]),
+                            "lotes_armar", "etapas", "exportar", "ubicaciones", "validacion"]),
     "Laboratorio": ("laboratorio", ["etiquetas_lab", "lotes_armar", "lotes_cerrar", "etapas"]),
     "Macroscopía": ("macroscopia", ["macro", "lotes_armar", "etapas"]),
     "Traslados": ("traslados", ["etapas"]),
