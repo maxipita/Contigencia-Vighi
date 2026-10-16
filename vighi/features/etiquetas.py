@@ -7,7 +7,7 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import REGISTRO
-from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, etiquetas_cantidad, qrs_protocolos, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
+from vighi.servicios.etiquetas import ESTUDIO_LAB, GRUPO_NUMERACION, MAX_PROTOCOLO, TIPOS_ETIQUETA, _entero, codigo_muestra_pap, datos_etiquetas, estudio_de_lote, estudios_para_etiquetar, ubicaciones_abreviaturas, etiquetas_cantidad, qrs_protocolos, etiquetas_casos, etiquetas_historial, numero_protocolo, personal, rotulos_cassettes, siguiente_libre, tecnicas_por_estudio, tipos_lote_etiqueta
 from vighi.servicios.lotes import tipos_lote
 
 bp = Blueprint("etiquetas", __name__)
@@ -88,11 +88,14 @@ def api_etiquetas_confirmar():
         if paps and p.get("cito") not in citos:
             return error("Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.")
         cito = p["cito"] if paps else ""
-        params = {"fecha": p["fecha"], "lote": p["lote"], "cito": cito}
+        ubicacion = p.get("ubicacion") if paps else ""
+        if paps and ubicacion not in ubicaciones_abreviaturas():
+            return error("Elegí la dirección: con lote PAPS va en la tercera línea de cada etiqueta y deja asociado el protocolo a esa ubicación.")
+        params = {"fecha": p["fecha"], "lote": p["lote"], "cito": cito, "ubicacion": ubicacion}
         est = REGISTRO[estudio_de_lote(p["lote"])]
         borradores = {"estudio": est.clave, "categoria": est.categoria, "subcategoria": est.subcategoria_fija,
                       "sitio": est.sitio_fijo, "tipo_lote": cito if paps else p["lote"], "fecha_lote": hoy(),
-                      "fecha_rec": p["fecha"], "protocolos": [numero_protocolo(k) for k in range(desde, hasta + 1)],
+                      "fecha_rec": p["fecha"], "lugar": ubicacion or None, "protocolos": [numero_protocolo(k) for k in range(desde, hasta + 1)],
                       "responsable_id": (db.uno("SELECT id FROM usuarios WHERE iniciales=?", (cito,))["id"] if paps else None)}
         por_proto, total = 2, n * 2
     else:

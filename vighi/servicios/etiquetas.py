@@ -4,6 +4,7 @@ import unicodedata
 from datetime import datetime, timedelta
 
 from vighi.core import db
+from vighi.core.fechas import hoy
 from vighi.servicios.consultas import tipos_lote_fijos
 from vighi.servicios.lotes import orden_numero
 
@@ -56,8 +57,25 @@ def tipos_lote_etiqueta():
     return sorted(set(tipos_lote_fijos()) | set(LOTES_ETIQUETA_EXTRA), key=str.casefold)
 
 
+def ubicaciones_abreviaturas():
+    return [r["abreviatura"] for r in db.q("SELECT abreviatura FROM ubicaciones ORDER BY abreviatura")]
+
+
+def lotes_de_hoy():
+    hoy_ = hoy()
+    out = {}
+    for u in personal("citotecnico"):
+        abierto = db.uno("SELECT codigo FROM lotes WHERE tipo_lote=? AND fecha=? AND cerrado=0 ORDER BY numero DESC LIMIT 1", (u["iniciales"], hoy_))
+        if abierto:
+            out[u["iniciales"]] = abierto["codigo"]
+            continue
+        n = (db.uno("SELECT MAX(numero) AS m FROM lotes WHERE tipo_lote=? AND fecha=?", (u["iniciales"], hoy_))["m"] or 0) + 1
+        out[u["iniciales"]] = f"{u['iniciales']}-{hoy_[5:7]}{hoy_[8:10]}.{n}"
+    return out
+
+
 def listas_etiquetas():
-    return {"tiposLote": tipos_lote_etiqueta(), "muestrasPap": MUESTRAS_PAP,
+    return {"tiposLote": tipos_lote_etiqueta(), "muestrasPap": MUESTRAS_PAP, "ubicaciones": ubicaciones_abreviaturas(), "lotesHoy": lotes_de_hoy(),
             "citotecnicos": personal("citotecnico"), "patologos": personal("firmante")}
 
 

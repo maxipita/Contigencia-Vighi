@@ -843,14 +843,14 @@ def etiquetas_confirmar(tipo, grupo, desde, hasta, n, por_proto, etiquetas, para
                               f"VALUES (?,?,?,{lote_sql},?,?,?,?,?,?)",
                               [tipo, desde, hasta] + lote_param + [n, por_proto, etiquetas, params_json, usuario_id, ahora_]))
         if borradores:
-            fila_sql = "(?,?,1,(SELECT MAX(id) FROM etiquetas_lotes),?,?)"
-            por_sentencia = 22
+            fila_sql = "(?,?,?,1,(SELECT MAX(id) FROM etiquetas_lotes),?,?)"
+            por_sentencia = 18
             pedidos = borradores["protocolos"]
             for i in range(0, len(pedidos), por_sentencia):
                 trozo = pedidos[i:i + por_sentencia]
-                declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
+                declaraciones.append(("INSERT INTO protocolos (numero, fecha_recoleccion, lugar_recoleccion, borrador, etiqueta_lote_id, creado_por, creado_en) VALUES "
                                       + ",".join([fila_sql] * len(trozo)),
-                                      [v for p in trozo for v in (p, borradores["fecha_rec"], usuario_id, ahora_)]))
+                                      [v for p in trozo for v in (p, borradores["fecha_rec"], borradores.get("lugar"), usuario_id, ahora_)]))
             declaraciones.append(("INSERT INTO flujos (protocolo_id, tipo, creado_en) "
                                   "SELECT p.id, ?, ? FROM protocolos p WHERE p.etiqueta_lote_id=(SELECT MAX(id) FROM etiquetas_lotes)",
                                   [borradores["estudio"], ahora_]))

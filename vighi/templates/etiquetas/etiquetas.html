@@ -84,6 +84,9 @@
       <label data-tipos="bp" data-solo-paps>Citotécnico
         <select id="cito"></select>
       </label>
+      <label data-tipos="bp" data-solo-paps>Dirección
+        <select id="ubicacion"></select>
+      </label>
       <label data-tipos="bp">Fecha de recolección
         <input type="date" id="fecha">
       </label>
@@ -238,13 +241,15 @@ window.ETIQUETAS = {{ datos|tojson }};
     }
     function renderBp(d) {
         var html = '';
-        var linea2 = (d.lote === 'PAPS') ? d.cito : d.lote;
+        var paps = d.lote === 'PAPS';
+        var linea2 = paps ? (loteActual && loteActual.loteCodigo) || DATOS.listas.lotesHoy[d.cito] || d.cito : d.lote;
+        var linea3 = paps ? d.ubicacion : formatearFecha(d.fecha);
         for (var i = 0; i < d.n; i++) {
             var proto = '#' + numero(d.inicio + i);
             html += '<div style="margin-top:20px;"></div>' +
                 '<table class="table-etiqueta" border="1"><tbody><tr>' +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), '') + bpQrProtocolo(85, numero(d.inicio + i)) +
-                bpEtiqueta(proto, linea2, formatearFecha(d.fecha), 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
+                bpEtiqueta(proto, linea2, linea3, '') + bpQrProtocolo(85, numero(d.inicio + i)) +
+                bpEtiqueta(proto, linea2, linea3, 'margin-left:15px;') + bpQrProtocolo(70, numero(d.inicio + i)) +
                 '</tr></tbody></table>';
         }
         return html;
@@ -304,6 +309,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         rellenar($('lote'), L.tiposLote);
         if (L.tiposLote.indexOf('ENDO') !== -1) $('lote').value = 'ENDO';
         rellenar($('cito'), L.citotecnicos, '(sin citotécnico)');
+        rellenar($('ubicacion'), L.ubicaciones, '(sin dirección)');
     }
 
     function ultimoUsado() {
@@ -492,8 +498,11 @@ window.ETIQUETAS = {{ datos|tojson }};
             if (d.lote === 'PAPS' && !d.cito) {
                 aviso('Elegí el citotécnico: con lote PAPS va en la segunda línea de cada etiqueta.', 'err'); return;
             }
+            if (d.lote === 'PAPS' && !d.ubicacion) {
+                aviso('Elegí la dirección: con lote PAPS va en la tercera línea de cada etiqueta.', 'err'); return;
+            }
             if (d.inicio + d.n - 1 > 999999) { aviso('El rango se pasa de ' + numero(999999) + '. Bajá la cantidad o el primer número.', 'err'); return; }
-            payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito}};
+            payload = {tipo: 'bp', inicio: d.inicio, n: d.n, params: {fecha: d.fecha, lote: $('lote').value, cito: d.cito, ubicacion: d.ubicacion}};
         } else {
             if (!d.n) { aviso('Marcá al menos un protocolo para etiquetar.', 'err'); return; }
             payload = {tipo: t, items: d.items.map(function (i) { return i.id; })};
@@ -536,7 +545,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         if (b.tipo === 'bp') {
             var p = b.params;
             $('cantidad').value = b.n; $('inicio').value = b.desde; $('fecha').value = p.fecha;
-            $('lote').value = p.lote; $('cito').value = p.cito || '';
+            $('lote').value = p.lote; $('cito').value = p.cito || ''; $('ubicacion').value = p.ubicacion || '';
         }
         loteActual = b;
         generar();
@@ -570,6 +579,7 @@ window.ETIQUETAS = {{ datos|tojson }};
             fecha: $('fecha').value,
             lote: $('lote').value.trim().toUpperCase(),
             cito: $('cito').value,
+            ubicacion: $('ubicacion').value,
             items: items,
             pos: items ? posicionesDe(items) : null
         };
@@ -618,7 +628,7 @@ window.ETIQUETAS = {{ datos|tojson }};
         } catch (e) {}
     }
 
-    ['cantidad', 'inicio', 'lote', 'cito', 'fecha'].forEach(function (id) {
+    ['cantidad', 'inicio', 'lote', 'cito', 'ubicacion', 'fecha'].forEach(function (id) {
         $(id).addEventListener('input', generar);
     });
     Array.prototype.forEach.call(document.querySelectorAll('input[name=tipo]'), function (r) {
