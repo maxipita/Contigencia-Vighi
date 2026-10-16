@@ -111,7 +111,8 @@ guardar(**valores)
 
 print("6) informe")
 with A.app.app_context():
-    db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e, "microscopia", admin, "2026-10-14 12:00:00"))
+    for etapa in ("microscopia", "revision"):
+        db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,?)", (e, etapa, admin, "2026-10-14 12:00:00"))
     d = informes.armar(pid)
 s = d["estudios"][0]
 chequear("el diagnóstico es el resultado", s["diagnostico"] == "NEGATIVO. INFLAMATORIO" and s["detalle"] == "", (s["diagnostico"], s["detalle"]))
