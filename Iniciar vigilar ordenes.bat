@@ -11,7 +11,7 @@ if not defined CARPETA (
 )
 echo Carpeta que se vigila: %CARPETA%
 echo.
-set /p VIGHI_CLAVE=Pega la clave de integracion y apreta Enter:
+if not defined VIGHI_CLAVE set /p VIGHI_CLAVE=Pega la clave de integracion y apreta Enter:
 set "VIGHI_URL=https://contingencia.sistemacapvighi.com"
 set "VIGHI_CARPETA=%CARPETA%"
 echo.
