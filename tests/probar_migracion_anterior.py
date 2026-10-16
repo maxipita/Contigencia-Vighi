@@ -208,6 +208,24 @@ with A.app.app_context():
     chequear('«Ct. DOMENIANNI, Miguel Angel» encuentra a Miguel Ángel Domenianni', ctx.persona('Ct. DOMENIANNI, Miguel Angel') == uid_mad and not ctx.nuevos['sin_firmante'], ctx.nuevos['sin_firmante'])
     chequear('sin el título también lo encuentra', ctx.persona('DOMENIANNI, Miguel Angel') == uid_mad)
 
+print('7c) «Micro > Revisar» del sistema anterior')
+
+
+def con_revision(idp, hecha):
+    tr = [seguimiento('Protocolo > Cargar', '01/10/2026 15:37 hs', 'ZZNU'), seguimiento('Macro > Informar', '02/10/2026 11:27 hs', 'ZZDS'),
+          seguimiento('Micro > Informar', '09/10/2026 10:00 hs', 'ZZDS')]
+    if hecha:
+        tr.append(seguimiento('Micro > Revisar', '10/10/2026 12:15 hs', 'ZZDS'))
+    return anterior.protocolo_de([flujo(idp, 10, f'#P{idp}-BP', [fila('A', 'Resección', 'Vesícula')], tr)], None, {})
+
+
+rev_hecha, rev_pendiente = con_revision(5555551, True), con_revision(5555552, False)
+with A.app.app_context():
+    res = mig.importar([rev_hecha, rev_pendiente])
+    filas = {r['numero']: r for r in db.q("SELECT p.numero, x.usuario_id, x.fecha_hora FROM etapas x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id WHERE x.etapa='revision'")}
+chequear('el importador reconoce la revisión hecha, con su fecha', res['importados'] == 2 and 'P5555551' in filas and filas['P5555551']['fecha_hora'].startswith('2026-10-10 12:15'), (res, list(filas)))
+chequear('si estaba pendiente queda pendiente de revisión', 'P5555552' not in filas)
+
 print('8) imágenes y órdenes')
 import io
 from PIL import Image

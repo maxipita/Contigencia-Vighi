@@ -10,7 +10,7 @@ from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal,
 from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
 from vighi.servicios.validacion import solo_pap
-from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
+from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, micro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
 from vighi.servicios.ordenes import SQL_ORDENES, ordenes_de
 from vighi.servicios.pap import aplicar_sospecha, contexto as contexto_pap, valores_de_formulario as valores_pap
@@ -215,7 +215,7 @@ def estudio(eid):
     tpl = lambda clase: db.q(SQL_TEMPLATES, (clase,))
     pasos = tipo.flujo(solicita)
     decal = con_decal(solicita)
-    traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados(), decal=decal)
+    traza_enc, traza = trazabilidad.calcular(e, pasos, etapas, db.feriados(), decal=decal, ihq=bool(solicita))
     hermanos = cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],), borradores=True)
     activos = [h for h in hermanos if not h["anulado"]]
     miembros = [h for h in hermanos if h["id"] == e["id"]] if e["anulado"] else [h for h in activos if h["tipo"] == e["tipo"]]
@@ -228,9 +228,9 @@ def estudio(eid):
             n = sum(1 for x in activos if x["tipo"] == h["tipo"])
             pestanas.append({"id": h["id"], "texto": h["etiqueta"] if n == 1 else f"{REGISTRO[h['tipo']].nombre} ({n} estudios)",
                              "activa": not e["anulado"] and h["tipo"] == e["tipo"], "anulado": False})
-    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados(), decal) if prox and not e["anulado"] and not e["borrador"] else None
+    limite_etapa = trazabilidad.limite(e["tipo"], prox[0], e["fecha_recoleccion"] or e["creado_en"], db.feriados(), decal, bool(solicita)) if prox and not e["anulado"] and not e["borrador"] else None
     semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
-                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal)
+                                                {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal, bool(solicita))
                 if limite_etapa else "")
     cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
                             and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"])
@@ -247,7 +247,7 @@ def estudio(eid):
                            ihq_hecha=any(k in etapas for k in PASOS_IHQ),
                            edita_macro=macro_editable(e, etapas, solicita),
                            decal_cambiable=macro_editable(e, etapas, solicita)[0] and "procesamiento" not in etapas and "decal" not in etapas,
-                           edita_micro=con_permiso("micro", habilitada(e, etapas, solicita, "microscopia")))
+                           edita_micro=con_permiso("micro", micro_editable(e, etapas, solicita)))
 
 
 @bp.route("/estudio/<int:eid>/macro", methods=["POST"])
@@ -339,7 +339,7 @@ def tecnica_borrar(tid):
 @requiere_permiso("micro")
 def guardar_micro(eid):
     e, _, micro, _, etapas, solicita = ficha(eid)
-    ok, motivo = habilitada(e, etapas, solicita, "microscopia")
+    ok, motivo = micro_editable(e, etapas, solicita)
     auto = request.form.get("autoguardar") == "1"
     if not ok:
         if auto:
@@ -359,7 +359,8 @@ def guardar_micro(eid):
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_micro", "", eid)
     flash("Microscopía guardada.", "ok")
     if request.form.get("y_listo"):
-        return marcar_listo(eid, "microscopia")
+        prox = REGISTRO[e["tipo"]].estado(set(etapas), solicita, bool(e["anulado"]))[1]
+        return marcar_listo(eid, prox[0] if prox and prox[0] in ("microscopia", "revision") else "microscopia")
     return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
 
 

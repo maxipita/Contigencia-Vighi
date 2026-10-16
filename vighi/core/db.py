@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
 CREATE TABLE IF NOT EXISTS feriados (fecha VARCHAR(10) PRIMARY KEY, descripcion VARCHAR(100));
 CREATE TABLE IF NOT EXISTS medicos (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre VARCHAR(150) NOT NULL, email VARCHAR(150));
 CREATE TABLE IF NOT EXISTS bloqueos (nombre VARCHAR(40) PRIMARY KEY, vence REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS pasos_unicos (clave VARCHAR(40) PRIMARY KEY, hecho_en VARCHAR(19) NOT NULL);
 CREATE TABLE IF NOT EXISTS ediciones (
     protocolo_id INTEGER PRIMARY KEY REFERENCES protocolos(id),
     usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
@@ -546,6 +547,15 @@ def auditar(usuario_id, protocolo_id, accion, detalle="", estudio_id=None):
        (ahora(), usuario_id, protocolo_id, estudio_id, accion, detalle))
 
 
+SQL_REVISION_RETROACTIVA = """INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora)
+    SELECT m.flujo_id, 'revision', m.usuario_id, (SELECT MAX(x.fecha_hora) FROM etapas x WHERE x.flujo_id=m.flujo_id)
+    FROM etapas m JOIN flujos f ON f.id=m.flujo_id JOIN protocolos p ON p.id=f.protocolo_id
+    WHERE m.etapa='microscopia' AND COALESCE(p.origen, '')<>'anterior'
+      AND (NOT EXISTS (SELECT 1 FROM micro mi WHERE mi.flujo_id=m.flujo_id AND mi.solicita_ihq=1)
+           OR EXISTS (SELECT 1 FROM etapas i WHERE i.flujo_id=m.flujo_id AND i.etapa='interp_ihq'))
+      AND NOT EXISTS (SELECT 1 FROM etapas r WHERE r.flujo_id=m.flujo_id AND r.etapa='revision')"""
+
+
 def preparar_esquema(c):
     vieja = [r["name"] for r in c.execute("PRAGMA table_info(informes_emitidos)")]
     if vieja and "protocolo_id" not in vieja:
@@ -622,6 +632,8 @@ def preparar_esquema(c):
                  WHERE pedido_en IS NULL
                    AND flujo_id IN (SELECT m.flujo_id FROM micro m WHERE m.solicita_ihq=1)
                    AND EXISTS (SELECT 1 FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia')""")
+    if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='revision'").fetchone():
+        c.lote([(SQL_REVISION_RETROACTIVA, ()), ("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('revision', ?)", (ahora(),))])
     return antes_de_informes
 
 

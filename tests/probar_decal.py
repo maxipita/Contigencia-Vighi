@@ -33,7 +33,7 @@ print('sin decal:', sin)
 print('con decal:', con)
 chequear('sin decal el flujo no cambia', 'decal' not in sin)
 chequear('con decal queda entre macro y procesamiento', con[:3] == ['macroscopia', 'decal', 'procesamiento'] and len(con) == len(sin) + 1)
-chequear('con IHQ y decal mantiene IHQ al final', [p[0] for p in bp.flujo(dom_estudios.Variante(True, True))][-4:] == bp.pasos_ihq)
+chequear('con IHQ y decal mantiene IHQ antes de la revisión final', [p[0] for p in bp.flujo(dom_estudios.Variante(True, True))][-5:] == bp.pasos_ihq + ['revision'])
 chequear('plazo de decal: un día después de la macro', bp.plazo('decal', True)[0] == bp.plazos['macroscopia'][0] + 1)
 chequear('etapas posteriores se corren un día', bp.plazo('procesamiento', True)[0] == bp.plazos['procesamiento'][0] + 1
          and bp.plazo('procesamiento', False)[0] == bp.plazos['procesamiento'][0] and bp.plazo('macroscopia', True)[0] == bp.plazos['macroscopia'][0])

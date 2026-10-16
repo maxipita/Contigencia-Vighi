@@ -22,10 +22,12 @@ ETAPAS = {
     "envio_ihq": ("Envío lab. externo", "traslados", "TRASLADOS", "Laboratorio", "Lab Ext > Procesar"),
     "proc_ihq": ("Procesamiento IHQ", "laboratorio", "LABORATORIO", "Procesamiento", "IHQ > Procesar"),
     "interp_ihq": ("Interpretación IHQ", "firmante", "DIAGNÓSTICOS", "Microscopía", "Micro > Interpretar"),
+    "revision": ("Revisión", "firmante", "DIAGNÓSTICOS", "Microscopía", "Micro > Revisar"),
 }
 NOMBRE_ETAPA = {k: v[0] for k, v in ETAPAS.items()}
 GINECOLOGICA = "Ginecológica"
 DIAS_DECAL = 1
+DIAS_REVISION = 1
 
 
 class Variante(int):
@@ -69,9 +71,13 @@ class Estudio:
         if con_decal(solicita_ihq) and "macroscopia" in claves:
             claves.insert(claves.index("macroscopia") + 1, "decal")
         claves += self.pasos_ihq if solicita_ihq else []
+        claves.append("revision")
         return [(k, ETAPAS[k][0], ETAPAS[k][1]) for k in claves]
 
-    def plazo(self, etapa, decal=False):
+    def plazo(self, etapa, decal=False, ihq=False):
+        if etapa == "revision":
+            dias, hora = self.plazo("interp_ihq" if ihq and self.pasos_ihq else "microscopia", decal)
+            return dias + DIAS_REVISION, hora
         if etapa == "decal":
             dias, hora = self.plazos.get("macroscopia", (0, 20))
             return dias + DIAS_DECAL, hora

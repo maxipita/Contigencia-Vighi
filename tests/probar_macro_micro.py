@@ -54,7 +54,6 @@ cargar_hasta('informe') if 'informe' in pasos else None
 siguiente = pasos[pasos.index('microscopia') + 1] if 'microscopia' in pasos and pasos.index('microscopia') + 1 < len(pasos) else None
 if siguiente:
     cargar_hasta(siguiente)
-    F.con.execute("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES ((SELECT flujo_id FROM estudios WHERE id=?),?,?,'2026-10-01 10:00:00')", (eid, 'microscopia', admin))
     chequear('pasada la micro vuelve a bloquear', guardar('tres') == 'dos')
 cargar_hasta('lote') if 'lote' in pasos else None
 print('FALLAS:', fallas)

@@ -29,7 +29,7 @@ class Pap(Estudio):
     nombre = "PAP"
     categoria = "Citologías"
     pasos = ["coloreado", "citotecnicos", "microscopia"]
-    plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "citotecnicos": (3, 18), "microscopia": (4, 20)}
+    plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "citotecnicos": (3, 18), "microscopia": (4, 20), "revision": (5, 20)}
     cantidades = ["1", "2", "1/2"]
     subcategoria_fija = GINECOLOGICA
     sitio_fijo = "Vagina"
