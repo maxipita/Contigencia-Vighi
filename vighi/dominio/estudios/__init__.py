@@ -1,5 +1,5 @@
 from . import bp, ct, pap
-from .base import ETAPAS, GINECOLOGICA, NOMBRE_ETAPA, SECTORES, Variante, con_decal
+from .base import ETAPAS, GINECOLOGICA, NOMBRE_ETAPA, SECTORES, Variante, con_decal, sector_marca
 
 REGISTRO = {m.ESTUDIO.clave: m.ESTUDIO for m in (pap, bp, ct)}
 TIPOS = {k: e.nombre for k, e in REGISTRO.items()}

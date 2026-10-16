@@ -8,7 +8,7 @@ from vighi.core.config import SEMAFOROS
 from vighi.core.fechas import fecha, fecha_hora
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import informes, trazabilidad
-from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES
+from vighi.dominio.estudios import NOMBRE_ETAPA, SECTORES, sector_marca
 from vighi.servicios.consultas import cargar_estudios, consultas_estudios
 from vighi.servicios.lotes import orden_numero
 from vighi.servicios.protocolos import ediciones_en_curso
@@ -47,7 +47,7 @@ def tablero():
         if v == "pendientes":
             return bool(pendientes)
         if v == "mios":
-            return any(e["proxima"][2] in mis for e in pendientes)
+            return any(sector_marca(mis, e["tipo"], e["proxima"][0], e["proxima"][2]) for e in pendientes)
         if v == "informados":
             return bool(activos) and not pendientes
         if v == "sin_cargar":
@@ -91,7 +91,7 @@ def tablero():
         if f["ver"] == "anulados":
             vista = [e for e in elegidos if e["anulado"]]
         elif f["ver"] in ("pendientes", "mios"):
-            vista = [e for e in elegidos if not e["anulado"] and e["proxima"] and (f["ver"] != "mios" or e["proxima"][2] in mis)]
+            vista = [e for e in elegidos if not e["anulado"] and e["proxima"] and (f["ver"] != "mios" or sector_marca(mis, e["tipo"], e["proxima"][0], e["proxima"][2]))]
         else:
             vista = [e for e in elegidos if not e["anulado"]] or elegidos
         if not vista:
