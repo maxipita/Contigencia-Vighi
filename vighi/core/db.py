@@ -598,25 +598,28 @@ def migrar_a_flujos(c):
     if not pendientes:
         c.commit()
         return
-    for t in pendientes:
-        c.execute(f"ALTER TABLE {t} RENAME TO {t}_vieja")
-    c.executescript(SCHEMA)
     cabecera = ("(SELECT COALESCE(MIN(CASE WHEN x.anulado=0 THEN x.id END), MIN(x.id)) FROM estudios x WHERE x.flujo_id=e.flujo_id)")
+    pasos = [(f"ALTER TABLE {t} RENAME TO {t}_vieja", ()) for t in pendientes]
+    pasos += [(s, ()) for s in d1.dividir_script(SCHEMA) if any(re.match(rf"\s*CREATE TABLE IF NOT EXISTS {t}\b", s) for t in pendientes)]
     if "etapas" in pendientes:
-        c.execute("""INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora)
+        pasos.append(("""INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora)
                      SELECT e.flujo_id, x.etapa, x.usuario_id, x.fecha_hora FROM etapas_vieja x JOIN estudios e ON e.id=x.estudio_id
                      WHERE x.id IN (SELECT MIN(x2.id) FROM etapas_vieja x2 JOIN estudios e2 ON e2.id=x2.estudio_id GROUP BY e2.flujo_id, x2.etapa)
-                     ORDER BY x.id""")
+                     ORDER BY x.id""", ()))
     columnas = {"macro": "template, descripcion, cassettes, decal",
                 "micro": "template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq",
                 "ihq": "marcadores, resultado, pedido_en, pedido_por"}
     for t in ("macro", "micro", "ihq"):
         if t in pendientes:
             origen = ", ".join("m." + k.strip() for k in columnas[t].split(","))
-            c.execute(f"""INSERT INTO {t} (flujo_id, {columnas[t]}) SELECT e.flujo_id, {origen} FROM {t}_vieja m JOIN estudios e ON e.id=m.estudio_id
-                          WHERE m.estudio_id={cabecera}""")
-    for t in pendientes:
-        c.execute(f"DROP TABLE {t}_vieja")
+            pasos.append((f"""INSERT INTO {t} (flujo_id, {columnas[t]}) SELECT e.flujo_id, {origen} FROM {t}_vieja m JOIN estudios e ON e.id=m.estudio_id
+                          WHERE m.estudio_id={cabecera}""", ()))
+    pasos += [(f"DROP TABLE {t}_vieja", ()) for t in pendientes]
+    try:
+        c.lote(pasos)
+    except Exception:
+        if [t for t in ("etapas", "macro", "micro", "ihq") if "flujo_id" not in cols(t)]:
+            raise
     c.commit()
 
 
