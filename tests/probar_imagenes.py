@@ -55,7 +55,7 @@ h = c.get(f'/protocolo/{pid}').get_data(as_text=True)
 chequear('galeria en protocolo', h.count('data-visor') == 2 and 'Corte 40x' in h)
 eid = F.con.execute('SELECT id FROM estudios WHERE protocolo_id=? LIMIT 1', (pid,)).fetchone()[0]
 he = c.get(f'/estudio/{eid}').get_data(as_text=True)
-chequear('galeria en estudio (escritura)', he.count('data-visor') == 2 and 'Subir imágenes' in he)
+chequear('galeria en estudio (escritura)', he.count('data-visor') == 2 and 'Subir como imagen' in he)
 r = c.post(f'/imagen/{iid}/borrar', data={'_csrf': csrf})
 chequear('borrar', r.status_code == 302 and F.con.execute('SELECT COUNT(*) FROM imagenes').fetchone()[0] == 1)
 print([tuple(x) for x in F.con.execute("SELECT accion, detalle FROM auditoria WHERE accion LIKE 'imagen%' ORDER BY id").fetchall()])

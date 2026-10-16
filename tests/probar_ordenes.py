@@ -136,7 +136,7 @@ chequear("queda en el historial del protocolo", "asignada a mano" in c.get(f"/pr
 
 print("7) en la ficha del protocolo")
 h = c.get(f"/protocolo/{p1}").get_data(as_text=True)
-chequear("la tarjeta muestra las órdenes del protocolo", 'id="ordenes"' in h and "Órdenes escaneadas" in h and "orden1.png" in h and "por QR" in h)
+chequear("la tarjeta de imágenes muestra las órdenes del protocolo", 'id="ordenes"' in h and "Imágenes y órdenes escaneadas" in h and "ordenes/_tarjeta" not in h and "orden1.png" in h and "por QR" in h)
 oid = [x for x in filas() if x["protocolo_id"] == p1][0]["id"]
 r = c.get(f"/orden/{oid}")
 chequear("se puede ver la imagen y su miniatura", r.status_code == 200 and r.mimetype == "image/jpeg" and r.data[:2] == b"\xff\xd8" and c.get(f"/orden/{oid}/mini").status_code == 200)

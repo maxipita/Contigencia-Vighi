@@ -78,9 +78,10 @@ class FalsoD1:
         return Response(json.dumps(salida), codigo, content_type="application/json")(entorno, inicio)
 
     def iniciar(self):
-        self.servidor = make_server("127.0.0.1", 0, self.app, threaded=True)
-        threading.Thread(target=self.servidor.serve_forever, daemon=True).start()
-        return f"http://127.0.0.1:{self.servidor.server_port}"
+        from waitress.server import create_server
+        self.servidor = create_server(self.app, host="127.0.0.1", port=0, threads=8, ident=None)
+        threading.Thread(target=self.servidor.run, daemon=True).start()
+        return f"http://127.0.0.1:{self.servidor.effective_port}"
 
     def detener(self):
-        self.servidor.shutdown()
+        self.servidor.close()
