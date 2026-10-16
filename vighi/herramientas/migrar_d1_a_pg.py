@@ -131,6 +131,7 @@ def crear_heredada(origen, destino, tabla):
 def migrar(origen, destino, confirmar=lambda resumen: True, solo_contar=False):
     informe = {"huellas": {}, "claves": {}, "filas": {}, "omitidas": [], "diferencias": []}
     db.preparar_esquema(destino)
+    destino.execute("DELETE FROM pasos_unicos")
     en_origen = set(tablas_origen(origen))
     sin_esquema = sorted(en_origen - set(orden_por_dependencias(destino)))
     for t in sin_esquema:
