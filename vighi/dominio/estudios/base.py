@@ -101,5 +101,5 @@ class Estudio:
 
     def tipos_lote(self, fijos, citotecnicos):
         if self.lote_por_citotecnico:
-            return list(citotecnicos)
+            return list(citotecnicos) + [t for t in fijos if t in self.lotes and t not in citotecnicos]
         return [t for t in fijos if t in self.lotes]

@@ -141,8 +141,10 @@ def _protocolo_editar(pid):
             asignar_lote(pid, lote, yo["id"])
             quitados = [k for k, e in actuales.items() if k not in {x["id"] for x in lista} and not e["anulado"]]
             for k in quitados:
-                db.ex("UPDATE estudios SET anulado=1, motivo_anulacion=? WHERE id=?", ("Quitado al completar el protocolo", k))
-                db.auditar(yo["id"], pid, "anular", "Quitado al completar el protocolo", k)
+                db.ex("DELETE FROM estudios WHERE id=?", (k,))
+            if quitados:
+                db.ex("DELETE FROM flujos WHERE protocolo_id=? AND NOT EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=flujos.id)", (pid,))
+                db.auditar(yo["id"], pid, "quitar_muestra", f"{len(quitados)} muestra(s) quitada(s) al completar el protocolo")
             if modo_pap:
                 falta = faltantes_activacion(d, [dict(x) for x in db.q("SELECT cantidad, anulado FROM estudios WHERE protocolo_id=?", (pid,))])
                 if not falta:

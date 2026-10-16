@@ -63,4 +63,13 @@ chequear('y el protocolo queda con el lugar', p['lugar_recoleccion'] == 'SAN-A')
 print('4) la pantalla ofrece la dirección')
 h = c.get('/etiquetas').get_data(as_text=True)
 chequear('hay selector de dirección y las ubicaciones llegan a la página', 'id="ubicacion"' in h and 'SAN-A' in h)
+print('5) PAPURG es un lote de PAP')
+r = c.post('/api/etiquetas/confirmar', json={'tipo': 'bp', 'inicio': 720, 'n': 1, 'params': {'fecha': '2026-10-16', 'lote': 'PAPURG', 'ubicacion': 'SAN-A'}}, headers={'X-CSRF': tk})
+chequear('confirma sin citotécnico', r.get_json().get('ok'), r.get_json())
+with A.app.app_context():
+    e = db.uno("SELECT e.tipo, e.sitio, l.tipo_lote FROM protocolos p JOIN estudios e ON e.protocolo_id=p.id JOIN lotes l ON l.id=e.lote_id WHERE p.numero='C000720'")
+    from vighi.servicios.lotes import tipos_lote
+    en_pap, en_bp = 'PAPURG' in tipos_lote('PAP'), 'PAPURG' in tipos_lote('BP')
+chequear('el protocolo nace con un PAP en lote PAPURG', e and (e['tipo'], e['tipo_lote']) == ('PAP', 'PAPURG'), e and dict(e))
+chequear('PAPURG sirve a los PAP y no a las biopsias', en_pap and not en_bp)
 print('FALLAS:', fallas or 'ninguna')

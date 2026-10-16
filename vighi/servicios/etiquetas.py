@@ -36,7 +36,7 @@ def qrs_protocolos(inicio, n):
 
 
 def estudio_de_lote(tipo_lote):
-    return {"PAPS": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
+    return {"PAPS": "PAP", "PAPURG": "PAP", "CT": "CT"}.get(tipo_lote, "BP")
 
 
 def numero_emitido(protocolo):
