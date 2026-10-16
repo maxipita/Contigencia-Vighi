@@ -10,7 +10,7 @@
   se activa, aparece en el tablero y se habilitan las etiquetas de laboratorio. Los datos del paciente los completa después <a href="{{ url_for('validacion.validacion') }}">Validación</a>.</p>
 {% elif completar %}<p class="muted">Protocolo generado desde las etiquetas de Recepción. Queda completo con apellido, nombre y la cantidad
   de cada estudio; con eso se habilitan las etiquetas de laboratorio y aparece en el tablero.</p>{% endif %}
-{% if pap %}<div class="cols"><div>{% endif %}
+{% if pap %}<div class="cols-mitad"><div>{% endif %}
 <form method="post" class="form-estudios"{% if edicion %} data-soltar="{{ url_for('protocolos.protocolo_soltar', pid=p.id) }}"{% endif %}>
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   {% if edicion %}<input type="hidden" name="edicion" value="{{ edicion }}">{% endif %}
@@ -78,5 +78,5 @@
     <a class="btn sec" href="{{ url_for('tablero.tablero') if nuevo else (url_for('tablero.completar') if completar else url_for('protocolos.protocolo', pid=p.id)) }}">Cancelar</a>
   </div>
 </form>
-{% if pap %}</div><div>{% with pid=p.id %}{% include "ordenes/_tarjeta.html" %}{% endwith %}</div></div>{% endif %}
+{% if pap %}</div><div>{% include "ordenes/_lateral.html" %}</div></div>{% endif %}
 {% endblock %}

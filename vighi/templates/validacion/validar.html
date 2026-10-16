@@ -9,7 +9,7 @@
 <p class="muted">Médico: <b>{{ protocolo.medico or '—' }}</b> · Cobertura: <b>{{ protocolo.cobertura or '—' }}</b> ·
   {% for e in estudios %}{{ e.etiqueta }}{{ ', ' if not loop.last }}{% endfor %}</p>
 
-<div class="cols">
+<div class="cols-mitad">
   <div>
     <form method="post" class="tarjeta">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
@@ -35,7 +35,7 @@
     </form>
   </div>
   <div>
-    {% with pid=protocolo.id %}{% include "ordenes/_tarjeta.html" %}{% endwith %}
+    {% include "ordenes/_lateral.html" %}
   </div>
 </div>
 {% endblock %}
