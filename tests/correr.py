@@ -15,7 +15,8 @@ SIN_ESTADO = {"probar_layout.py"}
 
 def veredicto(salida, codigo):
     if codigo != 0:
-        return False, f"terminó con código {codigo}"
+        cola = " | ".join(x.strip() for x in salida.strip().splitlines()[-3:])[-300:]
+        return False, f"terminó con código {codigo}: {cola}"
     if "Traceback (most recent call last)" in salida:
         return False, "error no controlado"
     fallas = re.findall(r"^\s+FALLA\b.*$", salida, re.M)
