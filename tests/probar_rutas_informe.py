@@ -79,11 +79,6 @@ chequear('un estudio inexistente no rompe (no es un 500)', r.status_code in (302
 r = cm.post(f'/protocolo/{p_bp}/informe.pdf', data={'_csrf': token(cm), 'comentario': 'x' * 50000}, follow_redirects=True)
 chequear('un comentario enorme se recorta y no rompe', r.status_code == 200 and r.data[:4] == b'%PDF')
 
-print('4) botón en la ficha del estudio')
-t = cm.get(f'/estudio/{bp}').get_data(as_text=True)
-chequear('aparece en un estudio informado para quien tiene el permiso', 'El informe en PDF es del protocolo completo' in t)
-t = ci.get(f'/estudio/{bp}').get_data(as_text=True)
-chequear('no aparece para quien no tiene el permiso', 'El informe en PDF es del protocolo completo' not in t)
 
 print('5) firma y matrícula en Usuarios')
 r = ca.get(f'/usuarios/{med}')

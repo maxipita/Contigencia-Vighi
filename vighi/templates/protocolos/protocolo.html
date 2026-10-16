@@ -102,28 +102,35 @@
 <div>
   <div class="tarjeta">
     <h2>Estudios</h2>
-    <table>
-      <tr><th>Muestra</th><th>Tipo de muestra</th><th>Tacos</th><th>Lote</th><th>Responsable</th></tr>
-      {% for tipo, grupo in estudios | groupby('tipo') %}
-      {% set activos = grupo | rejectattr('anulado') | list %}
-      {% set ref = activos[0] if activos else grupo[0] %}
-      <tr class="flujo-cab{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}><td colspan="5">
-        <a href="{{ url_for('estudios.flujo', pid=p.id, tipo=tipo) }}" title="Abrir el flujo (macro, micro, IHQ y seguimiento)"><b>{{ {'BP': 'Biopsias', 'CT': 'Citologías', 'PAP': 'PAP'}[tipo] }}</b> →</a>
-        {% if activos | length > 1 %}<span class="muted">· {{ activos | length }} estudios en el mismo flujo</span>{% endif %}
-        <span class="flujo-estado"><span class="chip {{ 'informado' if not ref.proxima }}">{{ ref.estado }}</span>
-          {% if ref.proxima %}<span class="muted">{{ SECTORES[ref.proxima[2]] }}</span>{% endif %}
-          {{ pill(ref.semaforo) }}{% if ref.vence %} <span class="muted">vence {{ ref.vence | dh }}</span>{% endif %}</span></td></tr>
-      {% for e in grupo %}
-      <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
-        <td><b>{{ e.etiqueta }}</b>{% if e.anulado %} <span class="chip anulado">Anulado</span>{% endif %}</td>
-        <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
-        <td>{{ e.tacos if e.tacos is not none else '' }}</td>
-        <td>{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
-        <td>{{ e.responsable or '' }}</td>
-      </tr>
-      {% endfor %}
-      {% endfor %}
-    </table>
+    {% for tipo, grupo in estudios | groupby('tipo') %}
+    {% set activos = grupo | rejectattr('anulado') | list %}
+    {% set ref = activos[0] if activos else grupo[0] %}
+    <div class="flujo-bloque{{ ' fila-anulada' if not activos }}"{% if not activos %} hidden{% endif %}>
+      <div class="flujo-encab">
+        <a class="flujo-titulo" href="{{ url_for('estudios.flujo', pid=p.id, tipo=tipo) }}" title="Abrir el flujo (macro, micro, IHQ y seguimiento)">{{ tipo }} →</a>
+        {% if activos | length > 1 %}<span class="muted">{{ activos | length }} muestras comparten este tracking</span>{% endif %}
+      </div>
+      <div class="flujo-tracking">
+        <span class="rotulo">Tracking</span>
+        <span class="dato-rec"><span class="muted">Estado</span> <span class="chip {{ 'informado' if not ref.proxima }}">{{ ref.estado }}</span></span>
+        {% if ref.proxima %}<span class="dato-rec"><span class="muted">Sector</span> <b>{{ SECTORES[ref.proxima[2]] }}</b></span>{% endif %}
+        {% if ref.semaforo %}<span class="dato-rec"><span class="muted">Semáforo</span> {{ pill(ref.semaforo) }}</span>{% endif %}
+        {% if ref.vence %}<span class="dato-rec"><span class="muted">Vence</span> <b>{{ ref.vence | dh }}</b></span>{% endif %}
+      </div>
+      <table>
+        <tr><th>Muestra</th><th>Tipo de muestra</th><th>Tacos</th><th>Lote</th><th>Responsable</th></tr>
+        {% for e in grupo %}
+        <tr class="{{ 'bloqueado fila-anulada' if e.anulado }}"{% if e.anulado %} hidden{% endif %}>
+          <td><b>{{ e.etiqueta }}</b>{% if e.anulado %} <span class="chip anulado">Anulado</span>{% endif %}</td>
+          <td>{{ e.subcategoria or '' }}<div class="muted">{{ e.tipo_muestra or '' }}</div></td>
+          <td>{{ e.tacos if e.tacos is not none else '' }}</td>
+          <td>{% if e.lote_id %}<a href="{{ url_for('lotes.lote', lote_id=e.lote_id) }}">{{ e.lote }}</a>{% endif %}</td>
+          <td>{{ e.responsable or '' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endfor %}
     {% set n_anulados = estudios | selectattr('anulado') | list | length %}
     {% if n_anulados %}<div class="acciones"><button type="button" class="btn sec mini-btn" data-alternar-anulados data-n="{{ n_anulados }}">Ver anulados ({{ n_anulados }})</button></div>{% endif %}
     {% if puede('protocolo_editar') %}

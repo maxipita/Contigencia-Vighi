@@ -398,7 +398,7 @@ def ihq_pedir(eid):
         guardar_seccion("ihq", e["flujo_id"], {"marcadores": ", ".join(marcadores), "pedido_en": db.ahora(), "pedido_por": yo["id"]})
         guardar_seccion("micro", e["flujo_id"], {"solicita_ihq": 1})
         tipo_tarea = tipo_solicitud_ihq()
-        descripcion = (f"Marcadores pedidos ({len(marcadores)}):\n" + "\n".join(f"- {m}" for m in marcadores) + f"\nEstudio: {etiqueta(e)}")[:2000]
+        descripcion = (f"Marcadores pedidos ({len(marcadores)}):\n" + "\n".join(f"- {m}" for m in marcadores))[:2000]
         crear_tarea(e["protocolo_id"], tipo_tarea, descripcion, "regular", "media", tipo_tarea["responsable_id"], yo["id"])
         db.auditar(yo["id"], e["protocolo_id"], "pedido_ihq", ", ".join(marcadores), eid)
         quien = db.uno("SELECT iniciales FROM usuarios WHERE id=?", (tipo_tarea["responsable_id"],)) if tipo_tarea["responsable_id"] else None

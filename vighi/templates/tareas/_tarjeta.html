@@ -7,10 +7,8 @@
     <div class="tarea-cab">
       <b>{{ t.titulo }}</b>
       {% if t.urgencia == 'urgente' %}<span class="chip urgente">Urgente</span>{% endif %}
-      <span class="chip prio-{{ t.prioridad }}">Prioridad {{ t.prioridad }}</span>
       {% if t.estado == 'cerrada' %}<span class="chip">Cerrada</span>{% endif %}
     </div>
-    {% if t.descripcion %}<div class="tarea-texto">{{ t.descripcion }}</div>{% endif %}
     <form method="post" action="{{ url_for('tareas.tarea_responsable', tid=t.id) }}" class="edicion">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <div class="ver">Responsable: <b>{{ t.resp_iniciales or 'Sin asignar' }}</b>{% if t.resp_nombre and t.resp_nombre != t.resp_iniciales %} <span class="muted">· {{ t.resp_nombre }}</span>{% endif %}
@@ -22,8 +20,7 @@
         <div class="acciones"><button class="btn">Guardar</button><button type="button" class="btn sec" data-cancelar>Cancelar</button></div>
       </div>{% endif %}
     </form>
-    <div class="tarea-pie muted">Creada por {{ t.creador or '?' }} · {{ t.creado_en | fh }}
-      {% if t.estado == 'cerrada' %}<br>Cerrada por {{ t.cerrador or 'el sistema' }} · {{ t.cerrada_en | fh }}{% if t.cierre_detalle %} ({{ t.cierre_detalle }}){% endif %}{% endif %}</div>
+    {% if t.estado == 'cerrada' %}<div class="tarea-pie muted">Cerrada por {{ t.cerrador or 'el sistema' }} · {{ t.cerrada_en | fh }}{% if t.cierre_detalle %} ({{ t.cierre_detalle }}){% endif %}</div>{% endif %}
     <div class="acciones">
       {% if t.estado == 'abierta' %}
       <form method="post" action="{{ url_for('tareas.tarea_cerrar', tid=t.id) }}" data-confirmar="¿Cerrar la tarea «{{ t.titulo }}»?"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sec mini-btn">Cerrar tarea</button></form>

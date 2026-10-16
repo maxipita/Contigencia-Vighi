@@ -68,12 +68,12 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
 - **Técnicas (biopsias):** antes de la macroscopía, la ficha del estudio tiene la tarjeta **Técnicas**: por cada estudio del flujo se registra el número (Nro), los fragmentos, si la inclusión
   fue **Reserva** (parcial) o **Inclusión total**, los tacos (los predeterminados del órgano, solo lectura) y los cassettes, con comentarios opcionales. Hace falta **al menos una técnica por estudio** para
   completar la macroscopía; se pueden agregar y borrar mientras la macro es editable. El N° de cassettes de la macro es la suma de las técnicas.
-- **Flujo compartido por tipo de estudio:** el recorrido (macroscopía, procesamiento, microscopía...) es de cada **tipo** dentro del protocolo, no
-  de cada estudio. Si un protocolo tiene 4 biopsias, las 4 comparten el mismo recorrido: al completar una etapa se marca en todas a la vez (y
-  al deshacerla, también), y la **macroscopía, la microscopía y la IHQ se cargan una sola vez** para todas (son del recorrido, no de cada estudio). La pantalla de uno de esos estudios
-  es la del recorrido completo: lista todos los estudios del tipo y tiene una sola trazabilidad.
-  Si tiene una biopsia y una citología, cada una tiene su propio recorrido. Si una biopsia pide IHQ, todo el recorrido de biopsias la incluye.
-  Cuando el recorrido de un tipo ya empezó no se puede sumar ni reactivar otro estudio de ese tipo (primero hay que deshacer las etapas).
+- **Flujo compartido por tipo de estudio:** el tracking (macroscopía, procesamiento, microscopía...) es de cada **tipo** dentro del protocolo, no
+  de cada estudio. Si un protocolo tiene 4 biopsias, las 4 comparten el mismo tracking: al completar una etapa se marca en todas a la vez (y
+  al deshacerla, también), y la **macroscopía, la microscopía y la IHQ se cargan una sola vez** para todas (son del tracking, no de cada estudio). La pantalla de uno de esos estudios
+  es la del tracking completo: lista todos los estudios del tipo y tiene una sola trazabilidad.
+  Si tiene una biopsia y una citología, cada una tiene su propio tracking. Si una biopsia pide IHQ, todo el tracking de biopsias la incluye.
+  Cuando el tracking de un tipo ya empezó no se puede sumar ni reactivar otro estudio de ese tipo (primero hay que deshacer las etapas).
 - **Informe en PDF:** el informe es **uno por protocolo** y junta todos sus estudios (cada uno con su material, macroscopía, microscopía y
   diagnóstico; si hay biopsias y citologías, el título es "Informe de anatomía patológica"). En la pantalla del protocolo hay un panel
   **Informe**: se habilita cuando **todos** los estudios están informados (mientras tanto dice qué falta). **Generar informe** abre una pantalla
@@ -106,7 +106,7 @@ Citología), cada uno con su muestra, responsable, lote, etapas y trazabilidad p
   y sus cuadros sirven para filtrar por semáforo (otro clic en el elegido lo quita). Al elegir uno, los totales siguen mostrando los tres de lo que se está viendo.
 - **Semáforo** (estudios pendientes, en el tablero, el protocolo y la ficha del estudio): **On time** si ni la etapa en que está ni ninguna anterior se pasó de su fecha límite;
   **Delayed** si hay atraso de menos de 1 día hábil; **Late** si llegó a 1 día hábil o más. El atraso **se arrastra**: si una etapa anterior se completó tarde, el protocolo
-  lo sigue contando aunque la etapa actual todavía esté en término (se toma el peor estado de todo el recorrido, incluido el ingreso). Los informados y anulados no llevan semáforo.
+  lo sigue contando aunque la etapa actual todavía esté en término (se toma el peor estado de todo el tracking, incluido el ingreso). Los informados y anulados no llevan semáforo.
 - **Usuarios:** por defecto solo los administradores. Con el permiso *Usuarios* (se tilda por perfil o por persona, y solo lo da un administrador) alguien más puede crear y editar personas, ponerles clave temporal y cargar firmas; no puede tocar a los administradores, ni hacer administrador a nadie, ni dar permisos que no tiene. *Perfiles y permisos* queda siempre solo para administradores.
 - **Corregir datos de un estudio** (permiso de edición de protocolos), en la tarjeta *Estudio* de la pantalla del estudio (se entra desde la ficha del protocolo con un clic en el estudio), cada dato tiene un lápiz *cambiar*; la tabla de la ficha del protocolo es solo para mirar: el **órgano**, el **tipo de muestra** (por ejemplo de Biopsia a Resección), la **cantidad** de frascos (de la que salen los tacos), el **lote** del protocolo (solo desde su primer estudio; se puede elegir otro lote abierto, crear uno nuevo o dejarlo sin lote) y el **responsable**. Cada cambio queda en el historial con el antes y el después. El tipo de estudio (biopsia, PAP o citología) no cambia.
 - **Autoguardado:** los textos de macroscopía, microscopía/diagnóstico e IHQ se guardan solos unos segundos después de escribir (al lado de *Guardar* dice «Guardado automáticamente» con la hora; si falla avisa en rojo y hay que usar *Guardar*). No hace falta apretar *Guardar*, pero para marcar la etapa como lista sí hay que tildar «y marcar como lista» y guardar. La decalcificación y «¿Solicita IHQ?» se siguen guardando con el botón.

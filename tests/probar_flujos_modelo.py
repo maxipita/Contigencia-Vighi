@@ -57,7 +57,7 @@ with A.app.app_context():
     from vighi.servicios.consultas import cargar_estudios
     filas = {e['id']: e for e in cargar_estudios("e.protocolo_id=?", (pm,))}
 chequear('las dos biopsias muestran el mismo estado', filas[b1]['estado'] == filas[b2]['estado'] and filas[b1]['proxima'] == filas[b2]['proxima'])
-chequear('la citología tiene su propio recorrido', filas[c1]['tipo'] == 'CT')
+chequear('la citología tiene su propio tracking', filas[c1]['tipo'] == 'CT')
 
 print('3) marcar y deshacer se hacen sobre el flujo')
 pend = ids['pendiente']
@@ -96,13 +96,13 @@ chequear('abre la pantalla del flujo de biopsias', r.status_code == 200 and 'Té
 chequear('y la del flujo de citologías', c.get(f'/protocolo/{pm}/flujo/CT').status_code == 200)
 chequear('un flujo que el protocolo no tiene da 404', c.get(f'/protocolo/{pm}/flujo/PAP').status_code == 404)
 h = c.get(f'/protocolo/{pm}').get_data(as_text=True)
-chequear('la ficha del protocolo enlaza a cada flujo y muestra su seguimiento', f'/protocolo/{pm}/flujo/BP' in h and f'/protocolo/{pm}/flujo/CT' in h and 'flujo-estado' in h)
+chequear('la ficha del protocolo enlaza a cada flujo y muestra su seguimiento', f'/protocolo/{pm}/flujo/BP' in h and f'/protocolo/{pm}/flujo/CT' in h and 'flujo-tracking' in h)
 
 print('7) en la ficha el acceso es solo por el flujo')
 h = c.get(f'/protocolo/{pm}').get_data(as_text=True)
 chequear('las muestras de la ficha no enlazan a su estudio', f'href="/estudio/{b1}"' not in h and f'href="/estudio/{c1}"' not in h)
 chequear('no repiten estado, semáforo ni vencimiento por muestra', '<th>Estado</th>' not in h and '<th>Semáforo</th>' not in h and '<th>Vence</th>' not in h)
-chequear('el seguimiento queda una vez por flujo', h.count('flujo-estado') == 2, h.count('flujo-estado'))
+chequear('el seguimiento queda una vez por flujo', h.count('flujo-tracking') == 2, h.count('flujo-tracking'))
 h = c.get(f"/lotes/{ids['p_mix'] and uno('SELECT lote_id FROM estudios WHERE id=?', ids['bp'])['lote_id'] or 0}").get_data(as_text=True) if uno('SELECT lote_id FROM estudios WHERE id=?', ids['bp'])['lote_id'] else ''
 chequear('en un lote las muestras enlazan al flujo', not h or f'/flujo/' in h)
 

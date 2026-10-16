@@ -91,7 +91,7 @@ r = autoguardar(f"/estudio/{e2}/ihq", marcadores="p53; Ki67, CK7, p53", resultad
 ih = fila("ihq", e2)
 chequear("el borrador guarda los marcadores como lista sin repetidos", r.status_code == 200 and ih["marcadores"] == "p53, Ki67, CK7", ih)
 chequear("antes de confirmar no se guarda el resultado", not ih["resultado"])
-chequear("y el estudio todavía no tiene IHQ en su recorrido", fila("micro", e2)["solicita_ihq"] == 0)
+chequear("y el estudio todavía no tiene IHQ en su tracking", fila("micro", e2)["solicita_ihq"] == 0)
 with A.app.app_context():
     tareas_antes = db.uno("SELECT COUNT(*) AS n FROM tareas WHERE protocolo_id=?", (pid2,))["n"]
     resp = db.ex("INSERT INTO usuarios (iniciales, nombre, sectores, admin, activo, debe_cambiar_clave) VALUES ('ZZIHQ','Resp IHQ','laboratorio',0,1,0)")
@@ -109,7 +109,7 @@ chequear("se crea la tarea «Solicitud de IHQ» para el responsable asignado", n
 chequear("la tarea enlista los marcadores pedidos", t and "- p53" in t["descripcion"] and "- Ki67" in t["descripcion"] and "- CK7" in t["descripcion"] and "(3)" in t["descripcion"], t["descripcion"] if t else None)
 mi = fila("micro", e2)
 ih = fila("ihq", e2)
-chequear("al confirmar arranca el recorrido de IHQ y queda registrado quién y cuándo", mi["solicita_ihq"] == 1 and ih["pedido_en"] and ih["pedido_por"] == admin, (mi, ih))
+chequear("al confirmar arranca el tracking de IHQ y queda registrado quién y cuándo", mi["solicita_ihq"] == 1 and ih["pedido_en"] and ih["pedido_por"] == admin, (mi, ih))
 chequear("el historial deja el pedido con los marcadores", auditorias("pedido_ihq", e2) == ["p53, Ki67, CK7"], str(auditorias("pedido_ihq", e2)))
 r = c.post(f"/estudio/{e2}/ihq/pedir", data={"_csrf": csrf, "marcadores": "p16"}, follow_redirects=True)
 with A.app.app_context():

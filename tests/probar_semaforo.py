@@ -125,7 +125,7 @@ chequear('filtrar por Late deja solo los atrasados', 'C000901' in t and 'C000900
 t = c.get('/?ver=todos&semaforo=on_time').get_data(as_text=True)
 chequear('filtrar por On time deja solo los que están a tiempo', 'C000900' in t and 'C000901' not in t)
 t = c.get(f'/protocolo/{cerca[0]}').get_data(as_text=True)
-chequear('la ficha del protocolo muestra el semáforo en el seguimiento del flujo y no en cada muestra', 'semaforo late' in t and 'flujo-estado' in t and '<th>Semáforo</th>' not in t and '<th>Estado</th>' not in t)
+chequear('la ficha del protocolo muestra el semáforo en el seguimiento del flujo y no en cada muestra', 'semaforo late' in t and 'flujo-tracking' in t and '<th>Semáforo</th>' not in t and '<th>Estado</th>' not in t)
 t = c.get(f'/estudio/{cerca[1]}').get_data(as_text=True)
 chequear('la ficha del estudio lo muestra junto al estado', 'semaforo late' in t and 'Late' in t.split('</h1>')[0])
 t = c.get(f'/estudio/{ids["bp"]}').get_data(as_text=True)
