@@ -112,7 +112,8 @@ class Conexion:
             cur = cx.execute(texto, params or None)
             if cur.description:
                 columnas = [d.name for d in cur.description]
-                filas = [Fila(columnas, [_valor(v) for v in f]) for f in cur.fetchall()]
+                indice = {k: i for i, k in enumerate(columnas)}
+                filas = [Fila(columnas, [_valor(v) for v in f], indice) for f in cur.fetchall()]
             else:
                 filas = []
             ultimo = None

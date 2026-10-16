@@ -1,14 +1,20 @@
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from vighi.dominio.estudios import ETAPAS, REGISTRO
 
 
 def _d(texto):
-    return datetime.strptime(texto[:10], "%Y-%m-%d").date()
+    try:
+        return date.fromisoformat(texto[:10])
+    except ValueError:
+        return datetime.strptime(texto[:10], "%Y-%m-%d").date()
 
 
 def _dt(texto):
-    return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
+    try:
+        return datetime.fromisoformat(texto)
+    except ValueError:
+        return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
 
 
 def sumar_habiles(desde, n, feriados):
