@@ -66,8 +66,10 @@ def tablero():
         q = f["q"].lower()
         return any(q in " ".join(str(e[k] or "") for k in ("numero", "apellido", "nombre", "dni", "lote", "sitio")).lower() for e in g)
 
-    firmantes = db.q("SELECT iniciales, nombre FROM usuarios WHERE activo=1 AND (',' || sectores || ',') LIKE '%,firmante,%' ORDER BY iniciales")
-    pap = db.uno("SELECT iniciales FROM usuarios WHERE LOWER(nombre) LIKE ? AND activo=1 ORDER BY id LIMIT 1", (f"%{informes.FIRMANTE_PAP}%",))
+    usuarios = db.q("SELECT iniciales, nombre, sectores FROM usuarios WHERE activo=1 AND ((',' || sectores || ',') LIKE '%,firmante,%' OR LOWER(nombre) LIKE ?) ORDER BY id",
+                    (f"%{informes.FIRMANTE_PAP}%",))
+    firmantes = sorted((u for u in usuarios if "firmante" in (u["sectores"] or "").split(",")), key=lambda u: u["iniciales"])
+    pap = next((u for u in usuarios if informes.FIRMANTE_PAP in (u["nombre"] or "").lower()), None)
 
     def firmante_de(g):
         activos = [e for e in g if not e["anulado"]]
