@@ -172,7 +172,7 @@ def _protocolo_editar(pid):
     for e in actuales.values():
         if e["lote_id"] and all(l["id"] != e["lote_id"] for l in ctx["lotes_abiertos"][e["tipo"]]):
             ctx["lotes_abiertos"][e["tipo"]].insert(0, db.uno("SELECT * FROM lotes WHERE id=?", (e["lote_id"],)))
-    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, pap=modo_pap, edicion=token, ultimos=[], **ctx)
+    return render_template("protocolos/protocolo_form.html", p=p, estudios=lista, nuevo=False, completar=borrador, pap=modo_pap, ordenes=ordenes_de(pid) if modo_pap else [], edicion=token, ultimos=[], **ctx)
 
 
 @bp.route("/paciente/<int:pid>/datos", methods=["POST"])
