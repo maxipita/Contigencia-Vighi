@@ -19,8 +19,18 @@ def clave_secreta():
     ruta = os.path.join(db.DATA, "secret.key")
     os.makedirs(db.DATA, exist_ok=True)
     if not os.path.exists(ruta):
-        with open(ruta, "w") as f:
+        temporal = f"{ruta}.{secrets.token_hex(4)}.tmp"
+        with open(temporal, "w") as f:
             f.write(secrets.token_hex(32))
+        try:
+            os.link(temporal, ruta)
+        except FileExistsError:
+            pass
+        except OSError:
+            os.replace(temporal, ruta)
+        finally:
+            if os.path.exists(temporal):
+                os.remove(temporal)
     with open(ruta) as f:
         return f.read().strip()
 
