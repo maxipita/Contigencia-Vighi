@@ -83,7 +83,7 @@ def pagina_pedida(texto):
     return int(texto) if texto and len(texto) < 9 and texto.isascii() and texto.isdigit() else 1
 
 
-def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
+def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA, propios=None):
     protocolos, fechas, con_ihq = cargar_protocolos()
     usuarios = db.q(SQL_RESPONSABLES)
     firmantes = [u for u in usuarios if "firmante" in (u["sectores"] or "").split(",")]
@@ -91,6 +91,15 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
     pap = next((u for u in usuarios if informes.FIRMANTE_PAP in (u["nombre"] or "").lower()), None)
     feriados, ahora = db.feriados(), datetime.now()
     mis = set(sectores)
+
+    def firmante_de(p):
+        activas = p.activas()
+        if pap and activas and all(m.tipo == "PAP" for m in activas):
+            return pap["iniciales"]
+        return next((m.responsable for m in activas if m.responsable in iniciales_firmantes), "")
+
+    if propios:
+        protocolos = {pid: p for pid, p in protocolos.items() if firmante_de(p) == propios or any(m.responsable == propios for m in p.activas())}
 
     conteo = {"pendientes": 0, "informados": 0, "sin_cargar": 0}
     for p in protocolos.values():
@@ -130,12 +139,6 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
     def con_texto(p):
         q = f["q"].lower()
         return any(q in " ".join(str(x or "") for x in (p.numero, p.apellido, p.nombre, p.dni, m.lote, m.sitio)).lower() for m in p.muestras)
-
-    def firmante_de(p):
-        activas = p.activas()
-        if pap and activas and all(m.tipo == "PAP" for m in activas):
-            return pap["iniciales"]
-        return next((m.responsable for m in activas if m.responsable in iniciales_firmantes), "")
 
     candidatos = []
     for p in protocolos.values():

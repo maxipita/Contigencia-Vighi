@@ -668,6 +668,12 @@ def preparar_esquema(c):
                    AND EXISTS (SELECT 1 FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia')""")
     if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='revision'").fetchone():
         c.lote([(SQL_REVISION_RETROACTIVA, ()), ("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('revision', ?)", (ahora(),))])
+    if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='dashboards'").fetchone():
+        c.lote([("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN ? ELSE permisos || ',' || ? END "
+                 "WHERE nombre = ? AND (',' || permisos || ',') NOT LIKE ?", (clave, clave, perfil, f"%,{clave},%"))
+                for perfil, clave in (("Ingreso", "dashboard_ingreso"), ("Laboratorio", "dashboard_laboratorio"), ("Macroscopía", "dashboard_macroscopia"),
+                                      ("Traslados", "dashboard_traslados"), ("Citotécnico", "dashboard_citotecnicos"), ("Médico firmante", "dashboard_patologos"))]
+               + [("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('dashboards', ?)", (ahora(),))])
     if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='revision_opcional'").fetchone():
         c.lote([(SQL_REVISION_PENDIENTE_PRESERVAR, ()), ("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('revision_opcional', ?)", (ahora(),))])
     return antes_de_informes

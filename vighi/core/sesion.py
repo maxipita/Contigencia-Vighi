@@ -124,7 +124,7 @@ def globales():
         if real:
             vista = {"admin": real, "otros": db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 AND id<>? ORDER BY iniciales", (real["id"],))}
     return {"vista_como": vista, "yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "mis_alertas": mis_alertas, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
+            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "mis_alertas": mis_alertas, "ve_dashboards": bool(u and any(p.startswith("dashboard_") for p in u["permisos"])), "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "sector_marca": sector_marca, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 

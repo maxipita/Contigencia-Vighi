@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, send_file
 
 from vighi.core import db
-from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
+from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio.estudios import NOMBRE_ETAPA
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios.exportacion import CABECERA, filas_exportables
@@ -30,7 +30,9 @@ def tablero():
     f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta")}
     f["ver"] = f["ver"] or "pendientes"
     f["desde"], f["hasta"] = dia_valido(f["desde"]), dia_valido(f["hasta"])
-    datos = armar(f, (yo["sectores"] or "").split(","), pagina_pedida(request.args.get("pagina")))
+    sectores = (yo["sectores"] or "").split(",")
+    propios = yo["iniciales"] if "firmante" in sectores and not yo["admin"] and not puede("tablero_todos") else None
+    datos = armar(f, sectores, pagina_pedida(request.args.get("pagina")), propios=propios)
     return render_template("tablero/tablero.html", f=f, etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"], **datos)
 
 

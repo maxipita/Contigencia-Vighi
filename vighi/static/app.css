@@ -709,3 +709,12 @@ a.chip-sel { text-decoration: none; }
 .filtros.compacto .opcion span { padding: 3px 11px; font-size: 12px; }
 .agenda-tarjeta.alerta { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
 .agenda-tarjeta.alerta .agenda-estado { background: var(--error-fondo); color: var(--error); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 14px; }
+.kpi { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 12px 16px; }
+.kpi-t { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--acento-fuerte); }
+.kpi-v { font-size: 28px; font-weight: 800; line-height: 1.1; margin: 4px 0 2px; }
+.kpi-d { font-size: 11px; color: var(--pizarra); }
+.tabla-ancha { overflow-x: auto; margin-bottom: 14px; }
+.tabla-dashboard td.sem-ot { color: #15803d; }
+.tabla-dashboard td.sem-dy { color: #b45309; }
+.tabla-dashboard td.sem-lt { color: #b91c1c; }
