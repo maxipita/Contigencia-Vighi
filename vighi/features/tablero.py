@@ -5,14 +5,17 @@ from flask import Blueprint, render_template, request, send_file
 
 from vighi.core import db
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
-from vighi.dominio.estudios import NOMBRE_ETAPA
+from vighi.dominio.estudios import ETAPAS
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios.exportacion import CABECERA, filas_exportables
 from vighi.servicios.protocolos import ediciones_en_curso
-from vighi.servicios.tablero import armar, pagina_pedida
+from vighi.servicios.tablero import CLASES_BIOPSIA, DIAGNOSTICOS, armar, pagina_pedida
 from vighi.servicios.validacion import pendientes as pendientes_de_validar
 
 bp = Blueprint("tablero", __name__)
+
+CLAVES_FILTRO = ("q", "tipo", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta", "dia", "mes", "anio", "lote", "medico", "cobertura", "plan",
+                 "biopsia", "zona", "diagnostico", "organo", "kwd")
 
 
 def dia_valido(texto):
@@ -23,17 +26,27 @@ def dia_valido(texto):
         return ""
 
 
+def numero_de(texto, tope, cifras, exacto=False):
+    if not (texto.isascii() and texto.isdigit() and (len(texto) == cifras if exacto else len(texto) <= cifras) and 1 <= int(texto) <= tope):
+        return ""
+    return texto.zfill(cifras)
+
+
 @bp.route("/")
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta")}
+    f = {k: request.args.get(k, "").strip() for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta", "dia", "mes", "anio",
+                                                   "lote", "medico", "cobertura", "plan", "biopsia", "zona", "diagnostico", "organo", "kwd")}
     f["ver"] = f["ver"] or "todos"
     f["desde"], f["hasta"] = dia_valido(f["desde"]), dia_valido(f["hasta"])
+    f["dia"], f["mes"], f["anio"] = numero_de(f["dia"], 31, 2), numero_de(f["mes"], 12, 2), numero_de(f["anio"], 9999, 4, True)
     sectores = (yo["sectores"] or "").split(",")
     propios = yo["iniciales"] if "firmante" in sectores and not yo["admin"] and not puede("tablero_todos") else None
     datos = armar(f, sectores, pagina_pedida(request.args.get("pagina")), propios=propios)
-    return render_template("tablero/tablero.html", f=f, etapas=[(k, n) for k, n in NOMBRE_ETAPA.items() if k != "ingreso"], **datos)
+    actividades = [(k, f"{v[2]}: {v[4]}") for k, v in ETAPAS.items() if k != "ingreso"]
+    filtrado = any(f[k] for k in CLAVES_FILTRO)
+    return render_template("tablero/tablero.html", f=f, actividades=actividades, filtrado=filtrado, clases_biopsia=CLASES_BIOPSIA, diagnosticos=DIAGNOSTICOS, **datos)
 
 
 @bp.route("/completar")

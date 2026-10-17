@@ -7,34 +7,73 @@
 <h1>Estudios</h1>
 {% set args = request.args.to_dict() %}
 {% set _ = args.pop('pagina', None) %}
-<form class="filtros" method="get">
+<form class="filtros compacto filtros-estudios" method="get">
   {% if f.ver != 'todos' %}<input type="hidden" name="ver" value="{{ f.ver }}">{% endif %}
-  <input name="q" value="{{ f.q }}" placeholder="Buscar protocolo, paciente, DNI, lote, sitio…" size="36">
+  {% if f.semaforo %}<input type="hidden" name="semaforo" value="{{ f.semaforo }}">{% endif %}
+  {% if f.sector %}<input type="hidden" name="sector" value="{{ f.sector }}">{% endif %}
+  <input name="q" value="{{ f.q }}" placeholder="Buscar protocolo, paciente, DNI, lote, sitio…" size="30">
   <select name="tipo">
-    <option value="">Todas las muestras</option>
+    <option value="">[ Todas las muestras ]</option>
     {% for k, n in TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ n }}</option>{% endfor %}
   </select>
-  <select name="sector">
-    <option value="">Pendiente en cualquier sector</option>
-    {% for k, n in SECTORES.items() if k not in ('ingreso', 'facturacion') %}<option value="{{ k }}" {{ 'selected' if f.sector == k }}>Pendiente en {{ n }}</option>{% endfor %}
+  <select name="dia" title="Día de ingreso">
+    <option value="">[ día ]</option>
+    {% for d in range(1, 32) %}{% set v = '%02d' % d %}<option value="{{ v }}" {{ 'selected' if f.dia == v }}>{{ d }}</option>{% endfor %}
   </select>
-  <select name="etapa">
-    <option value="">Pendiente en cualquier etapa</option>
-    {% for k, n in etapas %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>Pendiente en {{ n }}</option>{% endfor %}
+  <select name="mes" title="Mes de ingreso">
+    <option value="">[ mes ]</option>
+    {% for n in ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre') %}{% set v = '%02d' % loop.index %}<option value="{{ v }}" {{ 'selected' if f.mes == v }}>{{ n }}</option>{% endfor %}
   </select>
-  {% if f.semaforo %}<input type="hidden" name="semaforo" value="{{ f.semaforo }}">{% endif %}
-  <select name="ubicacion" title="Lugar de recolección o de entrega">
-    <option value="">Cualquier ubicación</option>
-    {% for l in lugares %}<option value="{{ l }}" {{ 'selected' if f.ubicacion == l }}>{{ l }}</option>{% endfor %}
-  </select>
-  <select name="mf" title="Médico firmante (iniciales)">
-    <option value="">Cualquier médico firmante</option>
-    {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.iniciales }}</option>{% endfor %}
+  <select name="anio" title="Año de ingreso">
+    <option value="">[ año ]</option>
+    {% for a in anios %}<option value="{{ a }}" {{ 'selected' if f.anio == a }}>{{ a }}</option>{% endfor %}
   </select>
   <label class="muted" title="Fecha de ingreso del protocolo">Ingresado del <input type="date" name="desde" value="{{ f.desde }}"></label>
   <label class="muted">al <input type="date" name="hasta" value="{{ f.hasta }}"></label>
+  <select name="ubicacion" title="Lugar de recolección o de entrega">
+    <option value="">[ Procedencia: todas ]</option>
+    {% for l in lugares %}<option value="{{ l }}" {{ 'selected' if f.ubicacion == l }}>{{ l }}</option>{% endfor %}
+  </select>
+  <select name="lote" title="Tipo de lote">
+    <option value="">[ Lote: todos ]</option>
+    {% for l in tipos_lote %}<option value="{{ l }}" {{ 'selected' if f.lote == l }}>{{ l }}</option>{% endfor %}
+  </select>
+  <select name="etapa" title="Actividad que está pendiente">
+    <option value="">[ Actividad: todas ]</option>
+    {% for k, n in actividades %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <input name="medico" value="{{ f.medico }}" placeholder="[ médico solicitante ]" size="18">
+  <select name="mf" title="Médico firmante">
+    <option value="">[ médico firmante ]</option>
+    {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.nombre or u.iniciales }}</option>{% endfor %}
+  </select>
+  <select name="cobertura">
+    <option value="">[ cobertura ]</option>
+    {% for c in coberturas %}<option value="{{ c }}" {{ 'selected' if f.cobertura == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="plan">
+    <option value="">[ plan ]</option>
+    {% for c in planes %}<option value="{{ c }}" {{ 'selected' if f.plan == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="biopsia" title="Tipo de biopsia">
+    <option value="">[ Tipo de biopsia ]</option>
+    {% for c in clases_biopsia %}<option value="{{ c }}" {{ 'selected' if f.biopsia == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <select name="zona" title="Zona del cuerpo">
+    <option value="">[ zona del cuerpo ]</option>
+    {% for z in zonas %}<option value="{{ z }}" {{ 'selected' if f.zona == z }}>{{ z }}</option>{% endfor %}
+  </select>
+  <select name="diagnostico" title="Diagnóstico">
+    <option value="">[ Diagnóstico: todos ]</option>
+    {% for k, n in diagnosticos %}<option value="{{ k }}" {{ 'selected' if f.diagnostico == k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <select name="organo" title="Órgano">
+    <option value="">[ Órgano: todos ]</option>
+    {% for o in organos %}<option value="{{ o }}" {{ 'selected' if f.organo == o }}>{{ o }}</option>{% endfor %}
+  </select>
+  <input name="kwd" value="{{ f.kwd }}" placeholder="Diagnóstico contiene…" size="18">
   <button class="btn sec">Filtrar</button>
-  {% if f.desde or f.hasta %}<a class="btn sec" href="{{ url_for('tablero.tablero', **dict(args, desde='', hasta='')) }}">Quitar fechas</a>{% endif %}
+  {% if filtrado %}<a class="btn sec" href="{{ url_for('tablero.tablero', ver=f.ver if f.ver != 'todos' else None) }}">Quitar filtros</a>{% endif %}
 </form>
 <div class="semaforo-total">
   {% for k, n in SEMAFOROS.items() %}

@@ -4,18 +4,24 @@ from math import ceil
 from vighi.core import db
 from vighi.core.config import SEMAFOROS
 from vighi.dominio import informes, trazabilidad
-from vighi.dominio.estudios import REGISTRO, SECTORES, Variante, sector_marca
+from vighi.dominio.estudios import GINECOLOGICA, REGISTRO, SECTORES, Variante, sector_marca
 from vighi.servicios.consultas import SQL_CON_DECAL, SQL_CON_IHQ, SQL_ETAPAS, SQL_RESPONSABLES, SQL_SIN_REVISION, etiqueta_flujos
 from vighi.servicios.lotes import orden_numero
+from vighi.servicios.mensajeria import MALIGNIDADES
 
 POR_PAGINA = 100
+CLASES_BIOPSIA = ("Dermatológicas", "Ginecológicas", "Quirúrgicas")
+DIAGNOSTICOS = (("con", "Con diagnóstico"), ("sin", "Sin diagnóstico")) + tuple(MALIGNIDADES)
 
-SQL_TABLERO = """SELECT e.protocolo_id, e.flujo_id, e.tipo, e.subcategoria, e.sitio, e.tipo_muestra, e.anulado, e.creado_en, e.lote_id,
+SQL_TABLERO = """SELECT e.protocolo_id, e.flujo_id, e.tipo, e.subcategoria, e.sitio, e.tipo_muestra, e.anulado, e.creado_en, e.lote_id, e.malignidad,
                         p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion, p.cargado_sistema, p.pendiente_validacion, p.lugar_recoleccion, p.lugar_entrega,
-                        u.iniciales, l.codigo
+                        p.cobertura, p.plan, p.medico, u.iniciales, l.codigo, l.tipo_lote
                  FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                  LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                  WHERE p.borrador=0 ORDER BY p.id DESC, e.id"""
+
+SQL_DIAGNOSTICO = """SELECT f.protocolo_id, f.tipo FROM micro m JOIN flujos f ON f.id=m.flujo_id
+                      WHERE m.conclusion LIKE ? OR m.resultado LIKE ? OR m.bethesda LIKE ?"""
 
 
 def consultas_tablero():
@@ -23,12 +29,13 @@ def consultas_tablero():
 
 
 class Muestra:
-    __slots__ = ("flujo_id", "tipo", "subcategoria", "sitio", "tipo_muestra", "anulado", "creado_en", "responsable", "lote", "decal", "ihq", "estado", "proxima", "vence", "semaforo")
+    __slots__ = ("flujo_id", "tipo", "subcategoria", "sitio", "tipo_muestra", "anulado", "creado_en", "responsable", "lote", "tipo_lote", "malignidad",
+                 "decal", "ihq", "estado", "proxima", "vence", "semaforo")
 
 
 class Protocolo:
     __slots__ = ("id", "numero", "apellido", "nombre", "dni", "fecha_recoleccion", "cargado_sistema", "validar", "lugar_recoleccion", "lugar_entrega",
-                 "lote_id", "lote", "muestras", "ingreso")
+                 "cobertura", "plan", "medico", "lote_id", "lote", "muestras", "ingreso")
 
     def activas(self):
         return [m for m in self.muestras if not m.anulado]
@@ -43,19 +50,21 @@ def cargar_protocolos():
     con_decal = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
     sin_revision = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_SIN_REVISION)}
     protocolos, por_flujo = {}, {}
-    for (pid, flujo_id, tipo, subcategoria, sitio, tipo_muestra, anulado, creado_en, lote_id, numero, apellido, nombre, dni, fecha_recoleccion,
-         cargado_sistema, validar, lugar_recoleccion, lugar_entrega, responsable, lote) in db.q(SQL_TABLERO):
+    for (pid, flujo_id, tipo, subcategoria, sitio, tipo_muestra, anulado, creado_en, lote_id, malignidad, numero, apellido, nombre, dni, fecha_recoleccion,
+         cargado_sistema, validar, lugar_recoleccion, lugar_entrega, cobertura, plan, medico, responsable, lote, tipo_lote) in db.q(SQL_TABLERO):
         p = protocolos.get(pid)
         if p is None:
             p = protocolos[pid] = Protocolo()
             p.id, p.numero, p.apellido, p.nombre, p.dni, p.fecha_recoleccion = pid, numero, apellido, nombre, dni, fecha_recoleccion
             p.cargado_sistema, p.validar, p.lugar_recoleccion, p.lugar_entrega = cargado_sistema, validar, lugar_recoleccion, lugar_entrega
+            p.cobertura, p.plan, p.medico = cobertura, plan, medico
             p.lote_id, p.lote, p.muestras, p.ingreso = lote_id, lote, [], creado_en
         elif creado_en < p.ingreso:
             p.ingreso = creado_en
         m = Muestra()
         m.flujo_id, m.tipo, m.subcategoria, m.sitio, m.tipo_muestra, m.anulado = flujo_id, tipo, subcategoria, sitio, tipo_muestra, bool(anulado)
         m.creado_en, m.responsable, m.lote, m.vence, m.semaforo = creado_en, responsable, lote, None, None
+        m.tipo_lote, m.malignidad = tipo_lote, malignidad
         m.decal = (pid, tipo) in con_decal
         m.ihq = (pid, tipo) in con_ihq
         if m.anulado:
@@ -81,6 +90,67 @@ def plazos(p, m, fechas, feriados, ahora):
 
 def pagina_pedida(texto):
     return int(texto) if texto and len(texto) < 9 and texto.isascii() and texto.isdigit() else 1
+
+
+def clase_biopsia(subcategoria):
+    if not subcategoria:
+        return ""
+    return "Dermatológicas" if subcategoria == "Dermatológica" else ("Ginecológicas" if subcategoria == GINECOLOGICA else "Quirúrgicas")
+
+
+def coincidencias_diagnostico(texto):
+    limpio = texto.replace("%", "").replace("_", "").strip()
+    if not limpio:
+        return None
+    patron = f"%{limpio}%"
+    return {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_DIAGNOSTICO, (patron, patron, patron))}
+
+
+def del_protocolo(p, f, firmante):
+    ingreso = p.ingreso[:10]
+    return not (
+        (f.get("ubicacion") and f["ubicacion"] not in (p.lugar_recoleccion, p.lugar_entrega))
+        or (f.get("mf") and f["mf"] != firmante)
+        or (f.get("medico") and f["medico"].lower() not in (p.medico or "").lower())
+        or (f.get("cobertura") and f["cobertura"] != p.cobertura)
+        or (f.get("plan") and f["plan"] != p.plan)
+        or (f.get("anio") and f["anio"] != ingreso[:4])
+        or (f.get("mes") and f["mes"] != ingreso[5:7])
+        or (f.get("dia") and f["dia"] != ingreso[8:10])
+        or (f.get("desde") and ingreso < f["desde"])
+        or (f.get("hasta") and ingreso > f["hasta"]))
+
+
+def del_estudio(m, pid, f, fechas, coinciden):
+    if f.get("tipo") and m.tipo != f["tipo"]:
+        return False
+    if f.get("sector") and not (m.proxima and m.proxima[2] == f["sector"]):
+        return False
+    if f.get("etapa") and not (m.proxima and m.proxima[0] == f["etapa"]):
+        return False
+    if (f.get("zona") and m.subcategoria != f["zona"]) or (f.get("organo") and m.sitio != f["organo"]):
+        return False
+    if (f.get("biopsia") and clase_biopsia(m.subcategoria) != f["biopsia"]) or (f.get("lote") and m.tipo_lote != f["lote"]):
+        return False
+    d = f.get("diagnostico")
+    if d in ("con", "sin") and ("microscopia" in fechas.get(m.flujo_id, ())) != (d == "con"):
+        return False
+    if d and d not in ("con", "sin") and m.malignidad != d:
+        return False
+    return coinciden is None or (pid, m.tipo) in coinciden
+
+
+def opciones(protocolos, f):
+    def con(valores, elegido):
+        return sorted({v for v in valores if v} | ({elegido} if elegido else set()), key=db.clave_nombre)
+    muestras = [m for p in protocolos.values() for m in p.muestras]
+    return {"coberturas": con((p.cobertura for p in protocolos.values()), f.get("cobertura")),
+            "planes": con((p.plan for p in protocolos.values() if not f.get("cobertura") or p.cobertura == f["cobertura"]), f.get("plan")),
+            "zonas": con((m.subcategoria for m in muestras), f.get("zona")),
+            "organos": con((m.sitio for m in muestras if not f.get("zona") or m.subcategoria == f["zona"]), f.get("organo")),
+            "tipos_lote": con((m.tipo_lote for m in muestras), f.get("lote")),
+            "anios": sorted({p.ingreso[:4] for p in protocolos.values()} | ({f["anio"]} if f.get("anio") else set()), reverse=True),
+            "lugares": con((l for p in protocolos.values() for l in (p.lugar_recoleccion, p.lugar_entrega)), f.get("ubicacion"))}
 
 
 def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA, propios=None):
@@ -127,31 +197,16 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA, propios=None):
             return not activas
         return True
 
-    def estudio_ok(m):
-        if f["tipo"] and m.tipo != f["tipo"]:
-            return False
-        if f["sector"] and not (m.proxima and m.proxima[2] == f["sector"]):
-            return False
-        if f["etapa"] and not (m.proxima and m.proxima[0] == f["etapa"]):
-            return False
-        return True
-
     def con_texto(p):
         q = f["q"].lower()
         return any(q in " ".join(str(x or "") for x in (p.numero, p.apellido, p.nombre, p.dni, m.lote, m.sitio)).lower() for m in p.muestras)
 
+    coinciden = coincidencias_diagnostico(f.get("kwd", ""))
     candidatos = []
     for p in protocolos.values():
-        if not del_ver(p) or (f["q"] and not con_texto(p)):
+        if not del_ver(p) or (f["q"] and not con_texto(p)) or not del_protocolo(p, f, firmante_de(p)):
             continue
-        if f["ubicacion"] and f["ubicacion"] not in (p.lugar_recoleccion, p.lugar_entrega):
-            continue
-        if f["mf"] and f["mf"] != firmante_de(p):
-            continue
-        ingreso = p.ingreso[:10]
-        if (f["desde"] and ingreso < f["desde"]) or (f["hasta"] and ingreso > f["hasta"]):
-            continue
-        elegidas = [m for m in p.muestras if estudio_ok(m)]
+        elegidas = [m for m in p.muestras if del_estudio(m, p.id, f, fechas, coinciden)]
         if f["ver"] == "anulados":
             vista = [m for m in elegidas if m.anulado]
         elif f["ver"] in ("pendientes", "mios"):
@@ -186,6 +241,5 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA, propios=None):
             "responsables": list(dict.fromkeys(m.responsable for m in vista if m.responsable)),
             "estados": list(dict.fromkeys((m.estado, SECTORES[m.proxima[2]] if m.proxima else "", m.anulado, not m.proxima) for m in vista)),
             "semaforo": semaforo, "vence": min(vencen) if vencen else None, "creado_en": p.ingreso})
-    lugares = {l for p in protocolos.values() for l in (p.lugar_recoleccion, p.lugar_entrega) if l} | ({f["ubicacion"]} if f["ubicacion"] else set())
-    return {"filas": filas, "conteo": conteo, "por_semaforo": por_semaforo, "lugares": sorted(lugares, key=db.clave_nombre), "firmantes": firmantes,
+    return {"filas": filas, "conteo": conteo, "por_semaforo": por_semaforo, "firmantes": firmantes, **opciones(protocolos, f),
             "pagina": pagina, "paginas": paginas, "total": total, "primera": desde + 1 if total else 0, "ultima": desde + len(filas), "por_pagina": por_pagina}
