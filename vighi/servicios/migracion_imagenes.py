@@ -23,6 +23,14 @@ def fecha_de(url):
     return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d} 00:00:00" if m else db.ahora()
 
 
+TIPOS_NUEVOS = {clave(t): t for t in db.TIPOS_IMAGEN_INICIALES} | {"imagen microscopio": "Imagen de microscopio"}
+
+
+def tipo_nuevo(i):
+    anterior = (i.get("tipo") or "").strip()
+    return TIPOS_NUEVOS.get(clave(anterior), anterior)[:40]
+
+
 def es_orden(tipo):
     return clave(tipo).startswith("orden")
 
@@ -45,8 +53,8 @@ def bajar(i):
 
 
 def guardar_imagen(pid, i, grande, mini, yo):
-    db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, imagen, miniatura) VALUES (?,?,?,?,?,?,?)",
-          (pid, yo, fecha_de(i["url"]), nombre_de(i["url"]), (i.get("tipo") or "")[:200],
+    db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, tipo, imagen, miniatura) VALUES (?,?,?,?,?,?,?,?)",
+          (pid, yo, fecha_de(i["url"]), nombre_de(i["url"]), "", tipo_nuevo(i),
            almacen.guardar("imagenes", grande, "image/jpeg"), almacen.guardar("imagenes", mini, "image/jpeg")))
 
 

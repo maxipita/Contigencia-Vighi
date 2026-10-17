@@ -10,6 +10,8 @@ from datetime import datetime
 from flask import g
 
 from vighi.core import d1
+
+TIPOS_IMAGEN_INICIALES = ("Historia clínica", "Imagen de microscopio", "Informe histológico", "Muestra", "Orden médica", "Presupuesto")
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA = os.path.join(BASE, "data")
 ARCHIVO_CLOUDFLARE = os.path.join(DATA, "cloudflare.env")
@@ -225,7 +227,7 @@ CREATE TABLE IF NOT EXISTS imagenes (
     protocolo_id INTEGER NOT NULL REFERENCES protocolos(id),
     usuario_id INTEGER REFERENCES usuarios(id),
     creado_en VARCHAR(19) NOT NULL,
-    nombre VARCHAR(120), descripcion VARCHAR(200),
+    nombre VARCHAR(120), descripcion VARCHAR(200), tipo VARCHAR(40),
     imagen BLOB NOT NULL, miniatura BLOB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_imagenes_protocolo ON imagenes(protocolo_id);
@@ -654,7 +656,7 @@ def preparar_esquema(c):
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("ordenes", "grupo", "VARCHAR(300)"),
                                    ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'"),
-                                   ("micro", "solicita_revision", "INTEGER NOT NULL DEFAULT 0")):
+                                   ("micro", "solicita_revision", "INTEGER NOT NULL DEFAULT 0"), ("imagenes", "tipo", "VARCHAR(40)")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
@@ -829,6 +831,10 @@ def inicializar():
         c.execute("DELETE FROM listas WHERE nombre='cobertura'")
         c.executemany("INSERT INTO listas VALUES (?,?,?)",
                       [("cobertura", i, v) for i, v in enumerate(cargar("listas.json")["cobertura"])])
+    if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='tipos_imagen'").fetchone():
+        iniciales = [] if c.execute("SELECT 1 FROM listas WHERE nombre='tipos_imagen'").fetchone() else \
+            [("INSERT INTO listas (nombre, orden, valor) VALUES ('tipos_imagen', ?, ?)", (i, v)) for i, v in enumerate(TIPOS_IMAGEN_INICIALES)]
+        c.lote(iniciales + [("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('tipos_imagen', ?)", (ahora(),))])
     if not c.execute("SELECT 1 FROM templates LIMIT 1").fetchone():
         for clase in ("macro", "micro"):
             c.executemany("INSERT INTO templates (clase, titulo, tipo_biopsia, texto, conclusion, organo, sb_id) VALUES (?,?,?,?,?,?,?)",

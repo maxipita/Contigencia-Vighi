@@ -253,11 +253,15 @@ r = c.post('/api/migracion/imagenes', data=json.dumps({'numero': 'P3333333', 'im
 d = r.get_json()
 with A.app.app_context():
     pid3 = db.uno("SELECT id FROM protocolos WHERE numero='P3333333'")['id']
-    im = db.q("SELECT nombre, descripcion, creado_en FROM imagenes WHERE protocolo_id=?", (pid3,))
+    im = db.q("SELECT nombre, descripcion, tipo, creado_en FROM imagenes WHERE protocolo_id=?", (pid3,))
     od = db.q("SELECT nombre, pagina, metodo FROM ordenes WHERE protocolo_id=?", (pid3,))
 chequear('copia la imagen como imagen y la orden como orden, y rechaza un origen ajeno', d['importadas'] == 2 and len(d['errores']) == 1 and len(im) == 1 and len(od) == 1, d)
-chequear('conserva nombre, tipo y fecha original', im[0]['nombre'] == '3333333_1.jpg' and im[0]['descripcion'] == 'Muestra' and im[0]['creado_en'] == '2026-09-24 00:00:00' and od[0]['nombre'].startswith('Batch1_'))
-chequear('se ven en la ficha', c.get(f'/protocolo/{pid3}').status_code == 200)
+chequear('conserva nombre, tipo y fecha original', im[0]['nombre'] == '3333333_1.jpg' and im[0]['tipo'] == 'Muestra' and im[0]['descripcion'] == '' and im[0]['creado_en'] == '2026-09-24 00:00:00' and od[0]['nombre'].startswith('Batch1_'))
+h3 = c.get(f'/protocolo/{pid3}').get_data(as_text=True)
+chequear('se ven en la ficha, con su tipo en la galería', '<span class="chip">Muestra</span>' in h3)
+mapa = {mi.tipo_nuevo({'tipo': t}) for t in ('Imágen Microscopio', 'Historia clínica', 'Informe Histologico', 'Presupuesto', 'Muestra', 'Orden médica')}
+chequear('los seis tipos del sistema anterior pasan a los nombres de la lista', mapa == set(db.TIPOS_IMAGEN_INICIALES), mapa)
+chequear('un tipo desconocido se conserva tal cual', mi.tipo_nuevo({'tipo': 'Otro raro'}) == 'Otro raro' and mi.tipo_nuevo({}) == '')
 r = c.post('/api/migracion/imagenes', data=json.dumps({'numero': 'P3333333', 'imagenes': IMGS[:2], 'ensayo': False}), headers=cab)
 d = r.get_json()
 with A.app.app_context():

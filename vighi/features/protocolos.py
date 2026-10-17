@@ -280,7 +280,7 @@ def protocolo(pid):
     for x in estudios:
         if not x["anulado"] and x["proxima"] and (x["tipo"], x["proxima"][1]) not in [(q[0], q[1]) for q in pendientes]:
             pendientes.append((x["tipo"], x["proxima"][1], TIPOS[x["tipo"]]))
-    return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), tareas=tareas_de(pid), ordenes=ordenes_de(pid), usuarios_tarea=usuarios_con_sectores(),
+    return render_template("protocolos/protocolo.html", p=p, estudios=estudios, historial=historial, listas=listas(), comentarios=comentarios_de(pid), imagenes=imagenes_de(pid), tipos_imagen=listas().get("tipos_imagen", []), tareas=tareas_de(pid), ordenes=ordenes_de(pid), usuarios_tarea=usuarios_con_sectores(),
                            ubicaciones=ubicaciones_del_protocolo(p), flujos_malignidad=malignidad_por_flujo(estudios), malignidades=mensajeria.MALIGNIDADES,
                            emitido=informe_emitido(pid),
                            flujos=flujos_de([pid]).get(pid, ""),

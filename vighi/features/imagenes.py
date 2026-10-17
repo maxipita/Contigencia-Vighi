@@ -2,6 +2,7 @@ from flask import Blueprint, abort, flash, request
 
 from vighi.core import almacen, db
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
+from vighi.servicios.consultas import listas
 from vighi.servicios.imagenes import MAX_IMAGENES, PERMISOS_IMAGENES, enviar_imagen, procesar_imagen, volver_a_imagenes
 from vighi.servicios.protocolos import protocolo_o_404
 
@@ -18,6 +19,8 @@ def imagenes_subir(pid):
         return volver_a_imagenes(pid)
     cupo = MAX_IMAGENES - db.uno("SELECT COUNT(*) AS n FROM imagenes WHERE protocolo_id=?", (pid,))["n"]
     descripcion = request.form.get("descripcion", "").strip()[:200]
+    tipo = request.form.get("tipo", "").strip()
+    tipo = tipo if tipo in listas().get("tipos_imagen", []) else ""
     yo = usuario_actual()
     subidas, fallas = 0, []
     for f in archivos:
@@ -32,8 +35,8 @@ def imagenes_subir(pid):
         except ImportError:
             flash("Falta instalar Pillow para subir imágenes (python -m pip install -r requirements.txt) y reiniciar el sistema.", "error")
             return volver_a_imagenes(pid)
-        db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, imagen, miniatura) VALUES (?,?,?,?,?,?,?)",
-              (pid, yo["id"], db.ahora(), (f.filename or "")[:120], descripcion,
+        db.ex("INSERT INTO imagenes (protocolo_id, usuario_id, creado_en, nombre, descripcion, tipo, imagen, miniatura) VALUES (?,?,?,?,?,?,?,?)",
+              (pid, yo["id"], db.ahora(), (f.filename or "")[:120], descripcion, tipo,
                almacen.guardar("imagenes", grande, "image/jpeg"), almacen.guardar("imagenes", mini, "image/jpeg")))
         subidas += 1
     if subidas:

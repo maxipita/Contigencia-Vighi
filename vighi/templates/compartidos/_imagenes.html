@@ -16,8 +16,8 @@
     {% endfor %}
     {% for i in imagenes %}
     <figure>
-      <a href="{{ url_for('imagenes.imagen_ver', iid=i.id) }}" data-visor title="{{ i.descripcion or '' }}"><img src="{{ url_for('imagenes.imagen_mini', iid=i.id) }}" loading="lazy" alt="{{ i.descripcion or 'Imagen' }}"></a>
-      <figcaption>{% if i.descripcion %}<div>{{ i.descripcion }}</div>{% endif %}<span class="muted">{{ i.iniciales or '?' }} · {{ i.creado_en | fh }}</span>
+      <a href="{{ url_for('imagenes.imagen_ver', iid=i.id) }}" data-visor title="{{ i.tipo or '' }}{{ ' · ' if i.tipo and i.descripcion }}{{ i.descripcion or '' }}"><img src="{{ url_for('imagenes.imagen_mini', iid=i.id) }}" loading="lazy" alt="{{ i.tipo or i.descripcion or 'Imagen' }}"></a>
+      <figcaption>{% if i.tipo %}<div><span class="chip">{{ i.tipo }}</span></div>{% endif %}{% if i.descripcion %}<div>{{ i.descripcion }}</div>{% endif %}<span class="muted">{{ i.iniciales or '?' }} · {{ i.creado_en | fh }}</span>
         {% if puede_imagenes %}<form method="post" action="{{ url_for('imagenes.imagen_borrar', iid=i.id) }}" data-confirmar="¿Borrar esta imagen?">
           <input type="hidden" name="_csrf" value="{{ csrf }}"><button class="enlace" title="Borrar imagen">Borrar</button></form>{% endif %}</figcaption>
     </figure>
@@ -28,7 +28,8 @@
   <form method="post" enctype="multipart/form-data" class="subida">
     <input type="hidden" name="_csrf" value="{{ csrf }}">
     <input type="file" name="archivos" accept="application/pdf,image/jpeg,image/png,image/webp,image/tiff" multiple required>
-    {% if puede_imagenes %}<input name="descripcion" maxlength="200" placeholder="Descripción (opcional, solo para las imágenes que subas)">{% endif %}
+    {% if puede_imagenes %}{% if tipos_imagen %}<select name="tipo" title="Tipo de imagen (solo para las imágenes que subas)"><option value="">Tipo de imagen</option>{% for t in tipos_imagen %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>{% endif %}
+    <input name="descripcion" maxlength="200" placeholder="Descripción (opcional, solo para las imágenes que subas)">{% endif %}
     <div class="acciones">
       {% if puede_ordenes %}<button class="btn sec" formaction="{{ url_for('ordenes.ordenes_subir', pid=pid) }}">Adjuntar como orden</button>{% endif %}
       {% if puede_imagenes %}<button class="btn sec" formaction="{{ url_for('imagenes.imagenes_subir', pid=pid) }}">Subir como imagen</button>{% endif %}

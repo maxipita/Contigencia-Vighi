@@ -2,7 +2,8 @@ from vighi.servicios.protocolos import limpiar_valor, sin_repetidos
 
 
 LISTADOS = {"tecnicas_especiales": ("Técnicas especiales", "Se tildan al agregar un estudio (biopsias y citologías) y se pueden elegir al informar la microscopía."),
-            "ihq_marcadores": ("Marcadores de IHQ", "Se eligen al cargar la IHQ de una biopsia, cuando el diagnóstico la solicita.")}
+            "ihq_marcadores": ("Marcadores de IHQ", "Se eligen al cargar la IHQ de una biopsia, cuando el diagnóstico la solicita."),
+            "tipos_imagen": ("Tipos de imagen", "Clasificación que se elige al subir una imagen a un protocolo y que se ve en la galería.")}
 
 
 def limpiar_listado(texto):

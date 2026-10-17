@@ -5,7 +5,7 @@ from flask import abort, redirect, request, send_file, url_for
 from vighi.core import almacen, db
 
 
-SQL_IMAGENES = """SELECT i.id, i.protocolo_id, i.nombre, i.descripcion, i.creado_en, u.iniciales FROM imagenes i
+SQL_IMAGENES = """SELECT i.id, i.protocolo_id, i.nombre, i.descripcion, i.tipo, i.creado_en, u.iniciales FROM imagenes i
                   LEFT JOIN usuarios u ON u.id=i.usuario_id WHERE i.protocolo_id=? ORDER BY i.id"""
 MAX_IMAGENES = 30
 PERMISOS_IMAGENES = ("protocolo_editar", "macro", "micro")
