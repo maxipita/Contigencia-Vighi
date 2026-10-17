@@ -24,7 +24,7 @@ def consultas_tablero():
 
 
 class Muestra:
-    __slots__ = ("flujo_id", "tipo", "subcategoria", "sitio", "tipo_muestra", "anulado", "creado_en", "responsable", "lote", "decal", "estado", "proxima", "vence", "semaforo")
+    __slots__ = ("flujo_id", "tipo", "subcategoria", "sitio", "tipo_muestra", "anulado", "creado_en", "responsable", "lote", "decal", "ihq", "estado", "proxima", "vence", "semaforo")
 
 
 class Protocolo:
@@ -57,6 +57,7 @@ def cargar_protocolos():
         m.flujo_id, m.tipo, m.subcategoria, m.sitio, m.tipo_muestra, m.anulado = flujo_id, tipo, subcategoria, sitio, tipo_muestra, bool(anulado)
         m.creado_en, m.responsable, m.lote, m.vence, m.semaforo = creado_en, responsable, lote, None, None
         m.decal = (pid, tipo) in con_decal
+        m.ihq = (pid, tipo) in con_ihq
         if m.anulado:
             m.estado, m.proxima = "ANULADO", None
         else:
@@ -74,8 +75,8 @@ def plazos(p, m, fechas, feriados, ahora):
     m.vence, m.semaforo = None, ""
     if m.proxima:
         base = p.fecha_recoleccion or m.creado_en
-        m.vence = trazabilidad.limite(m.tipo, m.proxima[0], base, feriados, m.decal)
-        m.semaforo = trazabilidad.semaforo_acumulado(m.tipo, base, {"ingreso": m.creado_en, **fechas.get(m.flujo_id, {})}, m.vence, ahora, feriados, m.decal)
+        m.vence = trazabilidad.limite(m.tipo, m.proxima[0], base, feriados, m.decal, m.ihq)
+        m.semaforo = trazabilidad.semaforo_acumulado(m.tipo, base, {"ingreso": m.creado_en, **fechas.get(m.flujo_id, {})}, m.vence, ahora, feriados, m.decal, m.ihq)
 
 
 def pagina_pedida(texto):

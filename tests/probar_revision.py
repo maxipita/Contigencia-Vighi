@@ -113,6 +113,29 @@ with A.app.app_context():
     migrado = flujo_con_microscopia('R000002', 'BP', origen='anterior')
     ihq_pendiente = flujo_con_microscopia('R000003', 'BP', ihq=True)
     ihq_hecha = flujo_con_microscopia('R000004', 'BP', ihq=True, interp=True)
+
+    from vighi.servicios import tablero as tablero_servicio
+    p_tab = db.ex("INSERT INTO protocolos (numero, fecha_recoleccion, apellido, nombre, borrador, creado_por, creado_en) VALUES (?,?,?,?,0,?,?)",
+                  ('R000005', '2026-10-01', 'Tablero', 'IHQ', admin, '2026-10-01 08:30:00'))
+    f_tab = db.ex("INSERT INTO flujos (protocolo_id, tipo, creado_en) VALUES (?,?,?)", (p_tab, 'BP', '2026-10-01 08:30:00'))
+    db.ex("INSERT INTO estudios (protocolo_id, flujo_id, tipo, categoria, sitio, tipo_muestra, cantidad, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
+          (p_tab, f_tab, 'BP', 'Biopsias', 'Mama', 'Biopsia', '1', admin, '2026-10-01 08:30:00'))
+    db.ex("INSERT INTO micro (flujo_id, solicita_ihq) VALUES (?,1)", (f_tab,))
+    for clave, fecha in (('macroscopia', '2026-10-05 09:00:00'), ('procesamiento', '2026-10-06 09:00:00'), ('inclusion', '2026-10-06 10:00:00'),
+                         ('corte', '2026-10-07 09:00:00'), ('coloreado', '2026-10-08 09:00:00'), ('microscopia', '2026-10-09 09:00:00'),
+                         ('corte_ihq', '2026-10-12 09:00:00'), ('envio_ihq', '2026-10-13 09:00:00'), ('proc_ihq', '2026-10-14 09:00:00'),
+                         ('interp_ihq', '2026-10-20 09:00:00')):
+        db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (f_tab, clave, ids['med'], fecha))
+    feriados = db.feriados()
+    esperado = trazabilidad.limite('BP', 'revision', '2026-10-01', feriados, False, True)
+    protocolos_t, fechas_t, _ = tablero_servicio.cargar_protocolos()
+    muestra_t = protocolos_t[p_tab].muestras[0]
+    chequear('el tablero ve la Revisión como próxima (con la IHQ ya interpretada)', muestra_t.proxima and muestra_t.proxima[0] == 'revision', muestra_t.proxima)
+    tablero_servicio.plazos(protocolos_t[p_tab], muestra_t, fechas_t, feriados, trazabilidad.datetime(2026, 10, 20, 14, 0, 0))
+    chequear('el tablero calcula el vencimiento de Revisión desde la interpretación de IHQ, no desde la microscopía',
+             muestra_t.vence == esperado, (muestra_t.vence, esperado))
+    chequear('y por lo tanto no la marca atrasada estando en término', muestra_t.semaforo == 'on_time', muestra_t.semaforo)
+
     db.ex("DELETE FROM pasos_unicos WHERE clave='revision'")
     c = db._conectar()
     db.preparar_esquema(c)
