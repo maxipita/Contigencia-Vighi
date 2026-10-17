@@ -351,6 +351,7 @@ form.en-linea .buscador { flex: 1; }
 .filtros.filtros-estudios input[type=date] { width: 112px; }
 .filtros-estudios label { font-size: 12px; white-space: nowrap; }
 .filtros-estudios .salto { flex-basis: 100%; height: 0; }
+.filtros.compacto.filtros-estudios > select, .filtros.filtros-estudios > input:not([type=date]):not([type=hidden]) { flex: 1 1 120px; max-width: none; min-width: 0; }
 .lista-medicos { columns: 3 230px; column-gap: 20px; max-height: 420px; overflow-y: auto; padding: 4px 2px; font-size: 13px; }
 .lista-medicos label { display: block; margin: 0; padding: 2px 0; break-inside: avoid; font-weight: 400; color: var(--texto); text-transform: none; letter-spacing: 0; font-size: 13px; }
 .lista-medicos label input { width: auto; margin-right: 4px; }
