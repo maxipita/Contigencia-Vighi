@@ -88,6 +88,9 @@ def api_template(tid):
 @bp.route("/api/medicos")
 @requiere_login
 def api_medicos():
-    r = jsonify([m["nombre"] for m in db.q("SELECT nombre FROM medicos ORDER BY nombre")])
+    ubicacion = request.args.get("ubicacion", "").strip()
+    de_la_ubicacion = db.q("SELECT d.nombre FROM medicos d JOIN ubicacion_medicos m ON m.medico_id=d.id JOIN ubicaciones u ON u.id=m.ubicacion_id "
+                           "WHERE u.abreviatura=? ORDER BY d.nombre", (ubicacion,)) if ubicacion else []
+    r = jsonify([m["nombre"] for m in de_la_ubicacion or db.q("SELECT nombre FROM medicos ORDER BY nombre")])
     r.headers["Cache-Control"] = "private, max-age=60"
     return r

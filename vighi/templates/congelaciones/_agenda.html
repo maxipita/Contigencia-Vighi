@@ -1,0 +1,53 @@
+{% import "congelaciones/_comunes.html" as k with context %}
+{% set args = request.args.to_dict(flat=False) %}
+<form class="filtros compacto" method="get">
+  <input type="hidden" name="vista" value="agenda">
+  <input type="hidden" name="semana" value="{{ lunes.isoformat() }}">
+  <select name="anio" title="Año">{% for a in anios %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}</select>
+  <select name="mes" title="Mes">{% for m in meses %}<option value="{{ loop.index }}" {{ 'selected' if loop.index == mes }}>{{ m }}</option>{% endfor %}</select>
+  <select name="ubicacion" title="Procedencia">{{ k.lista(ubicaciones, f.ubicacion, 'Procedencia: todas') }}</select>
+  <select name="patologo" title="Patólogo">{{ k.personas(patologos, f.patologo, 'Patólogo: todos', True) }}</select>
+  <select name="medico" title="Médico tratante">{{ k.lista(medicos, f.medico, 'Médico: todos') }}</select>
+  <select name="vinculadas" title="Vinculadas a un protocolo">
+    <option value="">Vinculadas: todas</option>
+    <option value="si" {{ 'selected' if f.vinculadas == 'si' }}>Con protocolo</option>
+    <option value="no" {{ 'selected' if f.vinculadas == 'no' }}>Sin protocolo</option>
+  </select>
+  <select name="estado" title="Estado"><option value="">Estado: todos</option>{% for clave, nombre in estados.items() %}<option value="{{ clave }}" {{ 'selected' if f.estado == clave }}>{{ nombre }}</option>{% endfor %}</select>
+  {{ k.tipos_marcados(tipos, f.tipos) }}
+  {{ k.horario(f) }}
+  <button class="btn sec">Filtrar</button>
+</form>
+<div class="semanas">
+  {% for s in semanas %}
+  <a href="{{ url_for('congelaciones.congelaciones', **dict(args, semana=s.lunes.isoformat(), anio=anio, mes=mes)) }}" class="{{ 'activo' if s.lunes == lunes }}">{{ s.lunes.day }} - {{ s.domingo.day }}</a>
+  {% endfor %}
+  <span class="muted">{{ n_activas }} {{ 'congelaciones' if n_activas != 1 else 'congelación' }} en la semana ({{ n_confirmadas }} confirmada{{ 's' if n_confirmadas != 1 else '' }})</span>
+  <a class="btn sec mini-btn" href="{{ url_for('congelaciones.descargar', **dict(args, desde=lunes.isoformat(), hasta=dias[6].fecha.isoformat())) }}"><svg class="ic"><use href="#i-descargar"/></svg> Descargar</a>
+</div>
+<div class="agenda-grilla">
+  {% for d in dias %}
+  <div class="agenda-col {{ 'hoy' if d.fecha == hoy }}">
+    <div class="agenda-cab">
+      <span>{{ d.dia }} {{ d.fecha.day }}</span>
+      {% if puede('congelaciones') %}<a class="agenda-mas" href="{{ url_for('congelaciones.congelacion_nueva', fecha=d.fecha.isoformat()) }}" title="Agendar una congelación el {{ d.dia }} {{ d.fecha.day }}"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg></a>{% endif %}
+    </div>
+    <div class="agenda-cuerpo">
+      {% for c in d.tarjetas %}
+      <a class="agenda-tarjeta est-{{ c.estado }}" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">
+        <div class="agenda-estado">{{ estados[c.estado] }}{% if c.protocolo_numero %} · {{ c.protocolo_numero }}{% endif %}</div>
+        <div class="agenda-datos">
+          <div class="agenda-hora"><b>{{ c.hora }}</b> {{ c.paciente }}</div>
+          <div><svg class="ic"><use href="#i-ubicacion"/></svg> {{ c.ubicacion }}</div>
+          {% if c.pat_nombre or c.pat_iniciales %}<div><svg class="ic"><use href="#i-usuarios"/></svg> {{ c.pat_nombre or c.pat_iniciales }}</div>{% endif %}
+          {% if c.cobertura %}<div class="muted">{{ c.cobertura }}</div>{% endif %}
+          <div><span class="chip">{{ c.tipo }}</span>{% if c.material %} {{ c.material }}{% endif %}{% if not c.en_horario %} <span class="chip fuera" title="Fuera de horario">Fuera de horario</span>{% endif %}</div>
+        </div>
+      </a>
+      {% else %}
+      <div class="agenda-vacio">Sin congelaciones</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>

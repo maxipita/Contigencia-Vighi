@@ -1,0 +1,29 @@
+{% import "congelaciones/_comunes.html" as k with context %}
+{% set args = request.args.to_dict(flat=False) %}
+<form class="filtros compacto" method="get">
+  <input type="hidden" name="vista" value="dashboard">
+  <select name="anio" title="Año">{% for a in anios %}<option value="{{ a }}" {{ 'selected' if a == anio }}>{{ a }}</option>{% endfor %}</select>
+  <select name="ubicacion" title="Procedencia">{{ k.lista(ubicaciones, f.ubicacion, 'Procedencia: todas') }}</select>
+  <select name="patologo" title="Patólogo">{{ k.personas(patologos, f.patologo, 'Patólogo: todos', True) }}</select>
+  <select name="medico" title="Médico tratante">{{ k.lista(medicos, f.medico, 'Médico: todos') }}</select>
+  {{ k.tipos_marcados(tipos, f.tipos) }}
+  {{ k.horario(f) }}
+  <select name="contar" title="Qué se cuenta">{% for clave, nombre in contar_opciones.items() %}<option value="{{ clave }}" {{ 'selected' if contar == clave }}>{{ nombre }}</option>{% endfor %}</select>
+  <button class="btn sec">Filtrar</button>
+  <a class="btn sec mini-btn" href="{{ url_for('congelaciones.descargar', **dict(args, vista=None, desde=anio ~ '-01-01', hasta=anio ~ '-12-31')) }}"><svg class="ic"><use href="#i-descargar"/></svg> Descargar detalle</a>
+</form>
+<table class="tabla-dashboard">
+  <tr><th>Patólogo</th>{% for m in meses %}<th class="num">{{ m[:3] }}</th>{% endfor %}<th class="num">Total</th></tr>
+  {% for r in filas %}
+  <tr>
+    <td><b>{{ r.patologo }}</b></td>
+    {% for n in r.meses %}<td class="num {{ 'cero' if n == 0 }}">{{ n }}</td>{% endfor %}
+    <td class="num"><b>{{ r.total }}</b></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="14" class="muted">No hay congelaciones en {{ anio }} para este filtro.</td></tr>
+  {% endfor %}
+  {% if filas %}
+  <tr class="total"><td>Total</td>{% for n in totales_meses %}<td class="num">{{ n }}</td>{% endfor %}<td class="num">{{ gran_total }}</td></tr>
+  {% endif %}
+</table>

@@ -170,8 +170,16 @@ document.querySelectorAll("select[data-templates]").forEach(sel => {
 const sinAcentos = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEach(async inp => {
   const deLista = inp.hasAttribute("data-ubicaciones");
-  const nombres = (await (await fetch(deLista ? "/api/ubicaciones" : "/api/medicos")).json())
-    .map(n => typeof n === "string" ? [n, sinAcentos(n), n] : [n.v, sinAcentos(n.v + " " + n.n), n.n ? n.v + " — " + n.n : n.v]);
+  const origen = inp.dataset.medicosDe && inp.form ? inp.form.elements[inp.dataset.medicosDe] : null;
+  let nombres = [];
+  const cargar = async () => {
+    const ubicacion = origen ? origen.value.trim() : "";
+    const url = deLista ? "/api/ubicaciones" : "/api/medicos" + (ubicacion ? "?ubicacion=" + encodeURIComponent(ubicacion) : "");
+    nombres = (await (await fetch(url)).json())
+      .map(n => typeof n === "string" ? [n, sinAcentos(n), n] : [n.v, sinAcentos(n.v + " " + n.n), n.n ? n.v + " — " + n.n : n.v]);
+  };
+  await cargar();
+  if (origen) ["change", "elegida"].forEach(t => origen.addEventListener(t, cargar));
   const caja = document.createElement("div");
   caja.className = "sugerencias";
   caja.hidden = true;
@@ -184,7 +192,7 @@ document.querySelectorAll("input[data-medicos], input[data-ubicaciones]").forEac
     [...items].forEach((el, k) => el.classList.toggle("activo", k === activo));
     items[activo].scrollIntoView({ block: "nearest" });
   };
-  const elegir = nombre => { inp.value = nombre; caja.hidden = true; };
+  const elegir = nombre => { inp.value = nombre; caja.hidden = true; inp.dispatchEvent(new Event("elegida")); };
   const mostrar = () => {
     const palabras = sinAcentos(inp.value).split(/\s+/).filter(Boolean);
     caja.innerHTML = "";
@@ -982,4 +990,31 @@ document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
     img.classList.toggle("girada", giro % 180 !== 0);
   });
   mostrar(0);
+})();
+
+(function () {
+  const hora = document.querySelector("[data-turno-hora]");
+  const turno = document.querySelector("[data-turno]");
+  if (hora && turno) {
+    const poner = () => {
+      const minutos = hora.value ? Number(hora.value.slice(0, 2)) * 60 + Number(hora.value.slice(3, 5)) : null;
+      turno.textContent = minutos === null ? "—" : minutos <= 720 ? "Mañana" : minutos <= 960 ? "Mediodía" : minutos <= 1200 ? "Tarde" : "Noche";
+    };
+    hora.addEventListener("change", poner);
+    poner();
+  }
+  const buscar = document.querySelector("[data-buscar-dni]");
+  if (!buscar) return;
+  const form = buscar.closest("form"), aviso = form.querySelector("[data-dni-aviso]");
+  buscar.addEventListener("click", async () => {
+    const dni = form.elements.dni.value.trim();
+    if (!dni) { aviso.textContent = "Escribí el DNI."; return; }
+    const r = await (await fetch("/api/congelaciones/paciente?dni=" + encodeURIComponent(dni))).json();
+    if (!r.apellido) { aviso.textContent = "No hay un paciente con ese DNI: completá los datos a mano."; return; }
+    form.elements.apellido.value = r.apellido;
+    form.elements.nombre.value = r.nombre;
+    if (r.cobertura && [...form.elements.cobertura.options].some(o => o.value === r.cobertura)) form.elements.cobertura.value = r.cobertura;
+    if (r.medico && !form.elements.medico.value) form.elements.medico.value = r.medico;
+    aviso.textContent = "Datos cargados de un protocolo anterior.";
+  });
 })();

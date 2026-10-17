@@ -1,0 +1,44 @@
+{% import "congelaciones/_comunes.html" as k with context %}
+{% set args = request.args.to_dict(flat=False) %}
+<form class="filtros compacto" method="get">
+  <input type="hidden" name="vista" value="tablero">
+  <select name="actividad" title="Actividad">
+    <option value="pendientes" {{ 'selected' if actividad == 'pendientes' }}>Actividad: pendientes</option>
+    <option value="todas" {{ 'selected' if actividad == 'todas' }}>Actividad: todas</option>
+    {% for clave, nombre in actividades.items() %}<option value="{{ clave }}" {{ 'selected' if actividad == clave }}>{{ nombre }}</option>{% endfor %}
+  </select>
+  <select name="patologo" title="Patólogo">{{ k.personas(patologos, f.patologo, 'Patólogo: todos', True) }}</select>
+  <select name="ubicacion" title="Procedencia">{{ k.lista(ubicaciones, f.ubicacion, 'Procedencia: todas') }}</select>
+  <select name="cobertura" title="Cobertura">{{ k.lista(coberturas, f.cobertura, 'Cobertura: todas') }}</select>
+  <select name="medico" title="Médico tratante">{{ k.lista(medicos, f.medico, 'Médico: todos') }}</select>
+  {{ k.tipos_marcados(tipos, f.tipos) }}
+  <button class="btn sec">Filtrar</button>
+  <a class="btn sec mini-btn" href="{{ url_for('congelaciones.descargar', **dict(args, vista=None)) }}"><svg class="ic"><use href="#i-descargar"/></svg> Descargar</a>
+</form>
+{% if total > limite %}<p class="muted">Se muestran las primeras {{ limite }} de {{ total }} congelaciones; filtrá para ver el resto.</p>{% endif %}
+<table class="tabla-congelaciones">
+  <tr><th>Actividad</th><th>Cuándo</th><th>Protocolo</th><th>Paciente</th><th>Procedencia</th><th>Cobertura</th><th title="Patólogo de la congelación">PC</th><th title="Médico firmante del protocolo">MF</th><th>Médico tratante</th><th></th></tr>
+  {% for c in filas %}
+  <tr class="{{ 'cancelada' if c.estado == 'cancelada' }}">
+    <td><span class="chip act-{{ c.actividad }}">{{ actividades[c.actividad] }}</span></td>
+    <td><b>{{ c.fecha | f }}</b> {{ c.hora }}<div class="muted">{{ c.tipo }}{% if not c.en_horario %} · fuera de horario{% endif %}</div></td>
+    <td>
+      {% if c.protocolo_id %}<a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.protocolo_numero }}</b></a>
+      {% elif puede('congelaciones') and c.actividad in ('vincular', 'realizar') %}
+      <form method="post" action="{{ url_for('congelaciones.congelacion_protocolo', cid=c.id) }}" class="vincular-rapido">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><input name="numero" placeholder="N° protocolo" size="10" required><button class="btn sec mini-btn">Vincular</button>
+      </form>
+      {% else %}<span class="muted">—</span>{% endif %}
+    </td>
+    <td>{{ c.paciente }}<div class="muted">{{ c.dni or '' }}</div></td>
+    <td>{{ c.ubicacion }}</td>
+    <td>{{ c.cobertura or '—' }}</td>
+    <td>{{ c.pat_iniciales or '—' }}</td>
+    <td>{{ c.mf or '—' }}</td>
+    <td>{{ c.medico or '—' }}</td>
+    <td><a class="btn sec mini-btn" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">Abrir</a></td>
+  </tr>
+  {% else %}
+  <tr><td colspan="10" class="muted">No hay congelaciones para este filtro.</td></tr>
+  {% endfor %}
+</table>

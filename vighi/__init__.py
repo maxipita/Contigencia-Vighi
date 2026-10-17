@@ -4,10 +4,11 @@ import secrets
 from flask import Flask
 
 from vighi.core import db, fechas, sesion
-from vighi.features import (auth, claves, coberturas, envios, estudios, etiquetas, facturacion, imagenes, informes, listados, lotes, ordenes, plantillas, protocolos, sistema,
-                            tablero, tareas, ubicaciones, usuarios, validacion, facturas_soporte, medicos, migracion)
+from vighi.features import (auth, claves, coberturas, congelaciones, envios, estudios, etiquetas, facturacion, imagenes, informes, listados, lotes, ordenes, plantillas, protocolos,
+                            sistema, tablero, tareas, ubicaciones, usuarios, validacion, facturas_soporte, medicos, migracion)
 
-BLUEPRINTS = (sistema, auth, tablero, protocolos, estudios, informes, imagenes, lotes, etiquetas, plantillas, usuarios, facturacion, coberturas, listados, envios, ubicaciones, tareas, ordenes, claves, validacion, facturas_soporte, medicos, migracion)
+BLUEPRINTS = (sistema, auth, tablero, protocolos, estudios, informes, imagenes, lotes, etiquetas, plantillas, usuarios, facturacion, coberturas, listados, envios, ubicaciones, tareas, ordenes, claves,
+              validacion, facturas_soporte, medicos, migracion, congelaciones)
 FILTROS = (("fh", fechas.fecha_hora), ("larga", fechas.fecha_larga), ("edad", fechas.edad), ("dh", fechas.fecha_hora_dt), ("f", fechas.fecha),
            ("peso", fechas.peso), ("peso0", fechas.peso_entero))
 

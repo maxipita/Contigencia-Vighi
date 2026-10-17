@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block titulo %}Congelaciones{% endblock %}
+{% block contenido %}
+<div class="eyebrow">Laboratorio</div>
+<h1>Congelaciones</h1>
+<div class="tabs">
+  {% for clave, nombre in vistas.items() %}<a href="{{ url_for('congelaciones.congelaciones', vista=clave) }}" class="{{ 'activo' if vista == clave }}">{{ nombre }}</a>{% endfor %}
+  {% if puede('congelaciones') %}<a href="{{ url_for('congelaciones.congelacion_nueva') }}" class="nueva"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg> Nueva congelación</a>{% endif %}
+</div>
+{% include "congelaciones/_" ~ vista ~ ".html" %}
+{% endblock %}

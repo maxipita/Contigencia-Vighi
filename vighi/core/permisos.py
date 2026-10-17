@@ -14,6 +14,8 @@ PERMISOS = {
     "etapas": ("Etapas", "Marcar etapas como listas (las de su sector)"),
     "lotes_avanzar": ("Etapas", "Avanzar un lote completo (marca la etapa en todos sus protocolos a la vez; no viene en ningún perfil)"),
     "etapas_deshacer": ("Etapas", "Deshacer etapas, incluso las propias (retrotraer; no viene en ningún perfil)"),
+    "congelaciones": ("Congelaciones", "Agendar, editar, reprogramar, cancelar y vincular congelaciones"),
+    "congelaciones_confirmar": ("Congelaciones", "Confirmar o rechazar las congelaciones de cualquier patólogo (cada patólogo siempre puede con las suyas)"),
     "exportar": ("Consultas", "Exportar a Excel"),
     "usuarios": ("Administración", "Usuarios (crear y editar personas, claves y firmas; los perfiles siguen siendo del administrador)"),
     "ubicaciones": ("Administración", "Ubicaciones y médicos (crear, editar, importar y asignar médicos)"),
@@ -25,12 +27,12 @@ GRUPOS = list(dict.fromkeys(g for g, _ in PERMISOS.values()))
 
 PERFILES_INICIALES = {
     "Ingreso": ("ingreso", ["protocolo_crear", "protocolo_editar", "estudio_anular", "sistema", "etiquetas_recepcion",
-                            "lotes_armar", "etapas", "exportar", "ubicaciones", "validacion"]),
+                            "lotes_armar", "etapas", "exportar", "ubicaciones", "validacion", "congelaciones"]),
     "Laboratorio": ("laboratorio", ["etiquetas_lab", "lotes_armar", "lotes_cerrar", "etapas"]),
     "Macroscopía": ("macroscopia", ["macro", "lotes_armar", "etapas"]),
     "Traslados": ("traslados", ["etapas"]),
     "Citotécnico": ("citotecnico", ["etiquetas_lab", "lotes_armar", "etapas"]),
-    "Médico firmante": ("firmante", ["micro", "informe", "etapas", "exportar"]),
+    "Médico firmante": ("firmante", ["micro", "informe", "etapas", "exportar", "congelaciones_confirmar"]),
     "Facturación": ("facturacion", ["facturacion", "exportar"]),
 }
 

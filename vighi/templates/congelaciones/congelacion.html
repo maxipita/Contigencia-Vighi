@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "congelaciones/_comunes.html" as k with context %}
+{% macro v(clave) %}{{ form[clave] if form and form[clave] is not none else '' }}{% endmacro %}
+{% block titulo %}{{ 'Congelación #' ~ c.id if c else 'Nueva congelación' }}{% endblock %}
+{% block contenido %}
+<div class="eyebrow"><a href="{{ url_for('congelaciones.congelaciones') }}">Congelaciones</a> / {{ 'Ficha' if c else 'Asignar nueva congelación' }}</div>
+<h1>{% if c %}Congelación #{{ c.id }} {{ k.estado(c.estado, estados) }}{% else %}Asignar nueva congelación{% endif %}</h1>
+{% set editable = puede('congelaciones') %}
+<div class="{{ 'cols' if c }}">
+  <form method="post" action="{{ url_for('congelaciones.congelacion_editar', cid=c.id) if c else url_for('congelaciones.congelacion_nueva') }}" class="form-congelacion">
+    <input type="hidden" name="_csrf" value="{{ csrf }}">
+    <fieldset class="tarjeta" {{ 'disabled' if not editable }}>
+      <h2>Agenda</h2>
+      <div class="grilla">
+        <div><label>Fecha *</label><input type="date" name="fecha" value="{{ v('fecha') }}" required></div>
+        <div><label>Hora *</label><select name="hora" data-turno-hora required>{% for h in horas %}<option value="{{ h }}" {{ 'selected' if v('hora') == h }}>{{ h }}</option>{% endfor %}</select></div>
+        <div><label>Turno</label><div class="turno" data-turno>—</div></div>
+        {% if not c %}
+        <div class="ancho"><label>Estado inicial</label>
+          <span class="opciones">{% for clave, nombre in estados_alta.items() %}<label class="opcion"><input type="radio" name="estado" value="{{ clave }}" {{ 'checked' if (v('estado') or 'agendada') == clave }}><span>{{ nombre }}</span></label>{% endfor %}</span></div>
+        {% endif %}
+        <div class="ancho"><label>Tipo *</label>
+          <span class="opciones">{% for t in tipos %}<label class="opcion"><input type="radio" name="tipo" value="{{ t }}" {{ 'checked' if v('tipo') == t }} required><span>{{ t }}</span></label>{% endfor %}</span></div>
+        <div><label>Ubicación *</label><div class="buscador"><input name="ubicacion" value="{{ v('ubicacion') }}" data-ubicaciones autocomplete="off" required placeholder="Escribí la ubicación…"></div></div>
+        <div><label>Patólogo</label><select name="patologo_id"><option value="">— Sin asignar —</option>{% for u in patologos %}<option value="{{ u.id }}" {{ 'selected' if v('patologo_id') | string == u.id | string }}>{{ u.nombre or u.iniciales }}</option>{% endfor %}</select></div>
+        <div><label>Médico tratante</label><div class="buscador"><input name="medico" value="{{ v('medico') }}" data-medicos data-medicos-de="ubicacion" autocomplete="off" placeholder="Escribí apellido…"></div>
+          <div class="muted">Se sugieren los médicos de la ubicación elegida.</div></div>
+        <div class="ancho"><label>Material</label><input name="material" value="{{ v('material') }}" maxlength="200" placeholder="Material o procedimiento…"></div>
+      </div>
+    </fieldset>
+    <fieldset class="tarjeta" {{ 'disabled' if not editable }}>
+      <h2>Paciente</h2>
+      <div class="grilla">
+        <div><label>DNI</label><input name="dni" value="{{ v('dni') }}" inputmode="numeric" autocomplete="off"></div>
+        <div class="buscar-dni"><button type="button" class="btn sec mini-btn" data-buscar-dni><svg class="ic"><use href="#i-buscar"/></svg> Buscar por DNI</button><span class="muted" data-dni-aviso></span></div>
+        <div><label>Apellido *</label><input name="apellido" value="{{ v('apellido') }}" maxlength="80" required></div>
+        <div><label>Nombre</label><input name="nombre" value="{{ v('nombre') }}" maxlength="80"></div>
+        <div><label>Cobertura</label><select name="cobertura"><option value="">—</option>{% for x in coberturas %}<option value="{{ x }}" {{ 'selected' if v('cobertura') == x }}>{{ x }}</option>{% endfor %}</select></div>
+        <div class="ancho"><label>Observaciones</label><textarea name="observaciones" maxlength="1000" style="min-height:60px">{{ v('observaciones') }}</textarea></div>
+      </div>
+    </fieldset>
+    {% if editable %}
+    <div class="acciones">
+      <button class="btn">{{ 'Guardar cambios' if c else 'Asignar congelación' }}</button>
+      <a class="btn sec" href="{{ url_for('congelaciones.congelaciones') }}">{{ 'Volver' if c else 'Cancelar' }}</a>
+    </div>
+    {% endif %}
+  </form>
+  {% if c %}
+  <div>
+    {% set confirma = editable or puede('congelaciones_confirmar') or c.patologo_id == yo.id %}
+    <div class="tarjeta">
+      <h2>Estado</h2>
+      <p>{{ k.estado(c.estado, estados) }} <span class="muted">{{ c.fecha | f }} · {{ c.hora }} hs</span></p>
+      <div class="acciones">
+        {% if c.estado == 'agendada' and confirma %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="confirmar"><button class="btn listo">Confirmar</button></form>
+        {% endif %}
+        {% if c.estado in ('agendada', 'confirmada') and confirma %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Rechazar esta congelación? Queda cancelada."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="rechazar"><button class="btn peligro">Rechazar</button></form>
+        {% endif %}
+        {% if c.estado == 'cancelada' and editable %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="reabrir"><button class="btn sec">Volver a «A confirmar»</button></form>
+        {% endif %}
+      </div>
+      <p class="muted">Creada el {{ c.creado_en | fh }}{% if c.actualizado_en %} · Última modificación: {{ c.actualizado_en | fh }}{% endif %}</p>
+    </div>
+    <div class="tarjeta">
+      <h2>Protocolo</h2>
+      {% if c.protocolo_id %}
+      <p><a href="{{ url_for('protocolos.protocolo', pid=c.protocolo_id) }}"><b>{{ c.protocolo_numero }}</b></a></p>
+      {% if editable %}<form method="post" action="{{ url_for('congelaciones.congelacion_protocolo', cid=c.id) }}" data-confirmar="¿Desvincular el protocolo {{ c.protocolo_numero }}?"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="numero" value=""><button class="btn sec mini-btn">Desvincular</button></form>{% endif %}
+      {% else %}
+      <p class="muted">Todavía no tiene protocolo.</p>
+      {% if editable %}
+      <form method="post" action="{{ url_for('congelaciones.congelacion_protocolo', cid=c.id) }}" class="vincular-rapido"><input type="hidden" name="_csrf" value="{{ csrf }}"><input name="numero" placeholder="N° de protocolo" size="14" required><button class="btn">Vincular</button></form>
+      {% if vinculos %}
+      <p class="muted">Protocolos del mismo DNI:</p>
+      <div class="acciones">{% for p in vinculos %}<form method="post" action="{{ url_for('congelaciones.congelacion_protocolo', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="numero" value="{{ p.numero }}"><button class="btn sec mini-btn">{{ p.numero }}</button></form>{% endfor %}</div>
+      {% endif %}
+      {% endif %}
+      {% endif %}
+    </div>
+    {% if editable and not c.protocolo_id %}
+    <div class="tarjeta">
+      <h2>Eliminar</h2>
+      <p class="muted">Si se cargó por error. Para una congelación que no se hace, usá Rechazar: queda en el historial.</p>
+      <form method="post" action="{{ url_for('congelaciones.congelacion_eliminar', cid=c.id) }}" data-confirmar="¿Eliminar la congelación #{{ c.id }}? No se puede deshacer."><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn peligro">Eliminar</button></form>
+    </div>
+    {% endif %}
+    <div class="tarjeta">
+      <h2>Historial</h2>
+      <table class="tabla-historial">
+        {% for h in historial %}<tr><td class="muted">{{ h.fecha_hora | fh }}</td><td>{{ h.iniciales or '—' }}</td><td>{{ h.detalle }}</td></tr>
+        {% else %}<tr><td class="muted">Sin movimientos registrados.</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

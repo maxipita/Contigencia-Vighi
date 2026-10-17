@@ -180,6 +180,23 @@ CREATE TABLE IF NOT EXISTS tareas (
     cerrada_por INTEGER REFERENCES usuarios(id), cerrada_en VARCHAR(19), cierre_detalle VARCHAR(100)
 );
 CREATE INDEX IF NOT EXISTS ix_tareas_protocolo ON tareas(protocolo_id);
+CREATE TABLE IF NOT EXISTS congelaciones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha VARCHAR(10) NOT NULL, hora VARCHAR(5) NOT NULL,
+    estado VARCHAR(10) NOT NULL DEFAULT 'agendada',
+    tipo VARCHAR(3) NOT NULL,
+    ubicacion VARCHAR(120) NOT NULL,
+    patologo_id INTEGER REFERENCES usuarios(id),
+    medico VARCHAR(150), material VARCHAR(200), cobertura VARCHAR(80),
+    dni VARCHAR(20), apellido VARCHAR(80), nombre VARCHAR(80),
+    observaciones TEXT,
+    protocolo_id INTEGER REFERENCES protocolos(id),
+    creado_por INTEGER REFERENCES usuarios(id), creado_en VARCHAR(19) NOT NULL,
+    actualizado_por INTEGER REFERENCES usuarios(id), actualizado_en VARCHAR(19)
+);
+CREATE INDEX IF NOT EXISTS ix_congelaciones_fecha ON congelaciones(fecha);
+CREATE INDEX IF NOT EXISTS ix_congelaciones_patologo ON congelaciones(patologo_id);
+CREATE INDEX IF NOT EXISTS ix_congelaciones_protocolo ON congelaciones(protocolo_id);
 CREATE TABLE IF NOT EXISTS claves_api (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre VARCHAR(60) NOT NULL, huella VARCHAR(64) NOT NULL UNIQUE,
@@ -749,7 +766,12 @@ def inicializar():
     columnas_protocolos = {r["name"] for r in c.execute("PRAGMA table_info(protocolos)")}
     sin_validacion = bool(columnas_protocolos) and "pendiente_validacion" not in columnas_protocolos
     sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
+    sin_congelaciones = not c.execute("PRAGMA table_info(congelaciones)").fetchall()
     antes_de_informes = preparar_esquema(c)
+    if sin_congelaciones:
+        for perfil, clave in (("Ingreso", "congelaciones"), ("Médico firmante", "congelaciones_confirmar")):
+            c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN ? ELSE permisos || ',' || ? END "
+                      "WHERE nombre = ? AND (',' || permisos || ',') NOT LIKE ?", (clave, clave, perfil, f"%,{clave},%"))
     if sin_destinos:
         pasar = []
         for r in c.execute("SELECT id, emails FROM ubicaciones WHERE COALESCE(emails,'')<>''").fetchall():

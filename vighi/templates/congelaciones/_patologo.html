@@ -1,0 +1,49 @@
+{% import "congelaciones/_comunes.html" as k with context %}
+{% set args = request.args.to_dict(flat=False) %}
+<form class="filtros compacto" method="get">
+  <input type="hidden" name="vista" value="patologo">
+  <select name="patologo" title="Médico de la congelación">{{ k.personas(patologos, patologo_elegido, 'Elegí un patólogo') }}</select>
+  {% if f.estado %}<input type="hidden" name="estado" value="{{ f.estado }}">{% endif %}
+  <label class="muted"><input type="checkbox" name="pasadas" value="1" {{ 'checked' if pasadas }} onchange="this.form.submit()"> Incluir las anteriores a hoy</label>
+  <button class="btn sec">Ver</button>
+</form>
+{% if not patologo_elegido %}
+<p class="muted">Elegí un patólogo para ver su agenda.</p>
+{% else %}
+<div class="agenda-chips">
+  <span class="muted">Estado</span>
+  {% for clave in ('agendada', 'confirmada') %}
+  <a class="chip-sel {{ 'on' if f.estado == clave }}" href="{{ url_for('congelaciones.congelaciones', **dict(args, estado='' if f.estado == clave else clave, ubicacion='')) }}">{{ estados[clave] }} ({{ por_estado[clave] }})</a>
+  {% endfor %}
+</div>
+<div class="agenda-chips">
+  <span class="muted">Procedencia</span>
+  <a class="chip-sel {{ 'on' if not f.ubicacion }}" href="{{ url_for('congelaciones.congelaciones', **dict(args, ubicacion='')) }}">Todas ({{ total_base }})</a>
+  {% for u, n in por_ubicacion.items() if n %}
+  <a class="chip-sel {{ 'on' if f.ubicacion == u }}" href="{{ url_for('congelaciones.congelaciones', **dict(args, ubicacion=u)) }}">{{ u }} ({{ n }})</a>
+  {% endfor %}
+</div>
+<div class="patologo-tarjetas">
+  {% for c in tarjetas %}
+  <div class="agenda-tarjeta est-{{ c.estado }}">
+    <div class="agenda-estado">{{ estados[c.estado] }}</div>
+    <div class="agenda-datos">
+      <div class="agenda-hora"><b>{{ c.cuando }}</b> · {{ c.hora }} hs</div>
+      <div><svg class="ic"><use href="#i-ubicacion"/></svg> {{ c.ubicacion }}</div>
+      {% if c.medico %}<div>Dr/a. {{ c.medico }}</div>{% endif %}
+      <div><svg class="ic"><use href="#i-usuarios"/></svg> {{ c.paciente }}{% if c.cobertura %} <span class="muted">({{ c.cobertura }})</span>{% endif %}</div>
+      <div><span class="chip">{{ c.tipo }}</span>{% if c.material %} {{ c.material }}{% endif %}</div>
+      <div class="acciones">
+        {% if c.estado == 'agendada' %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="confirmar"><button class="btn listo mini-btn">Confirmar</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Rechazar la congelación del {{ c.fecha | f }} a las {{ c.hora }}? Queda cancelada."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="rechazar"><button class="btn peligro mini-btn">Rechazar</button></form>
+        <a class="btn sec mini-btn" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">Abrir</a>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">No hay congelaciones para mostrar.</p>
+  {% endfor %}
+</div>
+{% endif %}
