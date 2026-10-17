@@ -115,7 +115,7 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
         if v == "sin_cargar":
             return bool(activas) and not pendientes and not p.cargado_sistema
         if v == "anulados":
-            return any(m.anulado for m in p.muestras)
+            return not activas
         return True
 
     def estudio_ok(m):
@@ -172,7 +172,7 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
     desde = (pagina - 1) * por_pagina
     filas = []
     for _, p, vista, semaforo in candidatos[desde:desde + por_pagina]:
-        activas = p.activas()
+        activas = p.activas() or p.muestras
         vencen = [m.vence for m in vista if m.vence]
         filas.append({
             "protocolo_id": p.id, "numero": p.numero, "flujos": etiqueta_flujos({m.tipo for m in activas}, p.id in con_ihq),
