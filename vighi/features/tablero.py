@@ -28,7 +28,7 @@ def dia_valido(texto):
 def tablero():
     yo = usuario_actual()
     f = {k: request.args.get(k, "") for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta")}
-    f["ver"] = f["ver"] or "pendientes"
+    f["ver"] = f["ver"] or "todos"
     f["desde"], f["hasta"] = dia_valido(f["desde"]), dia_valido(f["hasta"])
     sectores = (yo["sectores"] or "").split(",")
     propios = yo["iniciales"] if "firmante" in sectores and not yo["admin"] and not puede("tablero_todos") else None

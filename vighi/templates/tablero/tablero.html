@@ -3,19 +3,12 @@
 {% from "compartidos/_paginacion.html" import barra %}
 {% block titulo %}Tablero{% endblock %}
 {% block contenido %}
-<div class="eyebrow">Seguimiento</div>
+<div class="eyebrow">Consulta de estudios</div>
 <h1>Tablero</h1>
 {% set args = request.args.to_dict() %}
 {% set _ = args.pop('pagina', None) %}
-<div class="tabs">
-  {% for clave, nombre in [("pendientes","Pendientes (" ~ conteo.pendientes ~ ")"), ("mios","De mis sectores"),
-                           ("informados","Informados (" ~ conteo.informados ~ ")"), ("sin_cargar","Sin cargar al sistema (" ~ conteo.sin_cargar ~ ")"),
-                           ("anulados","Anulados"), ("todos","Todos")] %}
-    <a href="{{ url_for('tablero.tablero', **dict(args, ver=clave)) }}" class="{{ 'activo' if f.ver == clave }}">{{ nombre }}</a>
-  {% endfor %}
-</div>
 <form class="filtros" method="get">
-  <input type="hidden" name="ver" value="{{ f.ver }}">
+  {% if f.ver != 'todos' %}<input type="hidden" name="ver" value="{{ f.ver }}">{% endif %}
   <input name="q" value="{{ f.q }}" placeholder="Buscar protocolo, paciente, DNI, lote, sitio…" size="36">
   <select name="tipo">
     <option value="">Todas las muestras</option>

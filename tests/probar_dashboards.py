@@ -92,10 +92,15 @@ for actividad, _ in dash.ACTIVIDADES:
 print('4) sector: pendientes y hechas')
 h = c_adm.get('/dashboards?vista=macroscopia').get_data(as_text=True)
 fila = re.search(r'<td><b>Macroscopía</b></td>(.*?)</tr>', h, re.S).group(1)
-numeros = [int(x) for x in re.findall(r'<td class="num[^"]*">(\d+)</td>', fila)]
+numeros = [int(x) for x in re.findall(r'<td class="num[^"]*">(?:<a [^>]*>)?(\d+)(?:</a>)?</td>', fila)]
 chequear('cuenta las hechas hoy (dos macroscopías de prueba) y al menos un pendiente', numeros[0] >= 1 and numeros[4] >= 2 and numeros[5] >= 2, numeros)
 h = c_adm.get('/dashboards?vista=ingreso').get_data(as_text=True)
 chequear('ingreso muestra los pendientes de completar y de validar', 'Protocolos por completar' in h and 'por validar' in h)
+
+h = c_adm.get('/dashboards?vista=macroscopia').get_data(as_text=True)
+chequear('los pendientes y el semáforo llevan a la lista del Tablero con ese filtro', 'href="/?etapa=macroscopia"' in h and 'href="/?etapa=macroscopia&amp;semaforo=' in h)
+h = c_adm.get('/dashboards?vista=gerencial').get_data(as_text=True)
+chequear('Gerencial enlaza el semáforo y los sectores', 'href="/?semaforo=late"' in h and 'href="/?sector=' in h)
 
 print('5) performance: producción y demora de cada persona')
 h = c_adm.get('/dashboards?vista=performance&actividad=macroscopia&unidad=protocolos').get_data(as_text=True)

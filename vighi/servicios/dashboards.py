@@ -145,7 +145,7 @@ def sector(vista, f, hoy):
     filas = []
     for etapa in etapas:
         suyos = [e for e in eventos if e["etapa"] == etapa]
-        fila = {"etapa": NOMBRE_ETAPA[etapa] if etapa != "ingreso" else "Protocolo > Cargar", "pend": pend.get(etapa), "hoy": cantidad_de([e for e in suyos if e["dia"] == hoy], "estudios"),
+        fila = {"clave": etapa, "tipo": etapas[etapa], "etapa": NOMBRE_ETAPA[etapa] if etapa != "ingreso" else "Protocolo > Cargar", "pend": pend.get(etapa), "hoy": cantidad_de([e for e in suyos if e["dia"] == hoy], "estudios"),
                 "periodo": cantidad_de(suyos, "estudios"), "demora": texto_demora(demora_media(suyos))}
         filas.append(fila)
     personas = {}
@@ -197,7 +197,7 @@ def gerencial(f, hoy):
     return {"periodo": per, "ingresados_hoy": sum(1 for p in elegidos.values() if p.ingreso[:10] == hoy.isoformat()), "ingresados": ingresados,
             "informados": informados, "demora_dias": round(sum(dias_de_demora) / len(dias_de_demora), 1) if dias_de_demora else None,
             "pendientes": sum(semaforo.values()), "semaforo": semaforo,
-            "por_sector": sorted(((SECTORES[k], n) for k, n in por_sector.items() if k in SECTORES), key=lambda x: -x[1]),
+            "por_sector": sorted(((k, SECTORES[k], n) for k, n in por_sector.items() if k in SECTORES), key=lambda x: -x[2]),
             "por_dia": [(dia.isoformat(), n) for dia, n in sorted(por_dia.items())]}
 
 

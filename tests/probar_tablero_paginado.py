@@ -102,15 +102,10 @@ for texto, esperado in (('999', ultima), ('0', 1), ('-3', 1), ('abc', 1), ('', 1
     chequear(f'pagina={texto!r} responde 200 y muestra la página {esperado}', r.status_code == 200 and numeros(h) == filas_esperadas, r.status_code)
 
 print('3) los conteos son de todo el conjunto, no de la página')
-tabs = []
 sems = []
 for n in (1, 2, 3):
     h = paginas[n - 1][2]
-    tabs.append(re.findall(r'(Pendientes|Informados|Sin cargar al sistema) \((\d+)\)', h))
     sems.append(re.findall(r'<b>(\d+)</b><span>(On time|Delayed|Late)</span>', h))
-chequear('las pestañas muestran lo mismo en todas las páginas', tabs[0] == tabs[1] == tabs[2], tabs)
-pend_pestana = int(dict(tabs[0])['Pendientes'])
-chequear('Pendientes (n) cuenta todos los pendientes del sistema, no los de la búsqueda ni los de la página', pend_pestana > len(pendientes), (pend_pestana, len(pendientes)))
 chequear('el semáforo total es el mismo en todas las páginas', sems[0] == sems[1] == sems[2], sems)
 por_semaforo = {nombre: int(n) for n, nombre in sems[0]}
 chequear('el semáforo total suma todos los pendientes filtrados', sum(por_semaforo.values()) == len(pendientes), (por_semaforo, len(pendientes)))
@@ -166,8 +161,7 @@ h = pedir('/?ver=todos&q=PAG&semaforo=on_time')
 vinculos = enlaces(h)
 chequear('los enlaces conservan el filtro de semáforo', not vinculos or all(parametros(v).get('semaforo') == 'on_time' for v in vinculos), vinculos[:2])
 h = pedir('/?ver=pendientes&q=PAG&pagina=3')
-destinos = [html.unescape(x) for x in re.findall(r'<div class="tabs">(.*?)</div>', h, re.S)[0].split('href="')[1:]]
-chequear('las pestañas y el semáforo vuelven a la primera página', all('pagina=' not in d.split('"')[0] for d in destinos), destinos[:2])
+chequear('el Tablero no tiene solapas', 'class="tabs"' not in h)
 semaforo_links = re.findall(r'<div class="semaforo-total">(.*?)</div>', h, re.S)[0]
 chequear('el semáforo total no arrastra la página', 'pagina=' not in semaforo_links)
 chequear('filtrar con el formulario no manda la página', 'name="pagina"' not in h)
