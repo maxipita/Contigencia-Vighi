@@ -21,13 +21,13 @@
   <select name="mes" title="Mes">{% for n, nombre in o.meses %}<option value="{{ n }}" {{ 'selected' if d.periodo.mes == n }}>{{ nombre }}</option>{% endfor %}</select>
   <select name="actividad" title="Actividad">{% for k, n in d.actividades %}<option value="{{ k }}" {{ 'selected' if d.etapa == k }}>{{ n }}</option>{% endfor %}</select>
   <select name="unidad" title="Qué se cuenta">{% for k, n in UNIDADES.items() %}<option value="{{ k }}" {{ 'selected' if d.unidad == k }}>{{ n }}</option>{% endfor %}</select>
-  {% elif vista == 'patologos' %}
-  <select name="actividad" title="Actividad">{% for k, n in d.actividades %}<option value="{{ k }}" {{ 'selected' if d.etapa == k }}>{{ n }}</option>{% endfor %}</select>
-  {% if d.personas %}<select name="persona" title="Patólogo"><option value="">Patólogo: todos</option>{% for i, n in d.personas %}<option value="{{ i }}" {{ 'selected' if f.persona == i }}>{{ n }}</option>{% endfor %}</select>{% endif %}
+  {% elif vista in ('patologos', 'citotecnicos') %}
+  {% if d.actividades %}<select name="actividad" title="Actividad">{% for k, n in d.actividades %}<option value="{{ k }}" {{ 'selected' if d.etapa == k }}>{{ n }}</option>{% endfor %}</select>{% endif %}
+  {% if d.personas %}<select name="persona" title="{{ d.persona_rotulo }}"><option value="">{{ d.persona_rotulo }}: todos</option>{% for i, n in d.personas %}<option value="{{ i }}" {{ 'selected' if f.persona == i }}>{{ n }}</option>{% endfor %}</select>{% endif %}
   {% endif %}
-  <select name="tipo" title="Flujo"><option value="">Flujos: todos</option>{% for k in TIPOS %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ k }}</option>{% endfor %}</select>
+  {% if vista != 'citotecnicos' %}<select name="tipo" title="Flujo"><option value="">Flujos: todos</option>{% for k in TIPOS %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ k }}</option>{% endfor %}</select>{% endif %}
   {{ lista('ubicacion', o.lugares, f.ubicacion, 'Procedencia: todas') }}
-  {% if vista in ('gerencial', 'patologos', 'performance') %}{{ lista('cobertura', o.coberturas, f.cobertura, 'Cobertura: todas') }}{% endif %}
+  {% if vista in ('gerencial', 'patologos', 'citotecnicos', 'performance') %}{{ lista('cobertura', o.coberturas, f.cobertura, 'Cobertura: todas') }}{% endif %}
   <button class="btn sec">Actualizar</button>
 </form>
 
@@ -44,20 +44,20 @@
     {% for clave, nombre, n in d.por_sector %}<tr><td>{{ nombre }}</td><td class="num"><a href="{{ url_for('tablero.tablero', sector=clave) }}" title="Ver estos estudios">{{ n }}</a></td></tr>{% else %}<tr><td colspan="2" class="muted">No hay estudios pendientes.</td></tr>{% endfor %}
   </table></div>
 
-{% elif vista == 'patologos' %}
-{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios pendientes. Quien tiene el permiso «Ver todos los estudios» ve los de todos los patólogos.</div>{% endif %}
+{% elif vista in ('patologos', 'citotecnicos') %}
+{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios pendientes. Quien tiene el permiso «Ver todos los estudios» ve los de todos los {{ d.plural }}.</div>{% endif %}
 <table class="tabla-dashboard">
   <tr><th>Responsable</th><th>Tipo</th><th class="num">Pendientes</th><th class="num sem-ot"><span class="semaforo on_time">En término</span></th><th class="num sem-dy"><span class="semaforo delayed">Demorado</span></th><th class="num sem-lt"><span class="semaforo late">Atrasado</span></th>
       <th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th></tr>
   {% for r in d.filas %}
-  <tr><td><b>{{ r.nombre }}</b>{% if r.iniciales %} <a class="muted" href="{{ url_for('tablero.tablero', mf=r.iniciales) }}" title="Ver todos los estudios de {{ r.nombre }}">ver listado</a>{% endif %}</td><td>{{ r.tipo }}</td>
-    {% for k, sem in (('pend', ''), ('p_on_time', 'on_time'), ('p_delayed', 'delayed'), ('p_late', 'late')) %}<td class="num {{ {'on_time': 'sem-ot', 'delayed': 'sem-dy', 'late': 'sem-lt'}.get(sem, '') }} {{ 'cero' if not r[k] }}">{% if r[k] and r.iniciales %}<a href="{{ url_for('tablero.tablero', etapa=d.etapa, tipo=r.tipo, mf=r.iniciales, semaforo=sem or None) }}" title="Ver estos estudios">{{ r[k] }}</a>{% else %}{{ r[k] }}{% endif %}</td>{% endfor %}
+  <tr><td><b>{{ r.nombre }}</b>{% if r.iniciales and vista == 'patologos' %} <a class="muted" href="{{ url_for('tablero.tablero', mf=r.iniciales) }}" title="Ver todos los estudios de {{ r.nombre }}">ver listado</a>{% endif %}</td><td>{{ r.tipo }}</td>
+    {% for k, sem in (('pend', ''), ('p_on_time', 'on_time'), ('p_delayed', 'delayed'), ('p_late', 'late')) %}<td class="num {{ {'on_time': 'sem-ot', 'delayed': 'sem-dy', 'late': 'sem-lt'}.get(sem, '') }} {{ 'cero' if not r[k] }}">{% if r[k] and r.iniciales and vista == 'patologos' %}<a href="{{ url_for('tablero.tablero', etapa=d.etapa, tipo=r.tipo, mf=r.iniciales, semaforo=sem or None) }}" title="Ver estos estudios">{{ r[k] }}</a>{% else %}{{ r[k] }}{% endif %}</td>{% endfor %}
     {% for k in ('p_hasta_5', 'p_de_5_a_10', 'p_mas_de_10') %}<td class="num sem-lt {{ 'cero' if not r[k] }}">{{ r[k] }}</td>{% endfor %}</tr>
   {% else %}<tr><td colspan="9" class="muted">No hay estudios pendientes de esta actividad.</td></tr>{% endfor %}
   {% if d.filas %}<tr class="total"><td>Total</td><td></td>
     {% for k, c in (('pend', ''), ('p_on_time', 'sem-ot'), ('p_delayed', 'sem-dy'), ('p_late', 'sem-lt'), ('p_hasta_5', 'sem-lt'), ('p_de_5_a_10', 'sem-lt'), ('p_mas_de_10', 'sem-lt')) %}<td class="num {{ c }}">{{ d.total[k] }}</td>{% endfor %}</tr>{% endif %}
 </table>
-{% if d.elegida %}<p><a class="btn" href="{{ url_for('tablero.tablero', mf=f.persona) }}">Ver todo el listado de {{ d.elegida }}</a></p>{% endif %}
+{% if d.elegida and vista == 'patologos' %}<p><a class="btn" href="{{ url_for('tablero.tablero', mf=f.persona) }}">Ver todo el listado de {{ d.elegida }}</a></p>{% endif %}
 <p class="muted">Son los estudios que esperan esta actividad, medidos contra el plazo de la actividad: <b>En término</b> si todavía no venció, <b>Demorado</b> hasta un día hábil después y <b>Atrasado</b> desde ahí. Lo ya informado se mira en Performance. Los números llevan a la lista de Estudios.</p>
 
 {% elif vista == 'performance' %}

@@ -14,7 +14,6 @@ ETAPAS_DE = {
     "laboratorio": [(k, "") for k, v in ETAPAS.items() if v[1] == "laboratorio"],
     "macroscopia": [("macroscopia", "")],
     "traslados": [(k, "") for k, v in ETAPAS.items() if v[1] == "traslados"],
-    "citotecnicos": [("microscopia", "PAP")],
 }
 ETAPAS_PATOLOGOS = ("microscopia", "interp_ihq", "revision")
 ACTIVIDADES = [("ingreso", "Ingreso: Protocolo > Cargar")] + [(k, f"{v[2].capitalize()}: {v[4]}") for k, v in ETAPAS.items() if k != "ingreso"]
@@ -178,19 +177,19 @@ def fila_patologo(iniciales, nombre, tipo):
     return {"iniciales": iniciales, "nombre": nombre, "tipo": tipo, **{k: 0 for k in CAMPOS_PATOLOGOS}}
 
 
-def sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora):
+def sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora, admite, sin_nombre):
     protocolos, fechas, _ = cargar_protocolos()
     de_cobertura = hay_cobertura(f)
     for p in protocolos.values():
         if (de_cobertura is not None and p.id not in de_cobertura) or (f["ubicacion"] and f["ubicacion"] not in (p.lugar_recoleccion, p.lugar_entrega)):
             continue
         for m in p.activas():
-            if not m.proxima or m.proxima[0] != etapa or (f["tipo"] and m.tipo != f["tipo"]) or (solo_iniciales and m.responsable != solo_iniciales):
+            if not m.proxima or m.proxima[0] != etapa or (f["tipo"] and m.tipo != f["tipo"]) or not admite(m) or (solo_iniciales and m.responsable != solo_iniciales):
                 continue
             plazos(p, m, fechas, feriados, ahora)
             estado = trazabilidad.semaforo(m.vence, ahora, feriados) if m.vence else "on_time"
             iniciales = m.responsable or ""
-            fila = filas.setdefault((iniciales, m.tipo), fila_patologo(iniciales, nombres.get(iniciales, "Sin médico asignado"), m.tipo))
+            fila = filas.setdefault((iniciales, m.tipo), fila_patologo(iniciales, nombres.get(iniciales, sin_nombre), m.tipo))
             fila["pend"] += 1
             fila["p_" + estado] += 1
             if estado == "late":
@@ -198,18 +197,29 @@ def sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora):
                 fila["p_hasta_5" if atraso <= 5 else ("p_de_5_a_10" if atraso <= 10 else "p_mas_de_10")] += 1
 
 
-def patologos(f, hoy, solo_iniciales=None):
-    etapa = f["actividad"] if f["actividad"] in ETAPAS_PATOLOGOS else "microscopia"
+def por_responsable(f, hoy, solo_iniciales, etapa, admite, sector, rotulos):
     feriados, ahora = db.feriados(), datetime.now()
     usuarios = db.q(SQL_RESPONSABLES)
     nombres = {u["iniciales"]: u["nombre"] or u["iniciales"] for u in usuarios}
     filas = {}
-    sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora)
+    sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora, admite, rotulos["sin_nombre"])
     ordenadas = sorted((x for x in filas.values() if not f["persona"] or x["iniciales"] == f["persona"]), key=lambda x: (x["iniciales"] == "", db.clave_nombre(x["nombre"]), x["tipo"]))
     total = {k: sum(x[k] for x in ordenadas) for k in CAMPOS_PATOLOGOS}
-    personas = None if solo_iniciales else [(u["iniciales"], u["nombre"] or u["iniciales"]) for u in usuarios if "firmante" in (u["sectores"] or "").split(",")]
+    personas = None if solo_iniciales else [(u["iniciales"], u["nombre"] or u["iniciales"]) for u in usuarios if sector in (u["sectores"] or "").split(",")]
     elegida = next((n for i, n in (personas or []) if i == f["persona"]), "") if f["persona"] else ""
-    return {"filas": ordenadas, "total": total, "etapa": etapa, "actividades": [(k, NOMBRE_ETAPA[k]) for k in ETAPAS_PATOLOGOS], "personas": personas, "elegida": elegida}
+    return {"filas": ordenadas, "total": total, "etapa": etapa, "personas": personas, "elegida": elegida, **rotulos}
+
+
+def patologos(f, hoy, solo_iniciales=None):
+    etapa = f["actividad"] if f["actividad"] in ETAPAS_PATOLOGOS else "microscopia"
+    datos = por_responsable(f, hoy, solo_iniciales, etapa, lambda m: not (etapa == "microscopia" and m.tipo == "PAP"), "firmante",
+                            {"sin_nombre": "Sin médico asignado", "persona_rotulo": "Patólogo", "plural": "patólogos"})
+    return {**datos, "actividades": [(k, NOMBRE_ETAPA[k]) for k in ETAPAS_PATOLOGOS]}
+
+
+def citotecnicos(f, hoy, solo_iniciales=None):
+    return {**por_responsable(f, hoy, solo_iniciales, "microscopia", lambda m: m.tipo == "PAP", "citotecnico",
+                              {"sin_nombre": "Sin citotécnico asignado", "persona_rotulo": "Citotécnico", "plural": "citotécnicos"}), "actividades": []}
 
 
 def ventanas(per):

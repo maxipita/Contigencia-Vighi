@@ -16,9 +16,11 @@ def datos_sector(vista):
     return lambda f, hoy, yo: dash.sector(vista, f, hoy)
 
 
-def datos_patologos(f, hoy, yo):
-    propios = not (yo["admin"] or puede("tablero_todos"))
-    return {**dash.patologos(f, hoy, yo["iniciales"] if propios else None), "solo_lo_suyo": propios}
+def datos_responsables(armar):
+    def datos(f, hoy, yo):
+        propios = not (yo["admin"] or puede("tablero_todos"))
+        return {**armar(f, hoy, yo["iniciales"] if propios else None), "solo_lo_suyo": propios}
+    return datos
 
 
 def datos_performance(f, hoy, yo):
@@ -26,7 +28,7 @@ def datos_performance(f, hoy, yo):
 
 
 DATOS = {"gerencial": datos_gerencial, "ingreso": datos_sector("ingreso"), "laboratorio": datos_sector("laboratorio"), "macroscopia": datos_sector("macroscopia"),
-         "traslados": datos_sector("traslados"), "citotecnicos": datos_sector("citotecnicos"), "patologos": datos_patologos, "performance": datos_performance}
+         "traslados": datos_sector("traslados"), "citotecnicos": datos_responsables(dash.citotecnicos), "patologos": datos_responsables(dash.patologos), "performance": datos_performance}
 
 
 @bp.route("/dashboards")
