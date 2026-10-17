@@ -119,7 +119,10 @@ def del_protocolo(p, f, firmante):
 
 
 def del_estudio(m, pid, f, fechas, coinciden):
-    if f.get("tipo") and m.tipo != f["tipo"]:
+    if f.get("tipo") == "IHQ":
+        if not m.ihq:
+            return False
+    elif f.get("tipo") and m.tipo != f["tipo"]:
         return False
     if f.get("sector") and not (m.proxima and m.proxima[2] == f["sector"]):
         return False

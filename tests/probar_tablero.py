@@ -33,5 +33,5 @@ chequear('filtro de semáforo responde', c.get('/?ver=todos&semaforo=late').stat
 h0 = c.get('/').get_data(as_text=True)
 _, f0 = filas('/')
 _, ft = filas('/?ver=todos')
-chequear('el tablero ya no tiene solapas y muestra todos los estudios', 'class="tabs"' not in h0 and 'Pendientes (' not in h0 and [n for _, n in f0] == [n for _, n in ft])
+chequear('el tablero solo tiene solapas por tipo de muestra (no por estado) y muestra todos los estudios', '>PAPs<' in h0 and 'Pendientes (' not in h0 and 'ver=pendientes' not in h0 and [n for _, n in f0] == [n for _, n in ft])
 print('FALLAS:', fallas)

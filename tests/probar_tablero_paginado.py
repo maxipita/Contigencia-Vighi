@@ -161,7 +161,7 @@ h = pedir('/?ver=todos&q=PAG&semaforo=on_time')
 vinculos = enlaces(h)
 chequear('los enlaces conservan el filtro de semáforo', not vinculos or all(parametros(v).get('semaforo') == 'on_time' for v in vinculos), vinculos[:2])
 h = pedir('/?ver=pendientes&q=PAG&pagina=3')
-chequear('el Tablero no tiene solapas', 'class="tabs"' not in h)
+chequear('el Tablero no tiene solapas por estado', 'Pendientes (' not in h and 'class="tabs"' in h and '>BPs<' in h)
 semaforo_links = re.findall(r'<div class="semaforo-total">(.*?)</div>', h, re.S)[0]
 chequear('el semáforo total no arrastra la página', 'pagina=' not in semaforo_links)
 chequear('filtrar con el formulario no manda la página', 'name="pagina"' not in h)

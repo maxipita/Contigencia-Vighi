@@ -35,6 +35,7 @@ with A.app.app_context():
     db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?, 'microscopia', ?, '2026-10-10 10:00:00')", (f1, admin))
     db.ex("DELETE FROM micro WHERE flujo_id=?", (f2,))
     db.ex("INSERT INTO micro (flujo_id, conclusion) VALUES (?, 'Adenocarcinoma acinar de próstata')", (f2,))
+    db.ex("UPDATE micro SET solicita_ihq=1 WHERE flujo_id=?", (f2,))
     db.ex("INSERT INTO lotes (codigo, tipo_lote, fecha, numero) VALUES ('FILTRO-1010.1', 'FILTRO', '2026-10-10', 1)")
     lote = db.uno("SELECT id FROM lotes WHERE codigo='FILTRO-1010.1'")['id']
     db.ex("UPDATE estudios SET lote_id=? WHERE protocolo_id=(SELECT id FROM protocolos WHERE numero=?)", (lote, BP3))
@@ -114,4 +115,16 @@ chequear('quitar filtros vuelve a la lista completa', 'Quitar filtros' in pagina
 for basura in ('desde=x', 'hasta=99', 'zona=%FF', 'diagnostico=otro', 'lote=%25', 'plan=%27'):
     chequear('un valor raro (' + basura + ') no rompe la pantalla', c.get('/?' + basura).status_code == 200)
 
+h, vistos = ver('')
+chequear('los tipos de muestra son solapas y no una lista', 'class="tabs"' in h and 'name="tipo"' not in h.split('class="filtros')[1].split('</form>')[0] and all(x in h for x in ('>PAPs<', '>CTs<', '>BPs<', '>IHQs<')))
+h, vistos = ver('tipo=PAP')
+chequear('solapa PAP: solo los PAP y queda marcada', vistos == {PAP} and 'tipo=PAP" class="activo"' in h, vistos)
+h, vistos = ver('tipo=CT')
+chequear('solapa CT', vistos == {CT}, vistos)
+h, vistos = ver('tipo=BP')
+chequear('solapa BP', {BP1, BP2, BP3} <= vistos and not ({PAP, CT} & vistos), vistos)
+h, vistos = ver('tipo=IHQ')
+chequear('solapa IHQ: los que piden inmunohistoquímica', vistos == {BP2}, vistos)
+h, vistos = ver('tipo=BP&cobertura=GALENO')
+chequear('la solapa conserva los demás filtros', vistos == {BP2} and 'cobertura=GALENO' in h.split('class="tabs"')[1].split('</div>')[0].replace('&amp;', '&'), vistos)
 print('FALLAS:', ', '.join(fallas) if fallas else 'ninguna')
