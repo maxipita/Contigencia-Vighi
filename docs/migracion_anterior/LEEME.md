@@ -35,7 +35,7 @@ El código está commiteado en la rama `tiagob` y **no se subió a `main`** (un 
 - `vighi/herramientas/receptor_extraccion.py`: servidor local (`127.0.0.1:8765`) que recibe lo que manda el navegador y lo guarda en `data/migracion_anterior/` (con cerrojo, una línea por registro).
 - `vighi/herramientas/preparar_anterior.py`: normaliza y arma `protocolos_anterior.jsonl`; avisa de líneas dañadas y pacientes sin ficha (`pacientes_faltantes.json`).
 - `vighi/dominio/anterior.py` (reglas puras), `vighi/servicios/migracion_anterior.py` (escritura en la base), `vighi/servicios/migracion_imagenes.py`, `vighi/features/migracion.py`, `vighi/templates/migracion/`, `vighi/static/migracion.js`.
-- `CLAUDE.md`, sección «Migración del sistema anterior»: reglas de mapeo completas.
+- `docs/funcionalidades.md`, sección «Migración del sistema anterior»: reglas de mapeo completas.
 
 ## Cómo seguir (en orden)
 

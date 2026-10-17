@@ -16,11 +16,10 @@ SQL_TABLERO = """SELECT e.protocolo_id, e.flujo_id, e.tipo, e.subcategoria, e.si
                  FROM estudios e JOIN protocolos p ON p.id=e.protocolo_id
                  LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                  WHERE p.borrador=0 ORDER BY p.id DESC, e.id"""
-SQL_COMENTARIOS_POR_PROTOCOLO = "SELECT protocolo_id, COUNT(*) AS n FROM comentarios GROUP BY protocolo_id"
 
 
 def consultas_tablero():
-    return [(SQL_TABLERO, ()), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_COMENTARIOS_POR_PROTOCOLO, ()), (SQL_RESPONSABLES, ())]
+    return [(SQL_TABLERO, ()), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_RESPONSABLES, ())]
 
 
 class Muestra:
@@ -85,7 +84,6 @@ def pagina_pedida(texto):
 
 def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
     protocolos, fechas, con_ihq = cargar_protocolos()
-    comentarios = {r["protocolo_id"]: r["n"] for r in db.q(SQL_COMENTARIOS_POR_PROTOCOLO)}
     usuarios = db.q(SQL_RESPONSABLES)
     firmantes = [u for u in usuarios if "firmante" in (u["sectores"] or "").split(",")]
     iniciales_firmantes = {u["iniciales"] for u in firmantes}
@@ -177,7 +175,7 @@ def armar(f, sectores, pagina=1, por_pagina=POR_PAGINA):
         vencen = [m.vence for m in vista if m.vence]
         filas.append({
             "protocolo_id": p.id, "numero": p.numero, "flujos": etiqueta_flujos({m.tipo for m in activas}, p.id in con_ihq),
-            "n_comentarios": comentarios.get(p.id, 0), "estudios": len(activas),
+            "estudios": len(activas),
             "apellido": p.apellido, "nombre": p.nombre, "dni": p.dni, "validar": p.validar,
             "muestras": list(dict.fromkeys((m.subcategoria or "", m.tipo_muestra or "") for m in vista)),
             "lote_id": p.lote_id, "lote": p.lote,
