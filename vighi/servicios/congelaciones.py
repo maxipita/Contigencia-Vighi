@@ -1,19 +1,20 @@
 import io
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import abort
 from werkzeug.datastructures import MultiDict
 
-from vighi.core import db
-from vighi.servicios.consultas import SQL_RESPONSABLES, listas
+from vighi.core import db, permisos
+from vighi.core.config import CONGELACION_ALERTA_HORAS
+from vighi.servicios.consultas import listas
 from vighi.servicios.protocolos import dni_valido
 
 TIPOS = ("GI", "QR", "PUN")
-ESTADOS = {"agendada": "Agendada", "confirmada": "Confirmada", "cancelada": "Cancelada"}
+ESTADOS = {"agendada": "Agendada", "confirmada": "Confirmada", "eliminada": "Eliminada"}
 ESTADOS_ALTA = {"agendada": "A confirmar", "confirmada": "Confirmada"}
-ACTIVIDADES = {"confirmar": "A confirmar", "vincular": "Falta vincular el protocolo", "realizar": "Por realizar", "vinculada": "Vinculada", "cancelada": "Cancelada"}
-PENDIENTES = ("confirmar", "vincular", "realizar")
+ACTIVIDADES = {"alerta": "Alerta: sin confirmar", "confirmar": "A confirmar", "vincular": "Falta vincular el protocolo", "realizar": "Por realizar", "vinculada": "Vinculada", "eliminada": "Eliminada"}
+PENDIENTES = ("alerta", "confirmar", "vincular", "realizar")
 HORAS = [f"{h:02d}:{m}" for h in range(6, 24) for m in ("00", "30")]
 HORA_DESDE, HORA_HASTA = "08:00", "20:00"
 DIAS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
@@ -24,6 +25,9 @@ CAMPOS_DE_AGENDA = ("fecha", "hora", "ubicacion", "patologo_id")
 
 SQL_CONGELACIONES = """SELECT c.*, p.iniciales AS pat_iniciales, p.nombre AS pat_nombre, r.numero AS protocolo_numero
                        FROM congelaciones c LEFT JOIN usuarios p ON p.id=c.patologo_id LEFT JOIN protocolos r ON r.id=c.protocolo_id"""
+SQL_PATOLOGOS = """SELECT u.id, u.iniciales, u.nombre, u.sectores, u.admin, u.permisos_mas, u.permisos_menos, p.permisos AS perfil_permisos
+                   FROM usuarios u LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.activo=1 ORDER BY u.iniciales"""
+SQL_PATOLOGOS_USADOS = "SELECT DISTINCT patologo_id FROM congelaciones WHERE patologo_id IS NOT NULL"
 SQL_UBICACION_EXISTE = "SELECT abreviatura FROM ubicaciones WHERE abreviatura=?"
 SQL_UBICACIONES_USADAS = "SELECT DISTINCT ubicacion FROM congelaciones ORDER BY ubicacion"
 SQL_MEDICOS_USADOS = "SELECT DISTINCT medico FROM congelaciones WHERE COALESCE(medico, '')<>'' ORDER BY medico"
@@ -32,7 +36,7 @@ SQL_COBERTURAS_USADAS = "SELECT DISTINCT cobertura FROM congelaciones WHERE COAL
 
 
 def consultas_de_pantalla():
-    return [(SQL_RESPONSABLES, ()), (SQL_UBICACIONES_USADAS, ()), (SQL_MEDICOS_USADOS, ()), (SQL_COBERTURAS_USADAS, ())]
+    return [(SQL_PATOLOGOS, ()), (SQL_PATOLOGOS_USADOS, ()), (SQL_UBICACIONES_USADAS, ()), (SQL_MEDICOS_USADOS, ()), (SQL_COBERTURAS_USADAS, ())]
 
 
 def medicos_usados(ubicacion):
@@ -76,22 +80,43 @@ def semanas_del_mes(anio, mes):
     return semanas
 
 
-def patologos():
-    return [u for u in db.q(SQL_RESPONSABLES) if "firmante" in (u["sectores"] or "").split(",")]
+def patologos(incluir=()):
+    return [u for u in db.q(SQL_PATOLOGOS) if "firmante" in (u["sectores"] or "").split(",")
+            and ("congelaciones_realiza" in permisos.efectivos(u, u["perfil_permisos"]) or u["id"] in incluir)]
+
+
+def patologos_usados():
+    return {r["patologo_id"] for r in db.q(SQL_PATOLOGOS_USADOS)}
 
 
 def paciente_texto(c):
     return ", ".join(x for x in (c["apellido"], c["nombre"]) if x) or "Sin paciente"
 
 
-def actividad_de(c, ahora):
-    if c["estado"] == "cancelada":
-        return "cancelada"
+def limite_alerta(ahora=None):
+    return ((ahora or datetime.now()) + timedelta(hours=CONGELACION_ALERTA_HORAS)).strftime("%Y-%m-%d %H:%M")
+
+
+def en_alerta(c, limite):
+    return c["estado"] == "agendada" and f"{c['fecha']} {c['hora']}" < limite
+
+
+def actividad_de(c, ahora, limite):
+    if c["estado"] == "eliminada":
+        return "eliminada"
     if c["protocolo_id"]:
         return "vinculada"
     if c["estado"] == "agendada":
-        return "confirmar"
+        return "alerta" if en_alerta(c, limite) else "confirmar"
     return "vincular" if f"{c['fecha']} {c['hora']}" <= ahora else "realizar"
+
+
+def texto_de_alerta(c, ahora):
+    faltan = datetime.strptime(f"{c['fecha']} {c['hora']}", "%Y-%m-%d %H:%M") - ahora
+    if faltan <= timedelta(0):
+        return "Ya pasó la hora y no se confirmó"
+    horas = int(faltan.total_seconds() // 3600)
+    return f"Sin confirmar: faltan {horas} h" if horas else "Sin confirmar: falta menos de 1 h"
 
 
 def cuando(fecha):
@@ -100,10 +125,12 @@ def cuando(fecha):
 
 
 def decorar(filas, feriados=None):
-    ahora = db.ahora()[:16]
+    ahora = datetime.now()
+    texto_ahora, limite = ahora.strftime("%Y-%m-%d %H:%M"), limite_alerta(ahora)
     feriados = db.feriados() if feriados is None else feriados
-    return [{**dict(c), "turno": turno(c["hora"]), "actividad": actividad_de(c, ahora), "paciente": paciente_texto(c), "cuando": cuando(c["fecha"]),
-             "en_horario": en_horario(c["fecha"], c["hora"], feriados)} for c in filas]
+    return [{**dict(c), "turno": turno(c["hora"]), "actividad": actividad_de(c, texto_ahora, limite), "paciente": paciente_texto(c), "cuando": cuando(c["fecha"]),
+             "en_horario": en_horario(c["fecha"], c["hora"], feriados), "alerta": en_alerta(c, limite),
+             "alerta_texto": texto_de_alerta(c, ahora) if en_alerta(c, limite) else ""} for c in filas]
 
 
 def filtros_de(args):
@@ -112,14 +139,14 @@ def filtros_de(args):
             "vinculadas": args.get("vinculadas") if args.get("vinculadas") in ("si", "no") else "",
             "tipos": [t for t in TIPOS if t in args.getlist("tipo")],
             "horario": args.get("horario") if args.get("horario") in ("en", "fuera") else "",
-            "estado": args.get("estado") if args.get("estado") in ESTADOS else ""}
+            "estado": args.get("estado") if args.get("estado") in (*ESTADOS, "alerta") else ""}
 
 
 def filtros_vacios():
     return filtros_de(MultiDict())
 
 
-def listar(f, desde=None, hasta=None):
+def listar(f, desde=None, hasta=None, con_eliminadas=False):
     condiciones, params = [], []
     if desde:
         condiciones.append("c.fecha>=?")
@@ -127,7 +154,12 @@ def listar(f, desde=None, hasta=None):
     if hasta:
         condiciones.append("c.fecha<=?")
         params.append(hasta)
-    for columna, clave in (("c.ubicacion", "ubicacion"), ("c.medico", "medico"), ("c.cobertura", "cobertura"), ("c.estado", "estado")):
+    if f["estado"] == "alerta":
+        condiciones.append("c.estado='agendada' AND (c.fecha || ' ' || c.hora)<?")
+        params.append(limite_alerta())
+    elif not f["estado"] and not con_eliminadas:
+        condiciones.append("c.estado<>'eliminada'")
+    for columna, clave in (("c.ubicacion", "ubicacion"), ("c.medico", "medico"), ("c.cobertura", "cobertura")) + ((("c.estado", "estado"),) if f["estado"] != "alerta" else ()):
         if f[clave]:
             condiciones.append(f"{columna}=?")
             params.append(f[clave])
@@ -165,7 +197,7 @@ def firmantes_de(protocolos):
 
 
 def tablero(f, actividad):
-    filas = listar(f)
+    filas = listar(f, con_eliminadas=actividad in ("todas", "eliminada"))
     if actividad == "pendientes":
         filas = [c for c in filas if c["actividad"] in PENDIENTES]
     elif actividad in ACTIVIDADES:
@@ -193,8 +225,8 @@ def dashboard(f, anio, contar):
 
 
 def agenda_patologo(patologo, estado, ubicacion, pasadas):
-    desde = None if pasadas else db.ahora()[:10]
-    datos = [c for c in listar({**filtros_vacios(), "patologo": str(patologo)}, desde) if c["estado"] != "cancelada"]
+    hoy = db.ahora()[:10]
+    datos = [c for c in listar({**filtros_vacios(), "patologo": str(patologo)}) if pasadas or c["fecha"] >= hoy or c["alerta"]]
     por_estado = {k: sum(1 for c in datos if c["estado"] == k) for k in ("agendada", "confirmada")}
     base = [c for c in datos if not estado or c["estado"] == estado]
     por_ubicacion = {u: sum(1 for c in base if c["ubicacion"] == u) for u in sorted({c["ubicacion"] for c in datos}, key=db.clave_nombre)}
@@ -252,9 +284,9 @@ def validar(form, actual=None):
 
 
 def choque(d, cid=None):
-    if not d["patologo_id"] or d["estado"] == "cancelada":
+    if not d["patologo_id"] or d["estado"] == "eliminada":
         return None
-    otra = db.uno("SELECT id FROM congelaciones WHERE patologo_id=? AND fecha=? AND hora=? AND estado<>'cancelada' AND id<>?", (d["patologo_id"], d["fecha"], d["hora"], cid or 0))
+    otra = db.uno("SELECT id FROM congelaciones WHERE patologo_id=? AND fecha=? AND hora=? AND estado<>'eliminada' AND id<>?", (d["patologo_id"], d["fecha"], d["hora"], cid or 0))
     return f"El patólogo ya tiene la congelación #{otra['id']} a esa hora." if otra else None
 
 
@@ -286,15 +318,15 @@ def editar(c, d, yo):
     return reprogramada, None
 
 
-TRANSICIONES = {"confirmar": ("agendada", "confirmada"), "rechazar": (("agendada", "confirmada"), "cancelada"), "reabrir": ("cancelada", "agendada")}
-VERBOS = {"confirmar": "confirmada", "rechazar": "cancelada", "reabrir": "vuelta a A confirmar"}
+TRANSICIONES = {"confirmar": ("agendada", "confirmada"), "eliminar": (("agendada", "confirmada"), "eliminada"), "restaurar": ("eliminada", "agendada")}
+VERBOS = {"confirmar": "confirmada", "eliminar": "eliminada", "restaurar": "restaurada (vuelve a Agendada)"}
 
 
 def cambiar_estado(c, accion, yo):
     desde, hasta = TRANSICIONES[accion]
     if c["estado"] not in ((desde,) if isinstance(desde, str) else desde):
         return f"La congelación está {ESTADOS[c['estado']].lower()}: no se puede pasar a {ESTADOS[hasta].lower()}."
-    if accion == "reabrir":
+    if accion == "restaurar":
         error = choque({"patologo_id": c["patologo_id"], "fecha": c["fecha"], "hora": c["hora"], "estado": hasta}, c["id"])
         if error:
             return error
@@ -305,6 +337,8 @@ def cambiar_estado(c, accion, yo):
 
 def vincular(c, numero, yo):
     numero = numero.strip()
+    if numero and c["estado"] == "eliminada":
+        return "Está eliminada: restaurala antes de vincularla a un protocolo."
     if not numero:
         db.ex("UPDATE congelaciones SET protocolo_id=NULL, actualizado_por=?, actualizado_en=? WHERE id=?", (yo, db.ahora(), c["id"]))
         db.auditar(yo, c["protocolo_id"], "congelacion", f"Congelación #{c['id']}: se desvinculó del protocolo {c['protocolo_numero']}")
@@ -316,14 +350,6 @@ def vincular(c, numero, yo):
         return f"El DNI del protocolo {p['numero']} no coincide con el de la congelación."
     db.ex("UPDATE congelaciones SET protocolo_id=?, actualizado_por=?, actualizado_en=? WHERE id=?", (p["id"], yo, db.ahora(), c["id"]))
     db.auditar(yo, p["id"], "congelacion", f"Congelación #{c['id']}: se vinculó al protocolo {p['numero']}")
-    return None
-
-
-def eliminar(c, yo):
-    if c["protocolo_id"]:
-        return "No se puede eliminar: está vinculada a un protocolo. Desvinculala primero."
-    db.ex("DELETE FROM congelaciones WHERE id=?", (c["id"],))
-    db.auditar(yo, None, "congelacion", f"Congelación #{c['id']}: eliminada ({c['fecha']} {c['hora']}, {c['ubicacion']}, {paciente_texto(c)})")
     return None
 
 

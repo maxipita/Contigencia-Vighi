@@ -1,10 +1,11 @@
 import secrets
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import abort, flash, g, jsonify, redirect, request, session, url_for
 
 from vighi.core import db, permisos
-from vighi.core.config import SEMAFOROS
+from vighi.core.config import CONGELACION_ALERTA_HORAS, SEMAFOROS
 from vighi.core.opcionales import informes
 from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, TIPOS, sector_marca
 
@@ -12,15 +13,21 @@ from vighi.dominio.estudios import NOMBRE_ETAPA, REGISTRO, SECTORES, TIPOS, sect
 SQL_USUARIO = """SELECT u.*, p.nombre AS perfil, p.permisos AS perfil_permisos FROM usuarios u
                       LEFT JOIN perfiles p ON p.id=u.perfil_id WHERE u.id=? AND u.activo=1"""
 SQL_BORRADORES = "SELECT COUNT(*) AS n FROM protocolos WHERE borrador=1"
+SQL_MIS_ALERTAS = "SELECT COUNT(*) AS n FROM congelaciones WHERE estado='agendada' AND patologo_id=? AND (fecha || ' ' || hora)<?"
 SQL_MIS_TAREAS = "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN urgencia='urgente' THEN 1 ELSE 0 END), 0) AS urgentes FROM tareas WHERE estado='abierta' AND responsable_id=?"
 
 
 RUTAS_CON_CLAVE = ("/api/ordenes/automatico",)
 
 
+def limite_de_alerta():
+    return (datetime.now() + timedelta(hours=CONGELACION_ALERTA_HORAS)).strftime("%Y-%m-%d %H:%M")
+
+
 def adelantar_lecturas():
     if session.get("uid") and request.endpoint != "static":
-        db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ()), (SQL_MIS_TAREAS, (session["uid"],))])
+        g.limite_alerta = limite_de_alerta()
+        db.precargar([(SQL_USUARIO, (session["uid"],)), (SQL_BORRADORES, ()), (SQL_MIS_TAREAS, (session["uid"],)), (SQL_MIS_ALERTAS, (session["uid"], g.limite_alerta))])
 
 
 def usuario_actual():
@@ -110,13 +117,14 @@ def globales():
     u = usuario_actual()
     pendientes = db.uno(SQL_BORRADORES)["n"] if u else 0
     mis_tareas = db.uno(SQL_MIS_TAREAS, (u["id"],)) if u else None
+    mis_alertas = db.uno(SQL_MIS_ALERTAS, (u["id"], g.get("limite_alerta") or limite_de_alerta()))["n"] if u else 0
     vista = None
     if u and session.get("real_uid"):
         real = db.uno("SELECT id, iniciales, nombre FROM usuarios WHERE id=? AND activo=1 AND admin=1", (session["real_uid"],))
         if real:
             vista = {"admin": real, "otros": db.q("SELECT id, iniciales, nombre FROM usuarios WHERE activo=1 AND id<>? ORDER BY iniciales", (real["id"],))}
     return {"vista_como": vista, "yo": u, "csrf": session.get("csrf", ""), "TIPOS": TIPOS, "SECTORES": SECTORES, "REGISTRO": REGISTRO,
-            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
+            "planes_por_cobertura": db.planes_por_cobertura, "n_borradores": pendientes, "mis_tareas": mis_tareas, "mis_alertas": mis_alertas, "informes_ok": informes is not None, "SEMAFOROS": SEMAFOROS,
             "NOMBRE_ETAPA": NOMBRE_ETAPA, "puede": puede, "sector_marca": sector_marca, "mis_sectores": set((u["sectores"] or "").split(",")) if u else set()}
 
 

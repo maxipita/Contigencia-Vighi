@@ -768,6 +768,8 @@ def inicializar():
     sin_destinos = not c.execute("PRAGMA table_info(ubicacion_destinos)").fetchall()
     sin_congelaciones = not c.execute("PRAGMA table_info(congelaciones)").fetchall()
     antes_de_informes = preparar_esquema(c)
+    if not sin_congelaciones:
+        c.execute("UPDATE congelaciones SET estado='eliminada' WHERE estado='cancelada'")
     if sin_congelaciones:
         for perfil, clave in (("Ingreso", "congelaciones"), ("Médico firmante", "congelaciones_confirmar")):
             c.execute("UPDATE perfiles SET permisos = CASE WHEN permisos = '' THEN ? ELSE permisos || ',' || ? END "

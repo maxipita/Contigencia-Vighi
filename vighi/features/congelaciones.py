@@ -24,7 +24,7 @@ def datos_agenda(f):
     semanas = cg.semanas_del_mes(anio, mes)
     lunes = cg.lunes_de(pedida) if pedida and cg.lunes_de(pedida) in semanas else (cg.lunes_de(hoy) if cg.lunes_de(hoy) in semanas else semanas[0])
     dias = cg.agenda_semanal(f, lunes)
-    activas = [c for d in dias for c in d["tarjetas"] if c["estado"] != "cancelada"]
+    activas = [c for d in dias for c in d["tarjetas"] if c["estado"] != "eliminada"]
     return {"anio": anio, "mes": mes, "semanas": [{"lunes": s, "domingo": s + timedelta(days=6)} for s in semanas], "lunes": lunes, "dias": dias, "hoy": hoy,
             "anios": range(hoy.year - 3, hoy.year + 3), "n_activas": len(activas), "n_confirmadas": sum(1 for c in activas if c["estado"] == "confirmada")}
 
@@ -47,14 +47,15 @@ def datos_patologo(f):
     patologo = f["patologo"] if f["patologo"].isdigit() else (str(yo["id"]) if yo["id"] in {u["id"] for u in cg.patologos()} else "")
     pasadas = request.args.get("pasadas") == "1"
     tarjetas, por_estado, por_ubicacion, total = cg.agenda_patologo(int(patologo), f["estado"], f["ubicacion"], pasadas) if patologo else ([], {}, {}, 0)
-    return {"patologo_elegido": patologo, "tarjetas": tarjetas, "por_estado": por_estado, "por_ubicacion": por_ubicacion, "total_base": total, "pasadas": pasadas}
+    return {"patologo_elegido": patologo, "tarjetas": tarjetas, "por_estado": por_estado, "por_ubicacion": por_ubicacion, "total_base": total, "pasadas": pasadas,
+            "n_alertas": sum(1 for c in tarjetas if c["alerta"])}
 
 
 DATOS = {"agenda": datos_agenda, "tablero": datos_tablero, "dashboard": datos_dashboard, "patologo": datos_patologo}
 
 
-def opciones():
-    return {"patologos": cg.patologos(), "coberturas": listas().get("cobertura", []), "horas": cg.HORAS, "tipos": cg.TIPOS,
+def opciones(actual=None):
+    return {"patologos": cg.patologos({actual["patologo_id"]} if actual and actual["patologo_id"] else ()), "coberturas": listas().get("cobertura", []), "horas": cg.HORAS, "tipos": cg.TIPOS,
             "estados_alta": cg.ESTADOS_ALTA, "estados": cg.ESTADOS}
 
 
@@ -64,7 +65,7 @@ def congelaciones():
     vista = request.args.get("vista") if request.args.get("vista") in VISTAS else "agenda"
     db.precargar(cg.consultas_de_pantalla())
     f = cg.filtros_de(request.args)
-    return render_template("congelaciones/congelaciones.html", vista=vista, vistas=VISTAS, f=f, patologos=cg.patologos(),
+    return render_template("congelaciones/congelaciones.html", vista=vista, vistas=VISTAS, f=f, patologos=cg.patologos(cg.patologos_usados()),
                            ubicaciones=[r["ubicacion"] for r in db.q(cg.SQL_UBICACIONES_USADAS)], medicos=cg.medicos_usados(f["ubicacion"]),
                            coberturas=[r["cobertura"] for r in db.q(cg.SQL_COBERTURAS_USADAS)], tipos=cg.TIPOS, estados=cg.ESTADOS, actividades=cg.ACTIVIDADES,
                            contar_opciones=CONTAR, meses=cg.MESES, **DATOS[vista](f))
@@ -118,21 +119,21 @@ def congelacion_nueva():
 @bp.route("/congelaciones/<int:cid>")
 @requiere_login
 def congelacion(cid):
-    c = cg.congelacion_o_404(cid)
-    return render_template("congelaciones/congelacion.html", c=c, form=c, vinculos=cg.protocolos_de_paciente(c["dni"]), historial=cg.historial(cid), **opciones())
+    c = cg.decorar([cg.congelacion_o_404(cid)])[0]
+    return render_template("congelaciones/congelacion.html", c=c, form=c, vinculos=cg.protocolos_de_paciente(c["dni"]), historial=cg.historial(cid), **opciones(c))
 
 
 @bp.route("/congelaciones/<int:cid>/editar", methods=["POST"])
 @requiere_permiso("congelaciones")
 def congelacion_editar(cid):
-    c = cg.congelacion_o_404(cid)
+    c = cg.decorar([cg.congelacion_o_404(cid)])[0]
     d, error = cg.validar(request.form, c)
     reprogramada = None
     if not error:
         reprogramada, error = cg.editar(c, d, usuario_actual()["id"])
     if error:
         flash(error, "error")
-        return render_template("congelaciones/congelacion.html", c=c, form=request.form, vinculos=cg.protocolos_de_paciente(c["dni"]), historial=cg.historial(cid), **opciones())
+        return render_template("congelaciones/congelacion.html", c=c, form=request.form, vinculos=cg.protocolos_de_paciente(c["dni"]), historial=cg.historial(cid), **opciones(c))
     flash("Congelación actualizada." + (" Cambió la agenda: vuelve a A confirmar." if reprogramada else ""), "ok")
     return redirect(url_for("congelaciones.congelacion", cid=cid))
 
@@ -145,8 +146,8 @@ def congelacion_estado(cid):
     if accion not in cg.TRANSICIONES:
         abort(400)
     yo = usuario_actual()
-    propia = accion in ("confirmar", "rechazar") and c["patologo_id"] == yo["id"]
-    if not (propia or puede("congelaciones") or (accion in ("confirmar", "rechazar") and puede("congelaciones_confirmar"))):
+    propia = accion in ("confirmar", "eliminar") and c["patologo_id"] == yo["id"]
+    if not (propia or puede("congelaciones") or (accion in ("confirmar", "eliminar") and puede("congelaciones_confirmar"))):
         flash("No tenés permiso para esa acción. Pedíselo a un administrador.", "error")
         return volver(cid)
     error = cg.cambiar_estado(c, accion, yo["id"])
@@ -161,15 +162,3 @@ def congelacion_protocolo(cid):
     error = cg.vincular(c, request.form.get("numero", ""), usuario_actual()["id"])
     flash(error or ("Protocolo vinculado." if request.form.get("numero", "").strip() else "Protocolo desvinculado."), "error" if error else "ok")
     return volver(cid)
-
-
-@bp.route("/congelaciones/<int:cid>/eliminar", methods=["POST"])
-@requiere_permiso("congelaciones")
-def congelacion_eliminar(cid):
-    c = cg.congelacion_o_404(cid)
-    error = cg.eliminar(c, usuario_actual()["id"])
-    if error:
-        flash(error, "error")
-        return redirect(url_for("congelaciones.congelacion", cid=cid))
-    flash(f"Congelación #{cid} eliminada.", "ok")
-    return a_la_semana(c["fecha"])

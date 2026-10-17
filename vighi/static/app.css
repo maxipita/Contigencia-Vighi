@@ -660,7 +660,7 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 fieldset[disabled] .opcion { cursor: default; opacity: .7; }
 .chip.est-agendada, .chip.act-confirmar { background: var(--aviso-fondo); color: var(--aviso); }
 .chip.est-confirmada, .chip.act-realizar { background: var(--ok-fondo); color: var(--ok); }
-.chip.est-cancelada, .chip.act-cancelada { background: var(--error-fondo); color: var(--error); }
+.chip.est-eliminada, .chip.act-eliminada, .chip.act-alerta { background: var(--error-fondo); color: var(--error); }
 .chip.act-vincular { background: #fde8e6; color: #b42318; }
 .chip.act-vinculada { background: rgba(166, 87, 237, .14); color: var(--primario); }
 .chip.fuera { background: var(--superficie); color: var(--pizarra); font-size: 10px; }
@@ -683,15 +683,15 @@ a.agenda-tarjeta:hover { border-color: var(--acento); text-decoration: none; col
 .agenda-estado { padding: 3px 8px; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
 .agenda-tarjeta.est-agendada .agenda-estado { background: var(--aviso-fondo); color: var(--aviso); }
 .agenda-tarjeta.est-confirmada .agenda-estado { background: var(--ok-fondo); color: var(--ok); }
-.agenda-tarjeta.est-cancelada .agenda-estado { background: var(--error-fondo); color: var(--error); }
-.agenda-tarjeta.est-cancelada .agenda-datos { opacity: .6; }
+.agenda-tarjeta.est-eliminada .agenda-estado { background: var(--error-fondo); color: var(--error); }
+.agenda-tarjeta.est-eliminada .agenda-datos { opacity: .6; }
 .agenda-datos { display: flex; flex-direction: column; gap: 3px; padding: 7px 8px; word-break: break-word; }
 .agenda-hora b { font-family: var(--mono); font-weight: 500; }
 .agenda-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
 .patologo-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; margin-top: 14px; }
 .patologo-tarjetas .agenda-tarjeta { font-size: 13px; }
 .patologo-tarjetas form { margin: 0; }
-.tabla-congelaciones tr.cancelada td { opacity: .6; }
+.tabla-congelaciones tr.eliminada td { opacity: .6; }
 .vincular-rapido { display: flex; gap: 6px; align-items: center; margin: 0; }
 .vincular-rapido input { width: auto; padding: 4px 8px; font-size: 12px; }
 .tabla-dashboard td.num, .tabla-dashboard th.num { text-align: right; }
@@ -708,3 +708,5 @@ a.chip-sel { text-decoration: none; }
 .filtros.compacto { gap: 6px; }
 .filtros.compacto select { padding: 6px 26px 6px 9px; font-size: 12px; max-width: 168px; }
 .filtros.compacto .opcion span { padding: 3px 11px; font-size: 12px; }
+.agenda-tarjeta.alerta { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
+.agenda-tarjeta.alerta .agenda-estado { background: var(--error-fondo); color: var(--error); }

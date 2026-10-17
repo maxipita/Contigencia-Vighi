@@ -19,7 +19,7 @@
 <table class="tabla-congelaciones">
   <tr><th>Actividad</th><th>Cuándo</th><th>Protocolo</th><th>Paciente</th><th>Procedencia</th><th>Cobertura</th><th title="Patólogo de la congelación">PC</th><th title="Médico firmante del protocolo">MF</th><th>Médico tratante</th><th></th></tr>
   {% for c in filas %}
-  <tr class="{{ 'cancelada' if c.estado == 'cancelada' }}">
+  <tr class="{{ 'eliminada' if c.estado == 'eliminada' }}">
     <td><span class="chip act-{{ c.actividad }}">{{ actividades[c.actividad] }}</span></td>
     <td><b>{{ c.fecha | f }}</b> {{ c.hora }}<div class="muted">{{ c.tipo }}{% if not c.en_horario %} · fuera de horario{% endif %}</div></td>
     <td>

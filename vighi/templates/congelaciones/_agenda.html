@@ -13,7 +13,7 @@
     <option value="si" {{ 'selected' if f.vinculadas == 'si' }}>Con protocolo</option>
     <option value="no" {{ 'selected' if f.vinculadas == 'no' }}>Sin protocolo</option>
   </select>
-  <select name="estado" title="Estado"><option value="">Estado: todos</option>{% for clave, nombre in estados.items() %}<option value="{{ clave }}" {{ 'selected' if f.estado == clave }}>{{ nombre }}</option>{% endfor %}</select>
+  <select name="estado" title="Estado"><option value="">Estado: todos</option>{% for clave, nombre in estados.items() %}<option value="{{ clave }}" {{ 'selected' if f.estado == clave }}>{{ nombre }}</option>{% endfor %}<option value="alerta" {{ 'selected' if f.estado == 'alerta' }}>En alerta (sin confirmar)</option></select>
   {{ k.tipos_marcados(tipos, f.tipos) }}
   {{ k.horario(f) }}
   <button class="btn sec">Filtrar</button>
@@ -34,8 +34,8 @@
     </div>
     <div class="agenda-cuerpo">
       {% for c in d.tarjetas %}
-      <a class="agenda-tarjeta est-{{ c.estado }}" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">
-        <div class="agenda-estado">{{ estados[c.estado] }}{% if c.protocolo_numero %} · {{ c.protocolo_numero }}{% endif %}</div>
+      <a class="agenda-tarjeta est-{{ c.estado }} {{ 'alerta' if c.alerta }}" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">
+        <div class="agenda-estado">{{ estados[c.estado] }}{% if c.protocolo_numero %} · {{ c.protocolo_numero }}{% endif %}{% if c.alerta %} · ¡Sin confirmar!{% endif %}</div>
         <div class="agenda-datos">
           <div class="agenda-hora"><b>{{ c.hora }}</b> {{ c.paciente }}</div>
           <div><svg class="ic"><use href="#i-ubicacion"/></svg> {{ c.ubicacion }}</div>

@@ -52,15 +52,16 @@
     <div class="tarjeta">
       <h2>Estado</h2>
       <p>{{ k.estado(c.estado, estados) }} <span class="muted">{{ c.fecha | f }} · {{ c.hora }} hs</span></p>
+      {% if c.alerta %}<div class="aviso error">{{ c.alerta_texto }}{% if c.pat_nombre or c.pat_iniciales %}. Le aparece al patólogo ({{ c.pat_nombre or c.pat_iniciales }}) en el menú{% endif %}.</div>{% endif %}
       <div class="acciones">
         {% if c.estado == 'agendada' and confirma %}
         <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="confirmar"><button class="btn listo">Confirmar</button></form>
         {% endif %}
         {% if c.estado in ('agendada', 'confirmada') and confirma %}
-        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Rechazar esta congelación? Queda cancelada."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="rechazar"><button class="btn peligro">Rechazar</button></form>
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Eliminar esta congelación? Queda en el historial y se puede restaurar."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="eliminar"><button class="btn peligro">Eliminar</button></form>
         {% endif %}
-        {% if c.estado == 'cancelada' and editable %}
-        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="reabrir"><button class="btn sec">Volver a «A confirmar»</button></form>
+        {% if c.estado == 'eliminada' and editable %}
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="restaurar"><button class="btn sec">Restaurar</button></form>
         {% endif %}
       </div>
       <p class="muted">Creada el {{ c.creado_en | fh }}{% if c.actualizado_en %} · Última modificación: {{ c.actualizado_en | fh }}{% endif %}</p>
@@ -81,13 +82,6 @@
       {% endif %}
       {% endif %}
     </div>
-    {% if editable and not c.protocolo_id %}
-    <div class="tarjeta">
-      <h2>Eliminar</h2>
-      <p class="muted">Si se cargó por error. Para una congelación que no se hace, usá Rechazar: queda en el historial.</p>
-      <form method="post" action="{{ url_for('congelaciones.congelacion_eliminar', cid=c.id) }}" data-confirmar="¿Eliminar la congelación #{{ c.id }}? No se puede deshacer."><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn peligro">Eliminar</button></form>
-    </div>
-    {% endif %}
     <div class="tarjeta">
       <h2>Historial</h2>
       <table class="tabla-historial">

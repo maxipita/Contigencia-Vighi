@@ -23,10 +23,11 @@
   <a class="chip-sel {{ 'on' if f.ubicacion == u }}" href="{{ url_for('congelaciones.congelaciones', **dict(args, ubicacion=u)) }}">{{ u }} ({{ n }})</a>
   {% endfor %}
 </div>
+{% if n_alertas %}<div class="aviso error">{{ n_alertas }} congelación{{ 'es' if n_alertas != 1 }} sin confirmar con menos de 24 hs (o ya pasada{{ 's' if n_alertas != 1 }}): confirmalas o eliminalas.</div>{% endif %}
 <div class="patologo-tarjetas">
   {% for c in tarjetas %}
-  <div class="agenda-tarjeta est-{{ c.estado }}">
-    <div class="agenda-estado">{{ estados[c.estado] }}</div>
+  <div class="agenda-tarjeta est-{{ c.estado }} {{ 'alerta' if c.alerta }}">
+    <div class="agenda-estado">{{ estados[c.estado] }}{% if c.alerta %} · {{ c.alerta_texto }}{% endif %}</div>
     <div class="agenda-datos">
       <div class="agenda-hora"><b>{{ c.cuando }}</b> · {{ c.hora }} hs</div>
       <div><svg class="ic"><use href="#i-ubicacion"/></svg> {{ c.ubicacion }}</div>
@@ -37,7 +38,7 @@
         {% if c.estado == 'agendada' %}
         <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="confirmar"><button class="btn listo mini-btn">Confirmar</button></form>
         {% endif %}
-        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Rechazar la congelación del {{ c.fecha | f }} a las {{ c.hora }}? Queda cancelada."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="rechazar"><button class="btn peligro mini-btn">Rechazar</button></form>
+        <form method="post" action="{{ url_for('congelaciones.congelacion_estado', cid=c.id) }}" data-confirmar="¿Rechazar la congelación del {{ c.fecha | f }} a las {{ c.hora }}? Queda eliminada."><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="eliminar"><button class="btn peligro mini-btn">Rechazar</button></form>
         <a class="btn sec mini-btn" href="{{ url_for('congelaciones.congelacion', cid=c.id) }}">Abrir</a>
       </div>
     </div>
