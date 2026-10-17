@@ -21,6 +21,7 @@ PERMISOS = {
     "usuarios": ("Administración", "Usuarios (crear y editar personas, claves y firmas; los perfiles siguen siendo del administrador)"),
     "ubicaciones": ("Administración", "Ubicaciones y médicos (crear, editar, importar y asignar médicos)"),
     "feriados": ("Administración", "Feriados"),
+    "historial": ("Administración", "Ver el log de eventos (historial de cada protocolo, estudio y congelación: quién hizo qué y cuándo; no viene en ningún perfil)"),
     "facturacion": ("Administración", "Facturación y tarifario"),
 }
 

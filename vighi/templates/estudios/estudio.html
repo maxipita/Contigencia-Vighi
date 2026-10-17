@@ -351,12 +351,14 @@
 <div>
   {% with pid=e.protocolo_id %}{% include "compartidos/_imagenes.html" %}{% include "compartidos/_comentarios.html" %}{% endwith %}
 
+  {% if puede('historial') %}
   <div class="tarjeta">
     <h2>{{ 'Historial del flujo' if miembros | length > 1 else 'Historial del estudio' }}</h2>
     <div class="historial">
       {% for h in historial %}<div>{{ h.fecha_hora | fh }} · {{ h.iniciales or '?' }} · {{ h.accion }}{% if h.detalle %} ({{ h.detalle }}){% endif %}</div>{% endfor %}
     </div>
   </div>
+  {% endif %}
 
   {% if puede('estudio_anular') %}
   <div class="tarjeta zona-eliminar">

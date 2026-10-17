@@ -82,6 +82,7 @@
       {% endif %}
       {% endif %}
     </div>
+    {% if puede('historial') %}
     <div class="tarjeta">
       <h2>Historial</h2>
       <table class="tabla-historial">
@@ -89,6 +90,7 @@
         {% else %}<tr><td class="muted">Sin movimientos registrados.</td></tr>{% endfor %}
       </table>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>
