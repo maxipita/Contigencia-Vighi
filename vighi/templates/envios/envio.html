@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 {% block titulo %}Enviar informe {{ p.numero }}{% endblock %}
 {% macro botones(rol) %}
+{% set listo = vigente and not (flujos_malignidad | rejectattr('valor') | list) %}
 <div class="envio-botones">
   {% if email_ok %}
-  <button class="btn" name="solo" value="{{ rol }}" {{ 'disabled' if not vigente }}><svg class="ic"><use href="#i-mail"/></svg><span>Enviar informe</span></button>
+  <button class="btn" name="solo" value="{{ rol }}" {{ 'disabled' if not listo }}><svg class="ic"><use href="#i-mail"/></svg><span>Enviar informe</span></button>
   {% else %}
-  <button type="button" class="btn" data-correo="mailto" data-solo="{{ rol }}" {{ 'disabled' if not vigente }} title="Abre un mensaje nuevo en tu correo con los destinatarios, el asunto y el texto"><svg class="ic"><use href="#i-mail"/></svg><span>Enviar informe</span></button>
-  <button class="btn sec" formaction="{{ url_for('envios.envio_correo', pid=p.id, modo='eml') }}" name="solo" value="{{ rol }}" data-borrador {{ 'disabled' if not vigente }} title="Descarga un mensaje con el PDF ya adjunto: al abrirlo se ve como mensaje nuevo en Outlook"><svg class="ic"><use href="#i-descargar"/></svg><span>Con PDF adjunto</span></button>
+  <button type="button" class="btn" data-correo="mailto" data-solo="{{ rol }}" {{ 'disabled' if not listo }} title="Abre un mensaje nuevo en tu correo con los destinatarios, el asunto y el texto"><svg class="ic"><use href="#i-mail"/></svg><span>Enviar informe</span></button>
+  <button class="btn sec" formaction="{{ url_for('envios.envio_correo', pid=p.id, modo='eml') }}" name="solo" value="{{ rol }}" data-borrador {{ 'disabled' if not listo }} title="Descarga un mensaje con el PDF ya adjunto: al abrirlo se ve como mensaje nuevo en Outlook"><svg class="ic"><use href="#i-descargar"/></svg><span>Con PDF adjunto</span></button>
   {% endif %}
 </div>
 {% endmacro %}
@@ -35,12 +36,13 @@
   </div>
 </div>
 
+{% set falta_malignidad = flujos_malignidad | rejectattr('valor') | list %}
 {% if flujos_malignidad %}
 <div class="malig-resumen">
   <span class="muted">Malignidad:</span>
   {% for f in flujos_malignidad %}<span class="malig-chip {{ (f.valor or 'sin') | lower }}">{{ f.nombre }} · {{ malignidades.get(f.valor, 'sin asignar') }}</span>{% endfor %}
-  {% if flujos_malignidad | rejectattr('valor') | list %}<a href="{{ url_for('protocolos.protocolo', pid=p.id) }}#malignidad">Asignarla</a>
-  <span class="muted">(define a qué destinos de la ubicación corresponde)</span>{% endif %}
+  {% if falta_malignidad %}<a href="{{ url_for('protocolos.protocolo', pid=p.id) }}#malignidad">Asignarla</a>
+  <span class="muted">(obligatoria para entregar el informe; además define a qué destinos de la ubicación corresponde)</span>{% endif %}
 </div>
 {% endif %}
 
@@ -48,7 +50,7 @@
 <div class="aviso">Este servidor no tiene cuenta de correo configurada, así que <b>Enviar informe</b> abre el mensaje listo en tu correo (con el texto y los destinatarios) y lo mandás vos. <b>Con PDF adjunto</b> descarga el mensaje con el informe ya adjunto, para abrirlo en Outlook.</div>
 {% endif %}
 
-<form method="post" action="{{ url_for('envios.envio_enviar', pid=p.id) }}" id="form-envio" class="{{ '' if vigente else 'apagado' }}">
+<form method="post" action="{{ url_for('envios.envio_enviar', pid=p.id) }}" id="form-envio" class="{{ '' if vigente and not falta_malignidad else 'apagado' }}">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <div class="envio-cols">
 

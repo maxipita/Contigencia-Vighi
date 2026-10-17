@@ -158,9 +158,10 @@ def armar(pid, comentario=""):
         etapas.setdefault(x["flujo_id"], {})[x["etapa"]] = x
     ihq_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE flujo_id=? AND solicita_ihq=1", (e["flujo_id"],))}
     decal_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM macro WHERE flujo_id=? AND decal=1", (e["flujo_id"],))}
+    sin_revision_pide = {e["tipo"] for e in estudios if db.uno("SELECT 1 FROM micro WHERE flujo_id=? AND solicita_revision=0", (e["flujo_id"],))}
     pendientes = []
     for e in estudios:
-        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["flujo_id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide))
+        _, proxima = REGISTRO[e["tipo"]].estado(set(etapas.get(e["flujo_id"], {})), Variante(e["tipo"] in ihq_pide, e["tipo"] in decal_pide, e["tipo"] not in sin_revision_pide))
         if proxima and (_etiqueta(e), proxima[1]) not in pendientes:
             pendientes.append((_etiqueta(e), proxima[1]))
     if pendientes:

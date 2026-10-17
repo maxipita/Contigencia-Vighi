@@ -462,6 +462,9 @@ table.destinos td.acciones-fila { white-space: nowrap; }
 .malig-chip.sospechoso { background: #f9d24a; color: #4d3800; }
 .malig-chip.maligno { background: #e5484d; color: #fff; }
 .malig-chip.nma { background: #3fae6a; color: #fff; }
+.malig-mini { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; padding: 10px 14px;
+              background: #fafafa; border: 1px solid var(--borde); border-left: 4px solid var(--acento); border-radius: var(--radio); }
+.cierre-diagnostico { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; }
 
 th.num, td.num { text-align: right; white-space: nowrap; }
 input.num { text-align: right; }

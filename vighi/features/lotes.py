@@ -79,8 +79,9 @@ def lote_avanzar(lote_id):
         cabecera = flujo[0]["flujo_id"]
         primero = flujo[0]
         sin = [m for m in flujo if m["id"] not in con_tecnicas] if etapa == "macroscopia" and "macro" in REGISTRO[primero["tipo"]].secciones else []
-        motivo = motivo_no_listo(yo, primero["tipo"], etapa, primero["proxima"], Variante(primero["solicita_ihq"], primero["decal"]),
-                                 por_tabla["macro"].get(cabecera), por_tabla["micro"].get(cabecera), por_tabla["ihq"].get(cabecera), sin)
+        mi = por_tabla["micro"].get(cabecera)
+        motivo = motivo_no_listo(yo, primero["tipo"], etapa, primero["proxima"], Variante(primero["solicita_ihq"], primero["decal"], (not mi) or mi["solicita_revision"]),
+                                 por_tabla["macro"].get(cabecera), mi, por_tabla["ihq"].get(cabecera), sin)
         if motivo:
             problemas.append(f"{primero['numero']}: {motivo}")
     if problemas:

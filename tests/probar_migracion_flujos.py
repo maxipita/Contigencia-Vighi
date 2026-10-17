@@ -18,10 +18,10 @@ CABECERA = "(SELECT COALESCE(MIN(CASE WHEN x.anulado=0 THEN x.id END), MIN(x.id)
 CONSULTAS = {
     'etapas': "SELECT p.numero, f.tipo, x.etapa, x.usuario_id, x.fecha_hora FROM etapas x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id ORDER BY 1, 2, 3",
     'macro': "SELECT p.numero, f.tipo, x.template, x.descripcion, x.cassettes, x.decal FROM macro x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id ORDER BY 1, 2",
-    'micro': "SELECT p.numero, f.tipo, x.template, x.descripcion, x.conclusion, x.bethesda, x.tecnicas_especiales, x.solicita_ihq FROM micro x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id ORDER BY 1, 2",
+    'micro': "SELECT p.numero, f.tipo, x.template, x.descripcion, x.conclusion, x.bethesda, x.tecnicas_especiales, x.solicita_ihq, x.solicita_revision FROM micro x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id ORDER BY 1, 2",
     'ihq': "SELECT p.numero, f.tipo, x.marcadores, x.resultado, x.pedido_en, x.pedido_por FROM ihq x JOIN flujos f ON f.id=x.flujo_id JOIN protocolos p ON p.id=f.protocolo_id ORDER BY 1, 2",
 }
-COLUMNAS = {'etapas': 5, 'macro': 6, 'micro': 8, 'ihq': 6}
+COLUMNAS = {'etapas': 5, 'macro': 6, 'micro': 9, 'ihq': 6}
 
 
 def foto():
@@ -46,13 +46,13 @@ def volver_al_esquema_viejo(c, con_cabecera_distinta=False):
               "usuario_id INTEGER NOT NULL REFERENCES usuarios(id), fecha_hora VARCHAR(19) NOT NULL, UNIQUE (estudio_id, etapa))")
     c.execute("CREATE TABLE macro (estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id), template VARCHAR(120), descripcion TEXT, cassettes INTEGER, decal INTEGER NOT NULL DEFAULT 0)")
     c.execute("CREATE TABLE micro (estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id), template VARCHAR(120), descripcion TEXT, conclusion TEXT, "
-              "bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0)")
+              "bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0, solicita_revision INTEGER NOT NULL DEFAULT 0)")
     c.execute("CREATE TABLE ihq (estudio_id INTEGER PRIMARY KEY REFERENCES estudios(id), marcadores TEXT, resultado TEXT, pedido_en VARCHAR(19), pedido_por INTEGER)")
     c.execute("INSERT INTO etapas (estudio_id, etapa, usuario_id, fecha_hora) SELECT e.id, n.etapa, n.usuario_id, n.fecha_hora FROM etapas_nueva n JOIN estudios e ON e.flujo_id=n.flujo_id ORDER BY n.id, e.id")
     cab = CABECERA.format(t="n")
     c.execute(f"INSERT INTO macro (estudio_id, template, descripcion, cassettes, decal) SELECT {cab}, n.template, n.descripcion, n.cassettes, n.decal FROM macro_nueva n")
-    c.execute(f"INSERT INTO micro (estudio_id, template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq) "
-              f"SELECT {cab}, n.template, n.descripcion, n.conclusion, n.bethesda, n.tecnicas_especiales, n.solicita_ihq FROM micro_nueva n")
+    c.execute(f"INSERT INTO micro (estudio_id, template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq, solicita_revision) "
+              f"SELECT {cab}, n.template, n.descripcion, n.conclusion, n.bethesda, n.tecnicas_especiales, n.solicita_ihq, n.solicita_revision FROM micro_nueva n")
     c.execute(f"INSERT INTO ihq (estudio_id, marcadores, resultado, pedido_en, pedido_por) SELECT {cab}, n.marcadores, n.resultado, n.pedido_en, n.pedido_por FROM ihq_nueva n")
     if con_cabecera_distinta:
         otro = db.uno("SELECT MAX(id) AS m FROM estudios WHERE flujo_id=(SELECT flujo_id FROM estudios WHERE id=?)", (ids['mix_b1'],))['m']

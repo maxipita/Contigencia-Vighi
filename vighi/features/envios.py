@@ -8,7 +8,7 @@ from vighi.core.sesion import requiere_admin, requiere_permiso, usuario_actual
 from vighi.servicios import mensajeria
 from vighi.servicios.consultas import cargar_estudios
 from vighi.servicios.entrega import (ROLES_ENVIO, SQL_ENVIOS, centro, datos_del_mensaje, destinos_del_formulario, guardar_correos_del_formulario, informe_para_enviar,
-                                     lugares_de_envio, malignidad_por_flujo, medico_de, textos_envio)
+                                     lugares_de_envio, malignidad_pendiente, malignidad_por_flujo, medico_de, textos_envio)
 from vighi.servicios.fichas import SQL_INFORME_EMITIDO
 from vighi.servicios.protocolos import SQL_PROTOCOLO, protocolo_o_404
 from vighi.servicios.tareas import ENTREGA, sentencias_de_cierre
@@ -17,6 +17,7 @@ bp = Blueprint("envios", __name__)
 
 SQL_INSERTAR_ENVIO = "INSERT INTO envios (protocolo_id, informe_id, version, canal, rol, destino, estado, detalle, usuario_id, creado_en) VALUES (?,?,?,?,?,?,?,?,?,?)"
 SQL_INSERTAR_AUDITORIA = "INSERT INTO auditoria (fecha_hora, usuario_id, protocolo_id, estudio_id, accion, detalle) VALUES (?,?,?,?,?,?)"
+FALTA_MALIGNIDAD = "Antes de entregar el informe hay que asignar la malignidad del protocolo."
 
 
 def mensaje_del_formulario(p):
@@ -55,6 +56,9 @@ def envio_enviar(pid):
     emitido, vigente = informe_para_enviar(pid)
     if not vigente:
         flash("Primero hay que generar el informe: el guardado no existe o cambió el protocolo.", "error")
+        return volver
+    if malignidad_pendiente(cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)):
+        flash(FALTA_MALIGNIDAD, "error")
         return volver
     if not mensajeria.configurado():
         flash("El envío por e-mail no está configurado en este servidor.", "error")
@@ -101,6 +105,8 @@ def envio_correo(pid):
     emitido, vigente = informe_para_enviar(pid)
     if not vigente:
         return fallo("Primero hay que generar el informe: el guardado no existe o cambió el protocolo.")
+    if malignidad_pendiente(cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)):
+        return fallo(FALTA_MALIGNIDAD)
     vistos, error = destinos_del_formulario()
     if error:
         return fallo(error)
@@ -129,6 +135,8 @@ def envio_whatsapp(pid):
     emitido, vigente = informe_para_enviar(pid)
     if not vigente:
         return jsonify(error="Primero hay que generar el informe: el guardado no existe o cambió el protocolo."), 400
+    if malignidad_pendiente(cargar_estudios("e.protocolo_id=?", (pid,), borradores=True)):
+        return jsonify(error=FALTA_MALIGNIDAD), 400
     numero = mensajeria.whatsapp_numero(request.form.get("numero", ""))
     if not numero:
         return jsonify(error="El número no es válido. Escribilo con el código de área, por ejemplo 11 5015 1099."), 400

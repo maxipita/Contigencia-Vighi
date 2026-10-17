@@ -301,6 +301,9 @@ document.querySelectorAll("input[list]").forEach(inp => {
 document.querySelectorAll("form[data-confirmar]").forEach(f =>
   f.addEventListener("submit", e => { if (!confirm(f.dataset.confirmar)) e.preventDefault(); }));
 
+document.querySelectorAll("button[data-confirmar]").forEach(b =>
+  b.addEventListener("click", e => { if (!confirm(b.dataset.confirmar)) e.preventDefault(); }));
+
 (function () {
   var html = document.documentElement, boton = document.getElementById("alternarMenu");
   var desplegables = document.querySelectorAll(".desplegable");

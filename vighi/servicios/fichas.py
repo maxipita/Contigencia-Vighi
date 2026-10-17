@@ -41,7 +41,7 @@ def ficha(eid):
     micro = db.uno(SQL_MICRO, (eid,))
     ihq = db.uno(SQL_IHQ, (eid,))
     etapas = {x["etapa"]: x for x in db.q(SQL_ETAPAS_FICHA, (eid,))}
-    solicita = Variante(micro and micro["solicita_ihq"], macro and macro["decal"])
+    solicita = Variante(micro and micro["solicita_ihq"], macro and macro["decal"], bool(micro and micro["solicita_revision"]))
     return e, macro, micro, ihq, etapas, solicita
 
 

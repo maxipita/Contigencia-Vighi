@@ -27,6 +27,8 @@ SQL_CON_IHQ = ("SELECT f.protocolo_id, f.tipo FROM micro m JOIN flujos f ON f.id
                "AND EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=f.id AND e.anulado=0)")
 SQL_CON_DECAL = ("SELECT f.protocolo_id, f.tipo FROM macro m JOIN flujos f ON f.id=m.flujo_id WHERE m.decal=1 "
                  "AND EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=f.id AND e.anulado=0)")
+SQL_SIN_REVISION = ("SELECT f.protocolo_id, f.tipo FROM micro m JOIN flujos f ON f.id=m.flujo_id WHERE m.solicita_revision=0 "
+                     "AND EXISTS (SELECT 1 FROM estudios e WHERE e.flujo_id=f.id AND e.anulado=0)")
 SQL_TIPOS = "SELECT e.protocolo_id, e.tipo FROM estudios e WHERE e.anulado=0"
 
 
@@ -39,7 +41,7 @@ def consultas_estudios(where="1=1", params=(), borradores=False):
                      LEFT JOIN usuarios u ON u.id=e.responsable_id LEFT JOIN lotes l ON l.id=e.lote_id
                      LEFT JOIN tacos_organo t ON t.organo=e.sitio AND t.tipo_lote=l.tipo_lote
                      WHERE {where}{'' if borradores else ' AND p.borrador=0'} ORDER BY p.id DESC, e.id"""
-    return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_TIPOS, ())]
+    return [(principal, tuple(params)), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_SIN_REVISION, ()), (SQL_TIPOS, ())]
 
 
 def cargar_estudios(where="1=1", params=(), borradores=False):
@@ -52,6 +54,7 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         fechas.setdefault(r["flujo_id"], {})[r["etapa"]] = r["fecha_hora"]
     con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
     con_decal_ = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
+    sin_revision = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_SIN_REVISION)}
     out, fer, ahora_ = [], db.feriados(), datetime.now()
     flujos = flujos_de() if filas else {}
     for f in filas:
@@ -61,7 +64,7 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         d["solicita_ihq"] = (f["protocolo_id"], f["tipo"]) in con_ihq
         decal = (f["protocolo_id"], f["tipo"]) in con_decal_
         d["decal"] = decal
-        d["estado"], prox = tipo.estado(hechas.get(f["flujo_id"], set()), Variante(d["solicita_ihq"], decal), bool(f["anulado"]))
+        d["estado"], prox = tipo.estado(hechas.get(f["flujo_id"], set()), Variante(d["solicita_ihq"], decal, (f["protocolo_id"], f["tipo"]) not in sin_revision), bool(f["anulado"]))
         if f["borrador"]:
             d["estado"] = "A completar"
         d["proxima"] = prox

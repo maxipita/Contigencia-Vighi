@@ -17,6 +17,37 @@
     {{ casilla_firma() }}
   {% endif %}
 {% endmacro %}
+{% macro malignidad_mini() %}
+  {% for f in flujos_malignidad if f.tipo == e.tipo and f.asignable and not e.anulado %}
+  <div class="malig-mini">
+    <span class="malig-tipo">Malignidad</span>
+    {# Este panel se usa dentro de la ficha de Microscopía/IHQ, que ya es un <form>: los formularios no
+       se pueden anidar, así que estos campos apuntan con form="malig-cierre" al <form> real, declarado
+       aparte más arriba en la página (fuera de cualquier otro <form>). #}
+    <div class="malig-flujo">
+      <input type="hidden" form="malig-cierre" name="_csrf" value="{{ csrf }}"><input type="hidden" form="malig-cierre" name="tipo" value="{{ f.tipo }}">
+      <input type="hidden" form="malig-cierre" name="volver" value="{{ request.path }}">
+      {% if (puede('micro') or puede('informe')) and (not f.valor or yo.admin) %}
+      {% for m, mn in malignidades %}<button form="malig-cierre" name="valor" value="{{ m }}" class="malig-btn {{ m | lower }} {{ 'activo' if f.valor == m }}" {{ 'aria-pressed=true' if f.valor == m }}>{{ mn }}</button>{% endfor %}
+      {% if f.valor %}<button form="malig-cierre" name="valor" value="" class="malig-quitar" title="Quitar la malignidad asignada">Quitar</button>{% endif %}
+      {% elif f.valor %}{% for m, mn in malignidades if m == f.valor %}<span class="malig-btn {{ m | lower }} activo">{{ mn }}</span>{% endfor %}
+      <span class="muted">Confirmada: no se puede modificar.</span>
+      {% else %}<span class="muted">Sin asignar</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% endmacro %}
+{% macro cierre_diagnostico(etapa) %}
+  {% if prox and prox[0] == etapa and puede('etapas') and (yo.admin or sector_marca(mis_sectores, e.tipo, prox[0], prox[2])) %}
+    {{ malignidad_mini() }}
+    <div class="cierre-diagnostico">
+      <span class="muted">Al guardar, además:</span>
+      <button class="btn sec" name="cierre" value="revision" data-confirmar="¿Enviar a Revisión? Queda pendiente hasta que un firmante la complete.">y enviar a <b>Revisión</b> ({{ yo.iniciales }})</button>
+      <button class="btn" name="cierre" value="directo">Publicar informe, sin revisión ({{ yo.iniciales }})</button>
+    </div>
+    {{ casilla_firma() }}
+  {% endif %}
+{% endmacro %}
 {% macro chips(lista, destino) %}
   {% if lista %}<div class="chips" data-chips="{{ destino }}">{% for x in lista %}<button type="button" class="chip-sel" data-valor="{{ x }}">{{ x }}</button>{% endfor %}</div>{% endif %}
 {% endmacro %}
@@ -38,7 +69,9 @@
 <p><a href="{{ url_for('protocolos.protocolo', pid=e.protocolo_id) }}">← Protocolo {{ e.numero }}</a>{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
   · {{ e.apellido or '' }}{% if e.nombre %}, {{ e.nombre }}{% endif %}{% if e.dni %} · DNI {{ e.dni }}{% endif %}</p>
 <h1>{{ e.numero }} · {{ etiqueta }}{% if miembros | length > 1 %} <span class="chip flujos">{{ miembros | length }} estudios</span>{% endif %}
-  <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span> {{ pill(semaforo) }}</h1>
+  <span class="chip {{ 'anulado' if e.anulado else ('informado' if not prox) }}">{{ estado }}</span> {{ pill(semaforo) }}
+  {% for f in flujos_malignidad if f.tipo == e.tipo and f.asignable and not e.anulado %}<span class="malig-chip {{ (f.valor or 'sin') | lower }}" title="Malignidad de {{ f.nombre }}">{{ f.nombre }}: {% if f.valor %}{% for m, mn in malignidades if m == f.valor %}{{ mn }}{% endfor %}{% else %}falta malignidad{% endif %}</span>{% endfor %}</h1>
+<form id="malig-cierre" method="post" action="{{ url_for('protocolos.malignidad_asignar', pid=e.protocolo_id) }}"></form>
 {% if pestanas | length > 1 %}
 <div class="tabs">
   {% for t in pestanas %}<a href="{{ url_for('estudios.estudio', eid=t.id) }}" class="{{ 'activo' if t.activa }}{{ ' bloqueado' if t.anulado }}">{{ t.texto }}</a>{% endfor %}
@@ -274,7 +307,8 @@
         {% endif %}
         {% endif %}
       </div>
-      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('microscopia') }}{{ listo_toggle('revision') }}</div>
+      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('revision') }}</div>
+      {{ cierre_diagnostico('microscopia') }}
       </fieldset>
     </form>
   </div>
@@ -293,7 +327,8 @@
       <div class="grilla">
         <div class="ancho"><label>Resultado IHQ</label><textarea name="resultado">{{ ihq.resultado if ihq and ihq.resultado else '' }}</textarea></div>
       </div>
-      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span>{{ listo_toggle('interp_ihq') }}</div>
+      <div class="acciones"><button class="btn">Guardar</button><span class="autoestado" data-autoestado aria-live="polite"></span></div>
+      {{ cierre_diagnostico('interp_ihq') }}
       </fieldset>
     </form>
     {% else %}

@@ -6,9 +6,11 @@ from vighi.core import db
 from vighi.core.fechas import hoy
 from vighi.core.sesion import puede, requiere_login, requiere_permiso, usuario_actual
 from vighi.dominio import trazabilidad
-from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, con_decal, validar_combinacion
+from vighi.dominio.estudios import NOMBRE_ETAPA, PASOS_IHQ, REGISTRO, Variante, con_decal, validar_combinacion
 from vighi.servicios.catalogo import muestra_para, muestras_posibles, sitios_posibles
 from vighi.servicios.consultas import SQL_LISTAS, SQL_VARIANTE, cargar_estudios, consultas_estudios, etiqueta, flujo_avanzado, flujos_de, listas, miembros_flujo, protocolo_cerrado, responsables, SQL_RESPONSABLES
+from vighi.servicios.entrega import malignidad_por_flujo
+from vighi.servicios import mensajeria
 from vighi.servicios.validacion import solo_pap
 from vighi.servicios.fichas import FRAGMENTOS_VARIOS, INCLUSION_POR_LOTE, INCLUSIONES, OPCIONES_FRAGMENTOS, auditar_autoguardado, SQL_FICHA, SQL_HISTORIAL_ESTUDIO, SQL_TECNICAS, SQL_TEMPLATES, SQL_ULTIMA_ETAPA, con_permiso, consultas_ficha, entero_positivo, estudios_sin_tecnicas, ficha, fragmentos_de, guardar_seccion, habilitada, lista_marcadores, macro_editable, micro_editable, motivo_no_listo, pedido_ihq_confirmado, rotulo_fragmentos, sumar_cassettes
 from vighi.servicios.imagenes import SQL_IMAGENES, imagenes_de
@@ -240,6 +242,7 @@ def estudio(eid):
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
+                           flujos_malignidad=malignidad_por_flujo(hermanos), malignidades=mensajeria.MALIGNIDADES,
                            tpl_macro=tpl("macro"), tpl_micro=tpl("micro"), pap=contexto_pap() if tipo.micro_pap else None,
                            tecnicas_pedidas=sin_repetidos(x.strip() for m in miembros for x in (m["tecnicas_especiales"] or "").split(";")),
                            lista_ihq=listas().get("ihq_marcadores", []),
@@ -358,9 +361,10 @@ def guardar_micro(eid):
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_micro", "", eid)
     flash("Microscopía guardada.", "ok")
+    if request.form.get("cierre") in ("directo", "revision"):
+        return marcar_listo(eid, "microscopia")
     if request.form.get("y_listo"):
-        prox = REGISTRO[e["tipo"]].estado(set(etapas), solicita, bool(e["anulado"]))[1]
-        return marcar_listo(eid, prox[0] if prox and prox[0] in ("microscopia", "revision") else "microscopia")
+        return marcar_listo(eid, "revision")
     return redirect(url_for("estudios.estudio", eid=eid) + "#micro")
 
 
@@ -378,7 +382,7 @@ def guardar_ihq(eid):
         return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_ihq", "", eid)
     flash("IHQ guardada.", "ok")
-    if request.form.get("y_listo") and confirmado:
+    if request.form.get("cierre") in ("directo", "revision") and confirmado:
         return marcar_listo(eid, "interp_ihq")
     return redirect(url_for("estudios.estudio", eid=eid) + "#ihq")
 
@@ -422,14 +426,23 @@ def marcar_listo(eid, etapa):
         flash("Primero completá los datos del paciente de este protocolo.", "error")
         return redirect(url_for("protocolos.protocolo_editar", pid=e["protocolo_id"]))
     tipo = REGISTRO[e["tipo"]]
+    nueva_revision = solicita.revision
+    if etapa in ("microscopia", "interp_ihq"):
+        nueva_revision = request.form.get("cierre") != "directo"
+        solicita = Variante(int(solicita), solicita.decal, nueva_revision)
     _, prox = tipo.estado(set(etapas), solicita, bool(e["anulado"]))
     miembros = miembros_flujo(e)
     sin = estudios_sin_tecnicas(miembros) if etapa == "macroscopia" and "macro" in tipo.secciones else []
     motivo = motivo_no_listo(yo, e["tipo"], etapa, prox, solicita, macro, micro, ihq, sin)
+    if not motivo and not e["anulado"] and etapa == tipo.ultima_etapa(solicita) and db.uno(
+            "SELECT 1 FROM estudios WHERE protocolo_id=? AND tipo=? AND anulado=0 AND malignidad IS NULL", (e["protocolo_id"], e["tipo"])):
+        motivo = f"Antes de cerrar {NOMBRE_ETAPA[etapa].lower()} hay que asignar la malignidad de {tipo.nombre.lower()} en la ficha del protocolo."
     if motivo:
         flash(motivo, "error")
     else:
         ahora_ = db.ahora()
+        if etapa in ("microscopia", "interp_ihq"):
+            db.ex("UPDATE micro SET solicita_revision=? WHERE flujo_id=?", (1 if nueva_revision else 0, e["flujo_id"]))
         if not db.uno("SELECT 1 FROM etapas WHERE flujo_id=? AND etapa=?", (e["flujo_id"], etapa)):
             db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (e["flujo_id"], etapa, yo["id"], ahora_))
         db.auditar(yo["id"], e["protocolo_id"], "listo", NOMBRE_ETAPA[etapa] + (f" (en {len(miembros)} estudios {tipo.nombre.lower()})" if len(miembros) > 1 else ""), eid)

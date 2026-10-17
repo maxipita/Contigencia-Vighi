@@ -56,7 +56,7 @@ def filas_de_tanda(desde, hasta):
     for e in db.q(SQL_ESTUDIOS, rango):
         ma, mi, ih, et = macro.get(e["flujo_id"]), micro.get(e["flujo_id"]), ihq.get(e["flujo_id"]), etapas.get(e["flujo_id"], {})
         clave = (e["protocolo_id"], e["tipo"])
-        estado = REGISTRO[e["tipo"]].estado(et, Variante(clave in con_ihq, clave in con_decal), bool(e["anulado"]))[0]
+        estado = REGISTRO[e["tipo"]].estado(et, Variante(clave in con_ihq, clave in con_decal, (not mi) or mi["solicita_revision"]), bool(e["anulado"]))[0]
         fila = [e["numero"], etiqueta(e), estado, e["lote"], "Si" if e["anulado"] else "", e["protocolo_sistema"],
                 "Si" if e["cargado_sistema"] else "No", e["responsable"], fecha_hora(e["creado_en"]),
                 fecha(e["fecha_recoleccion"]), e["dni"], e["apellido"], e["nombre"], e["sexo"], fecha(e["fecha_nacimiento"]),
