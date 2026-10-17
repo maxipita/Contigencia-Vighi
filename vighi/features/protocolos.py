@@ -295,13 +295,16 @@ def malignidad_asignar(pid):
     protocolo_o_404(pid)
     tipo = request.form.get("tipo", "")
     valor = request.form.get("valor", "")
-    volver = redirect(url_for("protocolos.protocolo", pid=pid) + "#malignidad")
+    volver = redirect(request.form.get("volver") or (url_for("protocolos.protocolo", pid=pid) + "#malignidad"))
     if tipo not in TIPOS or (valor and valor not in mensajeria.NOMBRE_MALIGNIDAD):
         flash("Elegí una malignidad válida.", "error")
         return volver
     activos = [x for x in cargar_estudios("e.protocolo_id=?", (pid,), borradores=True) if x["tipo"] == tipo and not x["anulado"]]
-    if not activos or any(x["borrador"] or x["proxima"] for x in activos):
-        flash("La malignidad se asigna cuando los estudios están informados.", "error")
+    if not activos or any(x["borrador"] or (x["proxima"] and x["proxima"][0] not in ("microscopia", "interp_ihq", "revision")) for x in activos):
+        flash("La malignidad se asigna desde que el diagnóstico está cargado, antes de entregarlo o mandarlo a revisión.", "error")
+        return volver
+    if any(x["malignidad"] for x in activos) and not yo["admin"]:
+        flash("La malignidad ya fue confirmada: no se puede modificar. Pedíselo a un administrador.", "error")
         return volver
     db.ex("UPDATE estudios SET malignidad=? WHERE protocolo_id=? AND tipo=? AND anulado=0", (valor or None, pid, tipo))
     nombre = mensajeria.NOMBRE_MALIGNIDAD.get(valor, "sin malignidad")

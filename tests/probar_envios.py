@@ -132,6 +132,17 @@ chequear("hay una tarjeta por destinatario con su botón", all(f'name="solo" val
 chequear("vienen tildados los destinos de la entrega que corresponden", 'value="seguimiento@otam.com.ar" data-cuenta checked' in h)
 chequear("los de otra malignidad se avisan", "Falta cargar la malignidad" in h and "BP.MALIGNO" not in h)
 
+r = c.post(f"/protocolo/{P}/enviar/correo", data={"modo": "mailto", "solo": "paciente", "paciente_email": "ana@correo.com"}, headers=H)
+chequear("sin malignidad asignada no entrega el informe", r.status_code == 400 and "asignar la malignidad" in r.get_json()["error"])
+r = c.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": "MALIGNO"}, follow_redirects=True)
+with A.app.app_context():
+    chequear("asigna la malignidad a los estudios del flujo", {f["malignidad"] for f in db.q("SELECT malignidad FROM estudios WHERE protocolo_id=? AND tipo='BP'", (P,))} == {"MALIGNO"})
+h = c.get(f"/protocolo/{P}").get_data(as_text=True)
+chequear("la malignidad confirmada se ve arriba del protocolo", "Biopsia: Maligno" in h)
+chequear("junto con el chip de informado", "Biopsia: Maligno" in h and "Informado" in h)
+h = c.get(f"/protocolo/{P}/flujo/BP").get_data(as_text=True)
+chequear("y también arriba de la pantalla de seguimiento del flujo", "Biopsia: Maligno" in h)
+
 r = c.post(f"/protocolo/{P}/enviar/correo", data={"modo": "mailto", "solo": "paciente", "paciente_email": "ana@correo.com", "asunto": "Hola mundo", "cuerpo": "Texto"}, headers=H)
 enlace = r.get_json()["enlace"]
 chequear("el botón del paciente arma un mailto", enlace.startswith("mailto:?to=ana@correo.com&subject=Hola%20mundo&body=") and "Texto" in enlace, enlace[:120])
@@ -217,22 +228,35 @@ print("5) malignidad")
 c.post(f"/ubicaciones/{uid}/destino", data={"_csrf": csrf, "canal": "email", "destino": "nuevo-maligno@otam.com.ar", "informes": "1", "alcance": ["BP.MALIGNO"]})
 h = c.get(f"/protocolo/{P}").get_data(as_text=True)
 chequear("el panel de malignidad aparece con el estudio informado", 'id="malignidad"' in h and "Maligno" in h and "Sospechoso" in h)
-r = c.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": "MALIGNO"}, follow_redirects=True)
-with A.app.app_context():
-    chequear("asigna la malignidad a los estudios del flujo", {f["malignidad"] for f in db.q("SELECT malignidad FROM estudios WHERE protocolo_id=? AND tipo='BP'", (P,))} == {"MALIGNO"})
 r = c.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": "inventado"}, follow_redirects=True)
 chequear("rechaza un valor inválido", "malignidad válida" in r.get_data(as_text=True))
 h = c.get(f"/protocolo/{P}/enviar").get_data(as_text=True)
 chequear("con malignidad MALIGNO se tilda el que lo incluye y no el NMA", 'value="nuevo-maligno@otam.com.ar" data-cuenta checked' in h and 'value="nma@otam.com.ar" data-cuenta checked' not in h
          and "No corresponde: recibe solo Biopsia: no maligno" in h)
+
+cm = A.app.test_client()
+with cm.session_transaction() as s:
+    s["uid"] = ids["med"]
+cm.get("/")
+with cm.session_transaction() as s:
+    csrf_med = s["csrf"]
+r = cm.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf_med, "tipo": "BP", "valor": "NMA"}, follow_redirects=True)
+chequear("un usuario sin ser administrador no puede modificar una malignidad ya confirmada", "ya fue confirmada" in r.get_data(as_text=True))
+with A.app.app_context():
+    chequear("el valor no cambia", {f["malignidad"] for f in db.q("SELECT malignidad FROM estudios WHERE protocolo_id=? AND tipo='BP'", (P,))} == {"MALIGNO"})
+h_med = cm.get(f"/protocolo/{P}").get_data(as_text=True)
+chequear("sin ser administrador se muestra confirmada y sin botones para cambiarla", "Confirmada: no se puede modificar" in h_med and 'name="valor" value="NMA"' not in h_med)
+
 c.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": "NMA"})
+with A.app.app_context():
+    chequear("un administrador sí puede modificar una malignidad ya confirmada", {f["malignidad"] for f in db.q("SELECT malignidad FROM estudios WHERE protocolo_id=? AND tipo='BP'", (P,))} == {"NMA"})
 h = c.get(f"/protocolo/{P}/enviar").get_data(as_text=True)
 chequear("al cambiarla cambian los destinos", 'value="nma@otam.com.ar" data-cuenta checked' in h and 'value="nuevo-maligno@otam.com.ar" data-cuenta checked' not in h)
 c.post(f"/protocolo/{P}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": ""})
 with A.app.app_context():
     chequear("se puede quitar", {f["malignidad"] for f in db.q("SELECT malignidad FROM estudios WHERE protocolo_id=? AND tipo='BP'", (ids["p_pendiente"] and P,))} == {None})
 r = c.post(f"/protocolo/{ids['p_pendiente']}/malignidad", data={"_csrf": csrf, "tipo": "BP", "valor": "MALIGNO"}, follow_redirects=True)
-chequear("no se asigna con el estudio sin informar", "cuando los estudios están informados" in r.get_data(as_text=True))
+chequear("no se asigna con el estudio sin informar", "antes de entregarlo o mandarlo a revisión" in r.get_data(as_text=True))
 
 print("6) página de correo")
 h = c.get("/correo").get_data(as_text=True)

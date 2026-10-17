@@ -30,7 +30,7 @@ def armar_flujo(con_ihq):
         e = db.uno("SELECT flujo_id, protocolo_id FROM estudios WHERE id=?", (eid,))
         db.ex("DELETE FROM etapas WHERE flujo_id=?", (e['flujo_id'],))
         db.ex("DELETE FROM micro WHERE flujo_id=?", (e['flujo_id'],))
-        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion, solicita_ihq) VALUES (?,?,?,?)", (e['flujo_id'], 'x', 'y', 1 if con_ihq else 0))
+        db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion, solicita_ihq, solicita_revision) VALUES (?,?,?,?,1)", (e['flujo_id'], 'x', 'y', 1 if con_ihq else 0))
         for clave in PASOS + (PASOS_IHQ if con_ihq else ()):
             db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (e['flujo_id'], clave, ids['med'], BASE + ' 10:00:00'))
         db.ex("UPDATE protocolos SET fecha_recoleccion=? WHERE id=?", (BASE, e['protocolo_id']))

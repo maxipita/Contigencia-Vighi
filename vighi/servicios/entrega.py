@@ -79,9 +79,16 @@ def malignidad_por_flujo(estudios):
     for tipo in dict.fromkeys(x["tipo"] for x in estudios if not x["anulado"]):
         activos = [x for x in estudios if x["tipo"] == tipo and not x["anulado"]]
         valores = {x["malignidad"] for x in activos}
-        salida.append({"tipo": tipo, "nombre": TIPOS[tipo], "informado": not any(x["borrador"] or x["proxima"] for x in activos),
+        sin_borrador = not any(x["borrador"] for x in activos)
+        informado = sin_borrador and not any(x["proxima"] for x in activos)
+        asignable = sin_borrador and not any(x["proxima"] and x["proxima"][0] not in ("microscopia", "interp_ihq", "revision") for x in activos)
+        salida.append({"tipo": tipo, "nombre": TIPOS[tipo], "asignable": asignable, "informado": informado,
                        "valor": valores.pop() if len(valores) == 1 else None})
     return salida
+
+
+def malignidad_pendiente(estudios):
+    return any(f["asignable"] and not f["valor"] for f in malignidad_por_flujo(estudios))
 
 
 def destinos_del_formulario():

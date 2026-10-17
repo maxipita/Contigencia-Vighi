@@ -51,7 +51,7 @@ pid, eid = ids['p_pendiente'], ids['pendiente']
 with A.app.app_context():
     fid = db.uno("SELECT flujo_id FROM estudios WHERE id=?", (eid,))['flujo_id']
     db.ex("INSERT INTO macro (flujo_id, descripcion) VALUES (?,?)", (fid, 'Fragmento de 1 cm.'))
-    db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion) VALUES (?,?,?)", (fid, 'Sin atipia.', 'Negativo.'))
+    db.ex("INSERT INTO micro (flujo_id, descripcion, conclusion, solicita_revision) VALUES (?,?,?,1)", (fid, 'Sin atipia.', 'Negativo.'))
     for clave in ('macroscopia', 'procesamiento', 'inclusion', 'corte', 'coloreado', 'microscopia'):
         db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (fid, clave, ids['med'], '2026-10-05 10:00:00'))
     hechas = {r['etapa'] for r in db.q("SELECT etapa FROM etapas WHERE flujo_id=?", (fid,))}
@@ -83,6 +83,11 @@ cm.post(f'/estudio/{eid}/micro', data={'_csrf': tm, 'descripcion': 'Sin atipia.'
 with A.app.app_context():
     revisado = db.uno("SELECT conclusion FROM micro WHERE flujo_id=?", (fid,))['conclusion']
 chequear('mientras se revisa se puede corregir la microscopía', revisado == 'Negativo, revisado.', revisado)
+r = cm.post(f'/estudio/{eid}/listo/revision', data={'_csrf': tm}, follow_redirects=True)
+chequear('no se puede cerrar la revisión sin la malignidad', 'asignar la malignidad' in r.get_data(as_text=True))
+with A.app.app_context():
+    chequear('la revisión no quedó marcada', db.uno("SELECT 1 FROM etapas WHERE flujo_id=? AND etapa='revision'", (fid,)) is None)
+cm.post(f'/protocolo/{pid}/malignidad', data={'_csrf': tm, 'tipo': 'BP', 'valor': 'MALIGNO'})
 cm.post(f'/estudio/{eid}/listo/revision', data={'_csrf': tm})
 with A.app.app_context():
     marcada = db.uno("SELECT e.usuario_id FROM etapas e WHERE e.flujo_id=? AND e.etapa='revision'", (fid,))
@@ -104,7 +109,7 @@ with A.app.app_context():
         f = db.ex("INSERT INTO flujos (protocolo_id, tipo, creado_en) VALUES (?,?,?)", (p, tipo, db.ahora()))
         db.ex("INSERT INTO estudios (protocolo_id, flujo_id, tipo, categoria, sitio, tipo_muestra, cantidad, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
               (p, f, tipo, 'Biopsias', 'Mama', 'Biopsia', '1', admin, db.ahora()))
-        db.ex("INSERT INTO micro (flujo_id, solicita_ihq) VALUES (?,?)", (f, 1 if ihq else 0))
+        db.ex("INSERT INTO micro (flujo_id, solicita_ihq, solicita_revision) VALUES (?,?,1)", (f, 1 if ihq else 0))
         db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (f, 'microscopia', ids['med'], '2026-10-02 09:00:00'))
         if interp:
             db.ex("INSERT INTO etapas (flujo_id, etapa, usuario_id, fecha_hora) VALUES (?,?,?,?)", (f, 'interp_ihq', ids['med'], '2026-10-09 15:30:00'))
@@ -120,7 +125,7 @@ with A.app.app_context():
     f_tab = db.ex("INSERT INTO flujos (protocolo_id, tipo, creado_en) VALUES (?,?,?)", (p_tab, 'BP', '2026-10-01 08:30:00'))
     db.ex("INSERT INTO estudios (protocolo_id, flujo_id, tipo, categoria, sitio, tipo_muestra, cantidad, creado_por, creado_en) VALUES (?,?,?,?,?,?,?,?,?)",
           (p_tab, f_tab, 'BP', 'Biopsias', 'Mama', 'Biopsia', '1', admin, '2026-10-01 08:30:00'))
-    db.ex("INSERT INTO micro (flujo_id, solicita_ihq) VALUES (?,1)", (f_tab,))
+    db.ex("INSERT INTO micro (flujo_id, solicita_ihq, solicita_revision) VALUES (?,1,1)", (f_tab,))
     for clave, fecha in (('macroscopia', '2026-10-05 09:00:00'), ('procesamiento', '2026-10-06 09:00:00'), ('inclusion', '2026-10-06 10:00:00'),
                          ('corte', '2026-10-07 09:00:00'), ('coloreado', '2026-10-08 09:00:00'), ('microscopia', '2026-10-09 09:00:00'),
                          ('corte_ihq', '2026-10-12 09:00:00'), ('envio_ihq', '2026-10-13 09:00:00'), ('proc_ihq', '2026-10-14 09:00:00'),

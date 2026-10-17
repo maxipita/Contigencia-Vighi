@@ -5,7 +5,7 @@ from vighi.core import db
 from vighi.core.config import SEMAFOROS
 from vighi.dominio import informes, trazabilidad
 from vighi.dominio.estudios import REGISTRO, SECTORES, Variante, sector_marca
-from vighi.servicios.consultas import SQL_CON_DECAL, SQL_CON_IHQ, SQL_ETAPAS, SQL_RESPONSABLES, etiqueta_flujos
+from vighi.servicios.consultas import SQL_CON_DECAL, SQL_CON_IHQ, SQL_ETAPAS, SQL_RESPONSABLES, SQL_SIN_REVISION, etiqueta_flujos
 from vighi.servicios.lotes import orden_numero
 
 POR_PAGINA = 100
@@ -19,7 +19,7 @@ SQL_TABLERO = """SELECT e.protocolo_id, e.flujo_id, e.tipo, e.subcategoria, e.si
 
 
 def consultas_tablero():
-    return [(SQL_TABLERO, ()), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_RESPONSABLES, ())]
+    return [(SQL_TABLERO, ()), (SQL_ETAPAS, ()), (SQL_CON_IHQ, ()), (SQL_CON_DECAL, ()), (SQL_SIN_REVISION, ()), (SQL_RESPONSABLES, ())]
 
 
 class Muestra:
@@ -41,6 +41,7 @@ def cargar_protocolos():
         fechas.setdefault(r["flujo_id"], {})[r["etapa"]] = r["fecha_hora"]
     con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
     con_decal = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
+    sin_revision = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_SIN_REVISION)}
     protocolos, por_flujo = {}, {}
     for (pid, flujo_id, tipo, subcategoria, sitio, tipo_muestra, anulado, creado_en, lote_id, numero, apellido, nombre, dni, fecha_recoleccion,
          cargado_sistema, validar, lugar_recoleccion, lugar_entrega, responsable, lote) in db.q(SQL_TABLERO):
@@ -62,7 +63,7 @@ def cargar_protocolos():
         else:
             clave = (flujo_id, pid, tipo)
             if clave not in por_flujo:
-                por_flujo[clave] = REGISTRO[tipo].estado(fechas.get(flujo_id, ()), Variante((pid, tipo) in con_ihq, m.decal), False)
+                por_flujo[clave] = REGISTRO[tipo].estado(fechas.get(flujo_id, ()), Variante((pid, tipo) in con_ihq, m.decal, (pid, tipo) not in sin_revision), False)
             m.estado, m.proxima = por_flujo[clave]
         p.muestras.append(m)
     return protocolos, fechas, {pid for pid, _ in con_ihq}

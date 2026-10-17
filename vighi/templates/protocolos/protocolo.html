@@ -4,7 +4,9 @@
 {% block titulo %}Protocolo {{ p.numero }}{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Protocolo</div>
-<h1>#{{ p.numero }}{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}</h1>
+{% set malig_visibles = flujos_malignidad | selectattr('asignable') | list if not p.borrador else [] %}
+<h1>#{{ p.numero }}{% if flujos %} <span class="chip flujos" title="Flujos que componen el protocolo">{{ flujos }}</span>{% endif %}
+  {% for f in malig_visibles %}<span class="malig-chip {{ (f.valor or 'sin') | lower }}" title="Malignidad de {{ f.nombre }}">{{ f.nombre }}: {% if f.valor %}{% for m, mn in malignidades if m == f.valor %}{{ mn }}{% endfor %}{% else %}falta malignidad{% endif %}</span>{% if f.informado %}<span class="chip informado" title="{{ f.nombre }} informada">Informado</span>{% endif %}{% endfor %}</h1>
 {% if p.borrador %}<div class="aviso">Protocolo generado desde Recepción: faltan los datos del paciente y la cantidad de cada estudio.
   <a href="{{ url_for('protocolos.protocolo_editar', pid=p.id) }}">Completar datos</a>.</div>{% endif %}
 {% if p.pendiente_validacion %}<div class="aviso">Los datos del paciente están pendientes de validación: el protocolo sigue su curso en el laboratorio, pero no se puede generar el informe ni facturar hasta validarlos.
@@ -34,20 +36,20 @@
   </div>
 </div>
 {% endif %}
-{% set malig_visibles = flujos_malignidad | selectattr('informado') | list if not p.borrador else [] %}
 {% if malig_visibles %}
 <div class="panel-malignidad" id="malignidad">
   <div class="texto"><b>Malignidad</b>
-    <div class="muted">Se asigna con el estudio informado y define a qué destinos corresponde el informe al enviarlo.</div></div>
+    <div class="muted">Se asigna antes de cerrar la revisión (Micro &gt; Revisar) y hace falta para poder cerrarla y entregar el informe. Una vez confirmada no se puede modificar{% if yo.admin %} (salvo por un administrador){% endif %}.</div></div>
   <div class="malig-flujos">
   {% for f in malig_visibles %}
   <form method="post" action="{{ url_for('protocolos.malignidad_asignar', pid=p.id) }}" class="malig-flujo">
     <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="tipo" value="{{ f.tipo }}">
     <span class="malig-tipo">{{ f.nombre }}</span>
-    {% if puede('micro') or puede('informe') %}
+    {% if (puede('micro') or puede('informe')) and (not f.valor or yo.admin) %}
     {% for m, mn in malignidades %}<button name="valor" value="{{ m }}" class="malig-btn {{ m | lower }} {{ 'activo' if f.valor == m }}" {{ 'aria-pressed=true' if f.valor == m }}>{{ mn }}</button>{% endfor %}
     {% if f.valor %}<button name="valor" value="" class="malig-quitar" title="Quitar la malignidad asignada">Quitar</button>{% endif %}
     {% elif f.valor %}{% for m, mn in malignidades if m == f.valor %}<span class="malig-btn {{ m | lower }} activo">{{ mn }}</span>{% endfor %}
+    <span class="muted">Confirmada: no se puede modificar.</span>
     {% else %}<span class="muted">Sin asignar</span>{% endif %}
   </form>
   {% endfor %}

@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS micro (
     template VARCHAR(120), descripcion TEXT, conclusion TEXT,
     bethesda VARCHAR(40), tecnicas_especiales VARCHAR(200), solicita_ihq INTEGER NOT NULL DEFAULT 0,
     leucocitos VARCHAR(40), hematies VARCHAR(40), flora VARCHAR(200), aspecto VARCHAR(200), otros VARCHAR(200),
-    pavimentosas VARCHAR(200), endocervicales VARCHAR(200), metaplasicas VARCHAR(200), endometriales VARCHAR(200), resultado VARCHAR(200)
+    pavimentosas VARCHAR(200), endocervicales VARCHAR(200), metaplasicas VARCHAR(200), endometriales VARCHAR(200), resultado VARCHAR(200),
+    solicita_revision INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS abreviaturas_pap (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -562,6 +563,14 @@ SQL_REVISION_RETROACTIVA = """INSERT INTO etapas (flujo_id, etapa, usuario_id, f
            OR EXISTS (SELECT 1 FROM etapas i WHERE i.flujo_id=m.flujo_id AND i.etapa='interp_ihq'))
       AND NOT EXISTS (SELECT 1 FROM etapas r WHERE r.flujo_id=m.flujo_id AND r.etapa='revision')"""
 
+SQL_REVISION_PENDIENTE_PRESERVAR = """UPDATE micro SET solicita_revision=1 WHERE flujo_id IN (
+    SELECT m.flujo_id FROM etapas m
+    WHERE m.etapa='microscopia'
+      AND (NOT EXISTS (SELECT 1 FROM micro mi WHERE mi.flujo_id=m.flujo_id AND mi.solicita_ihq=1)
+           OR EXISTS (SELECT 1 FROM etapas i WHERE i.flujo_id=m.flujo_id AND i.etapa='interp_ihq'))
+      AND NOT EXISTS (SELECT 1 FROM etapas r WHERE r.flujo_id=m.flujo_id AND r.etapa='revision')
+)"""
+
 
 def preparar_esquema(c):
     vieja = [r["name"] for r in c.execute("PRAGMA table_info(informes_emitidos)")]
@@ -627,7 +636,8 @@ def preparar_esquema(c):
                                    ("protocolos", "validado_en", "VARCHAR(19)"),
                                    ("facturas", "fecha_estimada_cobro", "VARCHAR(10)"),
                                    ("ordenes", "grupo", "VARCHAR(300)"),
-                                   ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'")):
+                                   ("facturas", "fec_tipo", "VARCHAR(10) NOT NULL DEFAULT 'tentativa'"),
+                                   ("micro", "solicita_revision", "INTEGER NOT NULL DEFAULT 0")):
         if col not in cols(tabla):
             c.execute(f"ALTER TABLE {tabla} ADD COLUMN {col} {definicion}")
     c.execute("CREATE INDEX IF NOT EXISTS ix_protocolos_borrador ON protocolos(borrador)")
@@ -641,6 +651,8 @@ def preparar_esquema(c):
                    AND EXISTS (SELECT 1 FROM etapas x WHERE x.flujo_id=ihq.flujo_id AND x.etapa='microscopia')""")
     if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='revision'").fetchone():
         c.lote([(SQL_REVISION_RETROACTIVA, ()), ("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('revision', ?)", (ahora(),))])
+    if not c.execute("SELECT 1 FROM pasos_unicos WHERE clave='revision_opcional'").fetchone():
+        c.lote([(SQL_REVISION_PENDIENTE_PRESERVAR, ()), ("INSERT INTO pasos_unicos (clave, hecho_en) VALUES ('revision_opcional', ?)", (ahora(),))])
     return antes_de_informes
 
 
@@ -662,7 +674,7 @@ def migrar_a_flujos(c):
                      WHERE x.id IN (SELECT MIN(x2.id) FROM etapas_vieja x2 JOIN estudios e2 ON e2.id=x2.estudio_id GROUP BY e2.flujo_id, x2.etapa)
                      ORDER BY x.id""", ()))
     columnas = {"macro": "template, descripcion, cassettes, decal",
-                "micro": "template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq",
+                "micro": "template, descripcion, conclusion, bethesda, tecnicas_especiales, solicita_ihq, solicita_revision",
                 "ihq": "marcadores, resultado, pedido_en, pedido_por"}
     for t in ("macro", "micro", "ihq"):
         if t in pendientes:

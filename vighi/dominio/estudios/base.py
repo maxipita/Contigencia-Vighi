@@ -31,14 +31,19 @@ DIAS_REVISION = 1
 
 
 class Variante(int):
-    def __new__(cls, ihq=False, decal=False):
+    def __new__(cls, ihq=False, decal=False, revision=True):
         o = super().__new__(cls, 1 if ihq else 0)
         o.decal = bool(decal)
+        o.revision = bool(revision)
         return o
 
 
 def con_decal(variante):
     return bool(getattr(variante, "decal", False))
+
+
+def con_revision(variante):
+    return bool(getattr(variante, "revision", True))
 
 
 def _texto(fila, campo):
@@ -71,7 +76,8 @@ class Estudio:
         if con_decal(solicita_ihq) and "macroscopia" in claves:
             claves.insert(claves.index("macroscopia") + 1, "decal")
         claves += self.pasos_ihq if solicita_ihq else []
-        claves.append("revision")
+        if con_revision(solicita_ihq):
+            claves.append("revision")
         return [(k, ETAPAS[k][0], ETAPAS[k][1]) for k in claves]
 
     def plazo(self, etapa, decal=False, ihq=False):
