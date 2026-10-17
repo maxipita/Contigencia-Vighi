@@ -28,7 +28,7 @@
       {% set ve_etiquetas = puede('etiquetas_recepcion') or puede('etiquetas_lab') %}
       {% if puede('protocolo_crear') or ve_etiquetas %}
       <div class="desplegable">
-        <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span>{% if n_borradores and puede('protocolo_crear') %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}<svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
           {% if puede('protocolo_crear') %}<a class="{{ 'activo' if ep == 'protocolo_nuevo' }}" href="{{ url_for('protocolos.protocolo_nuevo') }}" title="Nuevo protocolo"><svg class="ic"><use href="#i-mas"/></svg> Nuevo protocolo</a>{% endif %}
           {% if ve_etiquetas %}<a class="{{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas.etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg> Etiquetas</a>{% endif %}

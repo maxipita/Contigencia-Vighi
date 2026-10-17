@@ -60,7 +60,6 @@ a:hover { color: var(--acento); }
 .desplegable .lista a .ic { color: var(--acento-fuerte); }
 .desplegable .lista a:hover { background: var(--superficie); color: var(--acento-fuerte); }
 .desplegable .lista a .cuenta { margin-left: auto; }
-.menu .it.cta .cuenta { background: #fff; color: var(--acento-fuerte); }
 .desplegable .lista a.activo { background: var(--superficie); color: var(--acento-fuerte); }
 .desplegable .lista .sep { height: 1px; margin: 5px 4px; background: var(--borde); }
 .desplegable .lista .rotulo { padding: 6px 12px 2px; font: 700 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--pizarra); }
