@@ -291,7 +291,6 @@ select:disabled { background: var(--superficie); color: var(--pizarra); cursor: 
 .panel-informe .texto { flex: 1; min-width: 240px; }
 .panel-informe .texto > b:first-child { display: block; color: var(--primario); font-size: 15px; }
 .panel-informe .acciones { margin: 0; }
-.firmar-yo { display: flex; gap: 6px; align-items: center; margin: 6px 0 0; font-size: 12px; color: var(--pizarra); cursor: pointer; }
 .flujo-bloque { margin: 14px 0 18px; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
 .flujo-bloque:first-of-type { margin-top: 6px; }
 .flujo-bloque table { margin: 0; }

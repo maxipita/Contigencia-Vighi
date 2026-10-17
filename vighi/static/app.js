@@ -717,7 +717,7 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
 
 (function () {
   const CAMPOS = ["template", "descripcion", "conclusion", "bethesda", "marcadores", "resultado", "leucocitos", "hematies", "flora", "aspecto", "otros",
-                  "pavimentosas", "endocervicales", "metaplasicas", "endometriales"];
+                  "pavimentosas", "endocervicales", "metaplasicas", "endometriales", "decal", "decal_presente"];
   document.querySelectorAll("form[data-autoguardar]").forEach((form) => {
     const estado = form.querySelector("[data-autoestado]");
     const csrf = form.querySelector("[name=_csrf]").value;
@@ -745,7 +745,7 @@ document.querySelectorAll("select[data-planes]").forEach((sel) => {
         base = serializar().toString();
         mostrar("Guardado automáticamente " + d.hora, "ok");
       } catch (e) {
-        mostrar("No se guardó solo: " + (e.message || "sin conexión") + ". Usá Guardar.", "error");
+        mostrar("No se guardó solo: " + (e.message || "sin conexión") + ". Revisá la conexión y volvé a escribir.", "error");
       }
       enCurso = false;
       if (pendiente) { pendiente = false; guardar(); }

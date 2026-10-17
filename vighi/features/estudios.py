@@ -234,11 +234,8 @@ def estudio(eid):
     semaforo = (trazabilidad.semaforo_acumulado(e["tipo"], e["fecha_recoleccion"] or e["creado_en"],
                                                 {"ingreso": e["creado_en"], **{k: v["fecha_hora"] for k, v in etapas.items()}}, limite_etapa, datetime.now(), db.feriados(), decal, bool(solicita))
                 if limite_etapa else "")
-    cierra_protocolo = bool(prox and not e["anulado"] and prox[0] == tipo.ultima_etapa(solicita)
-                            and all(not h["proxima"] and not h["borrador"] for h in activos if h["tipo"] != e["tipo"])
-                            and any(h["tipo"] != "PAP" for h in activos))
     tecnicas = db.q(SQL_TECNICAS, (e["protocolo_id"], e["tipo"])) if "macro" in tipo.secciones and not e["anulado"] else []
-    return render_template("estudios/estudio.html", ihq_confirmado=pedido_ihq_confirmado(micro, ihq), marcadores_ihq=lista_marcadores(ihq["marcadores"] if ihq else ""), INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), ordenes=ordenes_de(e["protocolo_id"]), cierra_protocolo=cierra_protocolo, semaforo=semaforo,
+    return render_template("estudios/estudio.html", ihq_confirmado=pedido_ihq_confirmado(micro, ihq), marcadores_ihq=lista_marcadores(ihq["marcadores"] if ihq else ""), INCLUSION_POR_LOTE=INCLUSION_POR_LOTE, FRAGMENTOS_VARIOS=FRAGMENTOS_VARIOS, OPCIONES_FRAGMENTOS=OPCIONES_FRAGMENTOS, ed=opciones_de_edicion(hermanos) if not e["borrador"] else opciones_de_edicion([]), tecnicas=tecnicas, sin_tecnicas={m["id"] for m in estudios_sin_tecnicas(miembros)}, e=e, miembros=miembros, pestanas=pestanas, comentarios=comentarios_de(e["protocolo_id"]), imagenes=imagenes_de(e["protocolo_id"]), ordenes=ordenes_de(e["protocolo_id"]), semaforo=semaforo,
                            flujos=flujos_de([e["protocolo_id"]]).get(e["protocolo_id"], ""), tipo=tipo, macro=macro, micro=micro, ihq=ihq, etapas=etapas, estado=est,
                            prox=prox, ultima=ultima, historial=historial, traza=traza, traza_enc=traza_enc,
                            hermanos=hermanos, etiqueta=etiqueta(e) if len(miembros) < 2 else tipo.nombre,
@@ -267,16 +264,17 @@ def guardar_macro(eid):
     valores = {"template": request.form.get("template", "").strip(),
                "descripcion": request.form.get("descripcion", "").strip()}
     detalle = ""
-    if auto:
-        guardar_seccion("macro", e["flujo_id"], valores)
-        auditar_autoguardado(usuario_actual(), e, "guardar_macro")
-        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     if request.form.get("decal_presente") == "1" and "procesamiento" not in etapas and "decal" not in etapas:
         decal = 1 if request.form.get("decal") == "1" else 0
         valores["decal"] = decal
         if decal != (1 if macro and macro["decal"] else 0):
             detalle = "agrega Macro > Decal" if decal else "quita Macro > Decal"
     guardar_seccion("macro", e["flujo_id"], valores)
+    if auto:
+        auditar_autoguardado(usuario_actual(), e, "guardar_macro")
+        if detalle:
+            db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", detalle, eid)
+        return jsonify(ok=True, hora=datetime.now().strftime("%H:%M"))
     db.auditar(usuario_actual()["id"], e["protocolo_id"], "guardar_macro", detalle, eid)
     flash("Macroscopía guardada.", "ok")
     if request.form.get("y_listo"):
@@ -450,7 +448,7 @@ def marcar_listo(eid, etapa):
               + (f" en los {len(miembros)} estudios de {tipo.nombre.lower()} del protocolo." if len(miembros) > 1 else "."), "ok")
         if cerrar_por_etapa(e["protocolo_id"], etapa, NOMBRE_ETAPA[etapa], yo["id"]):
             flash("Se cerraron las tareas que esperaban esta etapa.", "ok")
-        if request.form.get("firmar_yo") == "1" and protocolo_cerrado(e["protocolo_id"]) and not solo_pap(cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],))):
+        if puede("micro") and protocolo_cerrado(e["protocolo_id"]) and not solo_pap(cargar_estudios("e.protocolo_id=?", (e["protocolo_id"],))):
             db.ex("UPDATE protocolos SET firmante_id=? WHERE id=?", (yo["id"], e["protocolo_id"]))
             db.auditar(yo["id"], e["protocolo_id"], "firmante", f"{yo['iniciales']} firmará el informe", eid)
             flash("Vas a figurar como firmante del informe.", "ok")
