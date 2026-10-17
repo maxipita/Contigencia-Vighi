@@ -32,6 +32,7 @@
     {% for k, n in actividades %}<option value="{{ k }}" {{ 'selected' if f.etapa == k }}>{{ n }}</option>{% endfor %}
   </select>
   <input name="medico" value="{{ f.medico }}" placeholder="[ médico solicitante ]" size="15">
+  <span class="salto"></span>
   <select name="mf" title="Médico firmante">
     <option value="">[ médico firmante ]</option>
     {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.nombre or u.iniciales }}</option>{% endfor %}
