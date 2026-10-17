@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "compartidos/_semaforo.html" import pill with context %}
 {% from "compartidos/_paginacion.html" import barra %}
-{% block titulo %}Tablero{% endblock %}
+{% block titulo %}Estudios{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Consulta de estudios</div>
-<h1>Tablero</h1>
+<h1>Estudios</h1>
 {% set args = request.args.to_dict() %}
 {% set _ = args.pop('pagina', None) %}
 <form class="filtros" method="get">

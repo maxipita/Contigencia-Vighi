@@ -98,7 +98,7 @@ h = c_adm.get('/dashboards?vista=ingreso').get_data(as_text=True)
 chequear('ingreso muestra los pendientes de completar y de validar', 'Protocolos por completar' in h and 'por validar' in h)
 
 h = c_adm.get('/dashboards?vista=macroscopia').get_data(as_text=True)
-chequear('los pendientes y el semáforo llevan a la lista del Tablero con ese filtro', 'href="/?etapa=macroscopia"' in h and 'href="/?etapa=macroscopia&amp;semaforo=' in h)
+chequear('los pendientes y el semáforo llevan a la lista de Estudios con ese filtro', 'href="/?etapa=macroscopia"' in h and 'href="/?etapa=macroscopia&amp;semaforo=' in h)
 h = c_adm.get('/dashboards?vista=gerencial').get_data(as_text=True)
 chequear('Gerencial enlaza el semáforo y los sectores', 'href="/?semaforo=late"' in h and 'href="/?sector=' in h)
 
@@ -122,9 +122,9 @@ with A.app.app_context():
 c_med = cliente(ids['med'])
 h = c_med.get('/dashboards?vista=patologos').get_data(as_text=True)
 nombres = set(re.findall(r'<tr><td><b>([^<]+)</b>', h))
-chequear('con «Ver todos los protocolos del Tablero» ve a todos', len(nombres) >= 2 and 'Ves solamente' not in h, nombres)
+chequear('con «Ver todos los estudios» ve a todos', len(nombres) >= 2 and 'Ves solamente' not in h, nombres)
 
-print('7) Tablero: el firmante ve solo sus protocolos')
+print('7) Estudios: el firmante ve solo sus protocolos')
 with A.app.app_context():
     db.ex("UPDATE usuarios SET permisos_mas='' WHERE id=?", (ids['med'],))
     db.olvidar_cache()
@@ -147,7 +147,7 @@ with A.app.app_context():
     db.olvidar_cache()
 c_med = cliente(ids['med'])
 vistos, _ = numeros_del_tablero(c_med)
-chequear('con «Ver todos los protocolos del Tablero» ve todos', {'C000801', 'C000802', 'C000803'} <= vistos, vistos)
+chequear('con «Ver todos los estudios» ve todos', {'C000801', 'C000802', 'C000803'} <= vistos, vistos)
 c_cito = cliente(ids['cito'])
 with A.app.app_context():
     db.ex("UPDATE usuarios SET permisos_menos='' WHERE id=?", (ids['cito'],))

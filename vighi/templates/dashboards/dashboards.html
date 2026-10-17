@@ -4,7 +4,7 @@
 {% set COLOR_DE = {'on_time': 'sem-ot', 'delayed': 'sem-dy', 'late': 'sem-lt', 'hasta_5': 'sem-lt', 'de_5_a_10': 'sem-lt', 'mas_de_10': 'sem-lt'} %}
 {% macro kpi(titulo, valor, detalle='') %}<div class="kpi"><div class="kpi-t">{{ titulo }}</div><div class="kpi-v">{{ valor }}</div>{% if detalle %}<div class="kpi-d">{{ detalle }}</div>{% endif %}</div>{% endmacro %}
 {% macro lista(clave, valores, actual, vacio) %}<select name="{{ clave }}"><option value="">{{ vacio }}</option>{% for v in valores %}<option value="{{ v }}" {{ 'selected' if actual == v }}>{{ v }}</option>{% endfor %}</select>{% endmacro %}
-{% macro ir(n, etapa, tipo, semaforo='') %}{% if n %}<a href="{{ url_for('tablero.tablero', etapa=etapa, tipo=tipo or None, semaforo=semaforo or None) }}" title="Ver estos estudios en el Tablero">{{ n }}</a>{% else %}{{ n }}{% endif %}{% endmacro %}
+{% macro ir(n, etapa, tipo, semaforo='') %}{% if n %}<a href="{{ url_for('tablero.tablero', etapa=etapa, tipo=tipo or None, semaforo=semaforo or None) }}" title="Ver estos estudios">{{ n }}</a>{% else %}{{ n }}{% endif %}{% endmacro %}
 {% macro semaforo_celdas(c, etapa, tipo) %}
   <td class="num">{{ ir(c.n, etapa, tipo) }}</td><td class="num sem-ot">{{ ir(c.on_time, etapa, tipo, 'on_time') }}</td><td class="num sem-dy">{{ ir(c.delayed, etapa, tipo, 'delayed') }}</td><td class="num sem-lt">{{ ir(c.late, etapa, tipo, 'late') }}</td>
 {% endmacro %}
@@ -39,12 +39,12 @@
   {{ kpi('Pendientes', d.pendientes, 'Estudios en proceso') }}
 </div>
 <div class="semaforo-total">
-  {% for k, n in SEMAFOROS.items() %}<a class="caja {{ k }}" href="{{ url_for('tablero.tablero', semaforo=k) }}" title="Ver estos estudios en el Tablero"><b>{{ d.semaforo[k] }}</b><span>{{ n }}</span></a>{% endfor %}
+  {% for k, n in SEMAFOROS.items() %}<a class="caja {{ k }}" href="{{ url_for('tablero.tablero', semaforo=k) }}" title="Ver estos estudios"><b>{{ d.semaforo[k] }}</b><span>{{ n }}</span></a>{% endfor %}
 </div>
 <div class="config-grid">
   <div class="tarjeta"><h2>Pendientes por sector</h2>
     <table class="tabla-dashboard"><tr><th>Sector</th><th class="num">Estudios</th></tr>
-      {% for clave, nombre, n in d.por_sector %}<tr><td>{{ nombre }}</td><td class="num"><a href="{{ url_for('tablero.tablero', sector=clave) }}" title="Ver estos estudios en el Tablero">{{ n }}</a></td></tr>{% else %}<tr><td colspan="2" class="muted">No hay estudios pendientes.</td></tr>{% endfor %}
+      {% for clave, nombre, n in d.por_sector %}<tr><td>{{ nombre }}</td><td class="num"><a href="{{ url_for('tablero.tablero', sector=clave) }}" title="Ver estos estudios">{{ n }}</a></td></tr>{% else %}<tr><td colspan="2" class="muted">No hay estudios pendientes.</td></tr>{% endfor %}
     </table></div>
   <div class="tarjeta"><h2>Ingresos por día</h2>
     <table class="tabla-dashboard"><tr><th>Día</th><th class="num">Protocolos</th></tr>
@@ -53,7 +53,7 @@
 </div>
 
 {% elif vista == 'patologos' %}
-{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios informes. Quien tiene el permiso «Ver todos los protocolos del Tablero» ve los de todos los patólogos.</div>{% endif %}
+{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios informes. Quien tiene el permiso «Ver todos los estudios» ve los de todos los patólogos.</div>{% endif %}
 <table class="tabla-dashboard">
   <tr><th>Responsable</th><th>Tipo</th><th class="num sem-ot"><span class="semaforo on_time">En término</span></th><th class="num sem-dy"><span class="semaforo delayed">Demorado</span></th><th class="num sem-lt"><span class="semaforo late">Atrasado</span></th><th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th><th class="num">Total</th></tr>
   {% for r in d.filas %}
