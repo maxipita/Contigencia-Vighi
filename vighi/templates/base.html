@@ -20,21 +20,19 @@
     {% if yo %}
     <nav class="menu" id="menuPrincipal" aria-label="Menú principal">
       {% if ve_dashboards %}<a class="it {{ 'activo' if ep == 'dashboards' }}" href="{{ url_for('dashboards.dashboards') }}" title="Dashboards"><svg class="ic"><use href="#i-grafico"/></svg><span class="t">Dashboards</span></a>{% endif %}
-      {% if puede('protocolo_crear') %}<a class="it {{ 'activo' if ep == 'completar' }}" href="{{ url_for('tablero.completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg><span class="t">Por completar</span>{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>{% endif %}
-      {% if puede('etiquetas_recepcion') or puede('etiquetas_lab') %}<a class="it {{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas.etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg><span class="t">Etiquetas</span></a>{% endif %}
       <a class="it {{ 'activo' if ep in ('lotes', 'lote') }}" href="{{ url_for('lotes.lotes') }}" title="Lotes"><svg class="ic"><use href="#i-lotes"/></svg><span class="t">Lotes</span></a>
       <a class="it {{ 'activo' if ep in ('tablero', 'protocolo', 'estudio') }}" href="{{ url_for('tablero.tablero') }}" title="Estudios"><svg class="ic"><use href="#i-tablero"/></svg><span class="t">Estudios</span></a>
       <a class="it {{ 'activo' if ep == 'mis_tareas' }}" href="{{ url_for('tareas.mis_tareas') }}" title="Tareas"><svg class="ic"><use href="#i-check"/></svg><span class="t">Tareas</span>{% if mis_tareas and mis_tareas.n %}<span class="cuenta {{ 'urgente' if mis_tareas.urgentes }}" title="Tus tareas abiertas{{ ' (hay urgentes)' if mis_tareas.urgentes }}">{{ mis_tareas.n }}</span>{% endif %}</a>
       <a class="it {{ 'activo' if ep in ('congelaciones', 'congelacion', 'congelacion_nueva') }}" href="{{ url_for('congelaciones.congelaciones') }}" title="Congelaciones"><svg class="ic"><use href="#i-copo"/></svg><span class="t">Congelaciones</span>{% if mis_alertas %}<span class="cuenta urgente" title="Congelaciones tuyas sin confirmar, con menos de 24 hs">{{ mis_alertas }}</span>{% endif %}</a>
       {% if puede('facturacion') %}<a class="it {{ 'activo' if ep in ('administracion', 'facturacion_lista', 'facturar', 'factura') }}" href="{{ url_for('facturacion.administracion') }}" title="Facturación"><svg class="ic"><use href="#i-dolar"/></svg><span class="t">Facturación</span></a>{% endif %}
-      {% if puede('protocolo_crear') %}
+      {% set ve_etiquetas = puede('etiquetas_recepcion') or puede('etiquetas_lab') %}
+      {% if puede('protocolo_crear') or ve_etiquetas %}
       <div class="desplegable">
-        <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span><svg class="ic chev"><use href="#i-chev"/></svg></button>
+        <button class="it cta" type="button" data-abre aria-haspopup="true"><svg class="ic"><use href="#i-mas-sin-circulo"/></svg><span>Ingresar</span>{% if n_borradores and puede('protocolo_crear') %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}<svg class="ic chev"><use href="#i-chev"/></svg></button>
         <div class="lista">
-          <div class="rotulo">Nuevo protocolo</div>
-          <a href="{{ url_for('protocolos.protocolo_nuevo', tipo='BP') }}"><svg class="ic"><use href="#i-mas"/></svg> Con biopsia</a>
-          <a href="{{ url_for('protocolos.protocolo_nuevo', tipo='PAP') }}"><svg class="ic"><use href="#i-mas"/></svg> Con PAP</a>
-          <a href="{{ url_for('protocolos.protocolo_nuevo', tipo='CT') }}"><svg class="ic"><use href="#i-mas"/></svg> Con citología</a>
+          {% if puede('protocolo_crear') %}<a class="{{ 'activo' if ep == 'protocolo_nuevo' }}" href="{{ url_for('protocolos.protocolo_nuevo') }}" title="Nuevo protocolo"><svg class="ic"><use href="#i-mas"/></svg> Nuevo protocolo</a>{% endif %}
+          {% if ve_etiquetas %}<a class="{{ 'activo' if ep == 'etiquetas' }}" href="{{ url_for('etiquetas.etiquetas') }}" title="Etiquetas"><svg class="ic"><use href="#i-etiqueta"/></svg> Etiquetas</a>{% endif %}
+          {% if puede('protocolo_crear') %}<a class="{{ 'activo' if ep == 'completar' }}" href="{{ url_for('tablero.completar') }}" title="Por completar"><svg class="ic"><use href="#i-completar"/></svg> Por completar{% if n_borradores %}<span class="cuenta">{{ n_borradores }}</span>{% endif %}</a>{% endif %}
         </div>
       </div>
       {% endif %}
