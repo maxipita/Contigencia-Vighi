@@ -89,5 +89,5 @@ def api_template(tid):
 @requiere_login
 def api_medicos():
     r = jsonify([m["nombre"] for m in db.q("SELECT nombre FROM medicos ORDER BY nombre")])
-    r.headers["Cache-Control"] = "private, max-age=3600"
+    r.headers["Cache-Control"] = "private, max-age=60"
     return r

@@ -65,9 +65,9 @@ def cargar_estudios(where="1=1", params=(), borradores=False):
         if f["borrador"]:
             d["estado"] = "A completar"
         d["proxima"] = prox
-        d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer, decal) if prox else None
+        d["vence"] = trazabilidad.limite(f["tipo"], prox[0], f["fecha_recoleccion"] or f["creado_en"], fer, decal, d["solicita_ihq"]) if prox else None
         d["semaforo"] = (trazabilidad.semaforo_acumulado(f["tipo"], f["fecha_recoleccion"] or f["creado_en"], {"ingreso": f["creado_en"], **fechas.get(f["flujo_id"], {})},
-                                                         d["vence"], ahora_, fer, decal) if d["vence"] and not f["borrador"] else "")
+                                                         d["vence"], ahora_, fer, decal, d["solicita_ihq"]) if d["vence"] and not f["borrador"] else "")
         d["etiqueta"] = etiqueta(f)
         d["tacos"] = tacos_del_estudio(f)
         out.append(d)

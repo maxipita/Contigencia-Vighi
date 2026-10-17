@@ -16,6 +16,20 @@ def coberturas():
     return render_template("coberturas/coberturas.html", filas=filas, q=q, tipos_iva=facturacion.TIPOS_IVA)
 
 
+@bp.route("/coberturas/nueva", methods=["POST"])
+@requiere_permiso("facturacion")
+def cobertura_nueva():
+    nombre = srv.limpiar_cobertura(request.form.get("nombre"))
+    error = srv.error_cobertura(nombre)
+    if error:
+        flash(error, "error")
+        return redirect(url_for("coberturas.coberturas"))
+    srv.crear_cobertura(nombre)
+    db.auditar(usuario_actual()["id"], None, "cobertura", f"Alta: {nombre}")
+    flash(f"Cobertura «{nombre}» creada: completá su IVA, plazo de cobro y tarifa.", "ok")
+    return redirect(url_for("coberturas.cobertura", c=nombre))
+
+
 @bp.route("/cobertura", methods=["GET", "POST"])
 @requiere_permiso("facturacion")
 def cobertura():
@@ -53,9 +67,18 @@ def cobertura():
                 db.auditar(yo["id"], None, "cobertura_plan_quitado", f"{nombre} · {request.form.get('plan', '')}")
                 flash("Plan quitado.", "ok")
             return redirect(destino_planes)
+        elif accion == "eliminar":
+            error = srv.error_eliminar(nombre)
+            if error:
+                flash(error, "error")
+                return redirect(destino)
+            srv.eliminar_cobertura(nombre)
+            db.auditar(yo["id"], None, "cobertura", f"Baja: {nombre}")
+            flash(f"Cobertura «{nombre}» eliminada.", "ok")
+            return redirect(url_for("coberturas.coberturas"))
         return redirect(destino)
     pestana = "planes" if request.args.get("pestana") == "planes" else "datos"
     tarifas = db.q("SELECT id, nombre FROM tarifarios ORDER BY nombre")
-    protocolos = db.uno("SELECT COUNT(*) AS n FROM protocolos WHERE cobertura=?", (nombre,))["n"]
+    protocolos, facturas = srv.usos_de_cobertura(nombre)
     return render_template("coberturas/cobertura.html", c=srv.contexto_cobertura(nombre), pestana=pestana, tarifas=tarifas, general=srv.tarifa_general(),
-                           tipos_iva=facturacion.TIPOS_IVA, protocolos=protocolos)
+                           tipos_iva=facturacion.TIPOS_IVA, protocolos=protocolos, facturas=facturas)

@@ -63,6 +63,14 @@ def habilitada(e, etapas, solicita, etapa):
                    + (f" (ahora está en {prox[1]})." if prox else "."))
 
 
+def micro_editable(e, etapas, solicita):
+    en_micro = habilitada(e, etapas, solicita, "microscopia")
+    if en_micro[0]:
+        return en_micro
+    en_revision = habilitada(e, etapas, solicita, "revision")
+    return en_revision if en_revision[0] else en_micro
+
+
 def macro_editable(e, etapas, solicita):
     en_macro = habilitada(e, etapas, solicita, "macroscopia")
     if en_macro[0]:

@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% from "compartidos/_semaforo.html" import pill with context %}
+{% from "compartidos/_paginacion.html" import barra %}
 {% block titulo %}Tablero{% endblock %}
 {% block contenido %}
 <div class="eyebrow">Seguimiento</div>
 <h1>Tablero</h1>
 {% set args = request.args.to_dict() %}
+{% set _ = args.pop('pagina', None) %}
 <div class="tabs">
   {% for clave, nombre in [("pendientes","Pendientes (" ~ conteo.pendientes ~ ")"), ("mios","De mis sectores"),
                            ("informados","Informados (" ~ conteo.informados ~ ")"), ("sin_cargar","Sin cargar al sistema (" ~ conteo.sin_cargar ~ ")"),
@@ -36,13 +38,17 @@
     <option value="">Cualquier médico firmante</option>
     {% for u in firmantes %}<option value="{{ u.iniciales }}" {{ 'selected' if f.mf == u.iniciales }}>{{ u.iniciales }}</option>{% endfor %}
   </select>
+  <label class="muted" title="Fecha de ingreso del protocolo">Ingresado del <input type="date" name="desde" value="{{ f.desde }}"></label>
+  <label class="muted">al <input type="date" name="hasta" value="{{ f.hasta }}"></label>
   <button class="btn sec">Filtrar</button>
+  {% if f.desde or f.hasta %}<a class="btn sec" href="{{ url_for('tablero.tablero', **dict(args, desde='', hasta='')) }}">Quitar fechas</a>{% endif %}
 </form>
 <div class="semaforo-total">
   {% for k, n in SEMAFOROS.items() %}
   <a href="{{ url_for('tablero.tablero', **dict(args, semaforo='' if f.semaforo == k else k)) }}" class="{{ k }} {{ 'activo' if f.semaforo == k }}"><b>{{ por_semaforo[k] }}</b><span>{{ n }}</span></a>
   {% endfor %}
 </div>
+{{ barra("tablero.tablero", args, pagina, paginas, total, primera, ultima, "protocolo", "protocolos") }}
 <table>
   <tr><th>Protocolo</th><th>Paciente</th><th>Muestra</th><th>Lote</th><th>Responsable</th><th>Estado</th><th>Semáforo</th><th>Vence</th><th>Ingresado</th></tr>
   {% for c in filas %}
@@ -63,4 +69,5 @@
   <tr><td colspan="9" class="muted">No hay protocolos para mostrar.</td></tr>
   {% endfor %}
 </table>
+{{ barra("tablero.tablero", args, pagina, paginas, total, primera, ultima, "protocolo", "protocolos") }}
 {% endblock %}

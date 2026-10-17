@@ -62,11 +62,15 @@
     <h2>Resumen</h2>
     <p><b>Tarifa:</b> {{ d.tarifa.nombre if d.tarifa else '—' }}{% if d.propia %}, con {{ d.importes }} importes{% if d.ceros %} (<span class="chip-cero">{{ d.ceros }} sin importe</span>){% endif %}{% endif %}.</p>
     <p><b>Planes:</b> {% if d.planes %}{% for p in d.planes %}{{ p.plan }}{{ ', ' if not loop.last }}{% endfor %}{% else %}ninguno{% endif %}.</p>
-    <p><b>Protocolos:</b> {{ protocolos }} con esta cobertura.</p>
+    <p><b>Protocolos:</b> {{ protocolos }} con esta cobertura.{% if facturas %} <b>Facturas:</b> {{ facturas }}.{% endif %}</p>
     <div class="acciones">
       <a class="btn" href="{{ url_for('facturacion.tarifario', c=d.nombre, tarifario=c.opciones[0].id) }}">Tarifas</a>
       <a class="btn sec" href="{{ url_for('facturacion.nomencladores', c=d.nombre, tarifario=c.opciones[0].id) }}">Códigos</a>
     </div>
+    <form method="post" data-confirmar="¿Eliminar la cobertura {{ d.nombre }}? Sus tarifas propias quedan en el tarifario." style="margin-top:12px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="accion" value="eliminar"><input type="hidden" name="c" value="{{ d.nombre }}">
+      <button class="btn sec" {{ 'disabled title="Tiene protocolos o facturas"' | safe if protocolos or facturas }}>Eliminar cobertura</button>
+    </form>
   </div>
 </div>
 {% endif %}

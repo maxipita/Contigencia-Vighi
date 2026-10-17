@@ -1,0 +1,18 @@
+{% macro barra(endpoint, args, pagina, paginas, total, primera, ultima, singular, plural) %}
+{% if total %}
+<nav class="paginacion" aria-label="Páginas">
+  <span class="muted">{{ primera }}–{{ ultima }} de {{ total }} {{ singular if total == 1 else plural }}</span>
+  {% if paginas > 1 %}
+  <span class="paginas">
+    {% if pagina > 1 %}<a href="{{ url_for(endpoint, **dict(args, pagina=pagina - 1)) }}" rel="prev">‹ Anterior</a>{% endif %}
+    {% set cercanas = [1, pagina - 2, pagina - 1, pagina, pagina + 1, pagina + 2, paginas] | select('ge', 1) | select('le', paginas) | unique | sort %}
+    {% for n in cercanas %}
+      {% if not loop.first and n - loop.previtem > 1 %}<span class="muted">…</span>{% endif %}
+      <a href="{{ url_for(endpoint, **dict(args, pagina=n)) }}" class="{{ 'activo' if n == pagina }}"{% if n == pagina %} aria-current="page"{% endif %}>{{ n }}</a>
+    {% endfor %}
+    {% if pagina < paginas %}<a href="{{ url_for(endpoint, **dict(args, pagina=pagina + 1)) }}" rel="next">Siguiente ›</a>{% endif %}
+  </span>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

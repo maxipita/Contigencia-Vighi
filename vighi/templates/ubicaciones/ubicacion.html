@@ -29,6 +29,7 @@
       <div class="buscador"><input name="medico" data-medicos autocomplete="off" placeholder="Agregar médico: escribí el apellido…" size="40" required></div>
       <button class="btn">Agregar</button>
     </form>
+    <p class="muted" style="margin-top:6px">¿El médico no está en la lista? <a href="{{ url_for('medicos.medico_nuevo', ubicacion=u.id) }}">Crearlo y asociarlo a esta ubicación</a>.</p>
     {% endif %}
   </div>
   {% endif %}

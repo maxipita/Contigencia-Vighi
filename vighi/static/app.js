@@ -368,6 +368,12 @@ document.querySelectorAll("form[data-confirmar]").forEach(f =>
         }, 500);
       });
     });
+    form.querySelectorAll("input[type=date]").forEach(function (campo) {
+      campo.addEventListener("input", function () {
+        clearTimeout(espera);
+        espera = setTimeout(function () { form.submit(); }, 900);
+      });
+    });
   });
 })();
 

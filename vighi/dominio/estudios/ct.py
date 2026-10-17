@@ -6,7 +6,7 @@ class Citologia(Estudio):
     nombre = "Citología"
     categoria = "Citologías"
     pasos = ["coloreado", "microscopia"]
-    plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "microscopia": (3, 20)}
+    plazos = {"ingreso": (1, 20), "coloreado": (2, 20), "microscopia": (3, 20), "revision": (4, 20)}
     lotes = ["CT"]
     pide_tecnicas = True
     sector_responsable = "firmante"

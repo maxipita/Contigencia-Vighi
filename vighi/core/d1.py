@@ -29,10 +29,10 @@ class ErrorSQL(ErrorD1):
 class Fila:
     __slots__ = ("_claves", "_valores", "_indice")
 
-    def __init__(self, claves, valores):
+    def __init__(self, claves, valores, indice=None):
         self._claves = claves
         self._valores = valores
-        self._indice = {k: i for i, k in enumerate(claves)}
+        self._indice = indice if indice is not None else {k: i for i, k in enumerate(claves)}
 
     def keys(self):
         return list(self._claves)
@@ -153,7 +153,10 @@ class Conexion:
             raise (ErrorConexion if r.status_code >= 500 or r.status_code in (401, 403, 429) else ErrorSQL)(mensaje)
         cursores = []
         for resultado in datos["result"]:
-            filas = [Fila(list(f.keys()), [_decodificar(v) for v in f.values()]) for f in resultado.get("results") or []]
+            crudas = resultado.get("results") or []
+            claves = list(crudas[0].keys()) if crudas else []
+            indice = {k: i for i, k in enumerate(claves)}
+            filas = [Fila(claves, [_decodificar(v) for v in f.values()], indice) for f in crudas]
             meta = resultado.get("meta") or {}
             cursores.append(Cursor(filas, meta.get("last_row_id"), meta.get("changes", 0)))
         return cursores

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block titulo %}{{ 'Nuevo médico' if nuevo else m.nombre }}{% endblock %}
+{% block contenido %}
+{% set editable = puede('ubicaciones') %}
+<div class="eyebrow"><a href="{{ url_for('medicos.medicos_lista') }}">Médicos</a></div>
+<h1>{{ 'Nuevo médico' if nuevo else m.nombre }}</h1>
+{% if nuevo and ubicacion %}<p class="muted">Se va a asociar a la ubicación <b>{{ ubicacion.abreviatura }}</b>.</p>{% endif %}
+<div class="cols">
+<div>
+  <div class="tarjeta">
+    <h2>Datos</h2>
+    <form method="post" action="{{ url_for('medicos.medico_nuevo') if nuevo else url_for('medicos.medico_editar', mid=m.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      {% if nuevo and ubicacion %}<input type="hidden" name="ubicacion" value="{{ ubicacion.id }}">{% endif %}
+      <label>Nombre * (APELLIDO, Nombre)</label>
+      <input name="nombre" value="{{ m.nombre or '' }}" required maxlength="150" autocomplete="off" {{ 'autofocus' if nuevo }} {{ '' if editable else 'readonly' }} placeholder="PEREZ, Juan">
+      <label>E-mail (para enviarle los informes)</label>
+      <input type="email" name="email" value="{{ m.email or '' }}" maxlength="150" autocomplete="off" {{ '' if editable else 'readonly' }}>
+      {% if editable %}<div class="acciones"><button class="btn">{{ 'Crear médico' if nuevo else 'Guardar' }}</button>
+        <a class="btn sec" href="{{ url_for('medicos.medicos_lista') }}">{{ 'Cancelar' if nuevo else 'Volver' }}</a></div>{% endif %}
+    </form>
+  </div>
+</div>
+{% if not nuevo %}
+<div>
+  <div class="tarjeta" id="ubicaciones">
+    <h2>Ubicaciones ({{ ubicaciones | length }})</h2>
+    {% if ubicaciones %}
+    <form method="post" action="{{ url_for('medicos.medico_ubicacion_quitar', mid=m.id) }}" data-confirmar="¿Quitar las ubicaciones marcadas de este médico?">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="lista-medicos">
+        {% for u in ubicaciones %}<label>{% if editable %}<input type="checkbox" name="ubicacion" value="{{ u.id }}"> {% endif %}<a href="{{ url_for('ubicaciones.ubicacion', uid=u.id) }}">{{ u.abreviatura }}</a></label>{% endfor %}
+      </div>
+      {% if editable %}<div class="acciones"><button class="btn sec">Quitar las marcadas</button></div>{% endif %}
+    </form>
+    {% else %}<p class="muted">No está asociado a ninguna ubicación.</p>{% endif %}
+    {% if editable %}
+    <form method="post" action="{{ url_for('medicos.medico_ubicacion_agregar', mid=m.id) }}" class="en-linea" style="margin-top:12px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="buscador"><input name="ubicacion" data-ubicaciones autocomplete="off" placeholder="Asociar a una ubicación: escribí la abreviatura…" size="40" required></div>
+      <button class="btn">Agregar</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="tarjeta">
+    <h2>Protocolos</h2>
+    {% if protocolos %}<p><a href="{{ url_for('tablero.tablero', ver='todos', q=m.nombre) }}">{{ protocolos }} protocolo(s)</a> lo tienen como médico solicitante.</p>
+    {% else %}<p class="muted">Ningún protocolo lo tiene como médico solicitante.</p>{% endif %}
+    {% if editable %}
+    <form method="post" action="{{ url_for('medicos.medico_eliminar', mid=m.id) }}" data-confirmar="¿Eliminar a {{ m.nombre }}?">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button class="btn sec" {{ 'disabled title="Tiene protocolos"' | safe if protocolos }}>Eliminar médico</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,14 +1,20 @@
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from vighi.dominio.estudios import ETAPAS, REGISTRO
 
 
 def _d(texto):
-    return datetime.strptime(texto[:10], "%Y-%m-%d").date()
+    try:
+        return date.fromisoformat(texto[:10])
+    except ValueError:
+        return datetime.strptime(texto[:10], "%Y-%m-%d").date()
 
 
 def _dt(texto):
-    return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
+    try:
+        return datetime.fromisoformat(texto)
+    except ValueError:
+        return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
 
 
 def sumar_habiles(desde, n, feriados):
@@ -60,8 +66,8 @@ def texto_demora(horas):
     return f"{partes} ({horas}hs)"
 
 
-def limite(tipo, etapa, base_texto, feriados, decal=False):
-    dias, hora = REGISTRO[tipo].plazo(etapa, decal)
+def limite(tipo, etapa, base_texto, feriados, decal=False, ihq=False):
+    dias, hora = REGISTRO[tipo].plazo(etapa, decal, ihq)
     return datetime.combine(sumar_habiles(_d(base_texto), dias, feriados), time(hora))
 
 
@@ -75,18 +81,18 @@ def semaforo(limite, ahora, feriados):
 GRAVEDAD = {"": 0, "on_time": 1, "delayed": 2, "late": 3}
 
 
-def semaforo_acumulado(tipo, base_texto, completadas, limite_actual, ahora, feriados, decal=False):
+def semaforo_acumulado(tipo, base_texto, completadas, limite_actual, ahora, feriados, decal=False, ihq=False):
     peor = semaforo(limite_actual, ahora, feriados) if limite_actual else ""
     for etapa, cuando in completadas.items():
         if etapa != "decal" and etapa not in REGISTRO[tipo].plazos:
             continue
-        estado = semaforo(limite(tipo, etapa, base_texto, feriados, decal), _dt(cuando), feriados)
+        estado = semaforo(limite(tipo, etapa, base_texto, feriados, decal, ihq), _dt(cuando), feriados)
         if GRAVEDAD[estado] > GRAVEDAD[peor]:
             peor = estado
     return peor
 
 
-def calcular(estudio, pasos, etapas, feriados, ahora=None, decal=False):
+def calcular(estudio, pasos, etapas, feriados, ahora=None, decal=False, ihq=False):
     ahora = ahora or datetime.now()
     tipo = REGISTRO[estudio["tipo"]]
     base = _d(estudio["fecha_recoleccion"]) if estudio["fecha_recoleccion"] else _d(estudio["creado_en"])
@@ -96,7 +102,7 @@ def calcular(estudio, pasos, etapas, feriados, ahora=None, decal=False):
     ant_limite = datetime.combine(base, time(JORNADA[0]))
     ant_completada = ant_limite
     for clave in ["ingreso"] + [p[0] for p in pasos]:
-        dias, hora = tipo.plazo(clave, decal)
+        dias, hora = tipo.plazo(clave, decal, ihq)
         lim = datetime.combine(sumar_habiles(base, dias, feriados), time(hora))
         hecha = completadas.get(clave)
         _, _, proceso, actividad, accion = ETAPAS[clave]
@@ -126,7 +132,7 @@ def calcular(estudio, pasos, etapas, feriados, ahora=None, decal=False):
         "recoleccion": base if estudio["fecha_recoleccion"] else None,
         "base_ingreso": not estudio["fecha_recoleccion"],
         "estimada": estimada.date(),
-        "estimada_habiles": tipo.plazo(ultima, decal)[0],
+        "estimada_habiles": tipo.plazo(ultima, decal, ihq)[0],
         "informe": _dt(informe["fecha_hora"]).date() if informe else None,
         "informe_habiles": habiles_entre(base, _dt(informe["fecha_hora"]).date(), feriados) if informe else None,
     }

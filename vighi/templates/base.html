@@ -42,6 +42,7 @@
           <a href="{{ url_for('sistema.configuraciones') }}"><svg class="ic"><use href="#i-config"/></svg> Configuraciones</a>
           {% if puede('exportar') %}<a href="{{ url_for('tablero.exportar') }}"><svg class="ic"><use href="#i-descargar"/></svg> Exportar a Excel</a>{% endif %}
           <a href="{{ url_for('ubicaciones.ubicaciones_lista') }}"><svg class="ic"><use href="#i-ubicacion"/></svg> Ubicaciones</a>
+          <a href="{{ url_for('medicos.medicos_lista') }}"><svg class="ic"><use href="#i-usuarios"/></svg> Médicos</a>
           <a href="{{ url_for('ordenes.ordenes') }}"><svg class="ic"><use href="#i-informe"/></svg> Órdenes escaneadas</a>
         </div>
       </div>
