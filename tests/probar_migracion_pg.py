@@ -62,7 +62,6 @@ def foto(cliente):
             t = re.sub(r'name="_csrf" value="[^"]+"|content="[0-9a-f]{20,}"', '', t)
             t = re.sub(r'\d{2}/\d{2}/\d{4} \d{2}:\d{2}( hs)?', 'FH', t)
             t = re.sub(r'window\.CSRF = "[0-9a-f]+"', 'CSRF', t)
-            t = re.sub(r'<small class="base-modo">[^<]*</small>', '', t)
             t = re.sub(r'<div class="aviso ok">[^<]*</div>', '', t)
             cuerpo = t.encode()
         elif r.mimetype == 'application/pdf':
