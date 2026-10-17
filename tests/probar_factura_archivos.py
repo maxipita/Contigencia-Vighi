@@ -64,10 +64,17 @@ r = subir(c, tk, fid, ('vacio.pdf', b''))
 chequear('un archivo vacío', cuantos(fid) == antes and 'vacío' in r.get_data(as_text=True))
 r = c.post(f'/facturacion/{fid}/archivos', data={'_csrf': tk}, follow_redirects=True)
 chequear('sin elegir nada avisa', 'Elegí al menos un archivo' in r.get_data(as_text=True))
-r = subir(c, tk, fid, ('../../etc/pasaporte.pdf', b'%PDF'))
+r = subir(c, tk, fid, ('../../etc/pasaporte.pdf', b'%PDF-1.4'))
 with A.app.app_context():
     n = db.uno("SELECT nombre FROM factura_archivos WHERE id=(SELECT MAX(id) FROM factura_archivos)")['nombre']
 chequear('el nombre no arrastra rutas', n == 'pasaporte.pdf', n)
+antes = cuantos(fid)
+r = subir(c, tk, fid, ('falso.pdf', b'esto no es un pdf'))
+chequear('un pdf con contenido falso', cuantos(fid) == antes and 'no coincide' in r.get_data(as_text=True))
+r = subir(c, tk, fid, ('falso.xlsx', b'esto no es un excel'))
+chequear('un excel con contenido falso', cuantos(fid) == antes and 'no coincide' in r.get_data(as_text=True))
+r = subir(c, tk, fid, ('bueno.csv', b'protocolo,importe\nC000001,100'))
+chequear('un csv de texto plano sí se acepta', cuantos(fid) == antes + 1)
 
 print('3) permisos')
 with A.app.app_context():

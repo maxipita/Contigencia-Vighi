@@ -35,6 +35,15 @@ def clave_secreta():
         return f.read().strip()
 
 
+def cabeceras_seguridad(resp):
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Referrer-Policy"] = "same-origin"
+    if os.environ.get("CONTINGENCIA_HTTPS") == "1":
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return resp
+
+
 def crear_app():
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
@@ -48,6 +57,7 @@ def crear_app():
     app.before_request(sesion.adelantar_lecturas)
     app.before_request(sesion.verificar_csrf)
     app.before_request(sesion.modo_vista)
+    app.after_request(cabeceras_seguridad)
     app.context_processor(sesion.globales)
     for nombre, funcion in FILTROS:
         app.add_template_filter(funcion, nombre)
