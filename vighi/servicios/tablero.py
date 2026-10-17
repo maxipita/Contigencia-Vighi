@@ -114,9 +114,6 @@ def del_protocolo(p, f, firmante):
         or (f.get("medico") and f["medico"].lower() not in (p.medico or "").lower())
         or (f.get("cobertura") and f["cobertura"] != p.cobertura)
         or (f.get("plan") and f["plan"] != p.plan)
-        or (f.get("anio") and f["anio"] != ingreso[:4])
-        or (f.get("mes") and f["mes"] != ingreso[5:7])
-        or (f.get("dia") and f["dia"] != ingreso[8:10])
         or (f.get("desde") and ingreso < f["desde"])
         or (f.get("hasta") and ingreso > f["hasta"]))
 
@@ -149,7 +146,6 @@ def opciones(protocolos, f):
             "zonas": con((m.subcategoria for m in muestras), f.get("zona")),
             "organos": con((m.sitio for m in muestras if not f.get("zona") or m.subcategoria == f["zona"]), f.get("organo")),
             "tipos_lote": con((m.tipo_lote for m in muestras), f.get("lote")),
-            "anios": sorted({p.ingreso[:4] for p in protocolos.values()} | ({f["anio"]} if f.get("anio") else set()), reverse=True),
             "lugares": con((l for p in protocolos.values() for l in (p.lugar_recoleccion, p.lugar_entrega)), f.get("ubicacion"))}
 
 

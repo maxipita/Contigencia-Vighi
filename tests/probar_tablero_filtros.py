@@ -47,7 +47,7 @@ def ver(q):
 
 h, vistos = ver('')
 chequear('la pantalla ofrece todos los filtros del sistema anterior',
-         all(f'name="{k}"' in h for k in ('dia', 'mes', 'anio', 'ubicacion', 'lote', 'etapa', 'medico', 'mf', 'cobertura', 'plan', 'biopsia', 'zona', 'diagnostico', 'organo', 'kwd')))
+         all(f'name="{k}"' in h for k in ('desde', 'hasta', 'ubicacion', 'lote', 'etapa', 'medico', 'mf', 'cobertura', 'plan', 'biopsia', 'zona', 'diagnostico', 'organo', 'kwd')))
 chequear('los rótulos son los del sistema anterior', all(x in h for x in ('[ Procedencia: todas ]', '[ Lote: todos ]', '[ Actividad: todas ]', '[ cobertura ]', '[ plan ]',
                                                                        '[ Tipo de biopsia ]', '[ zona del cuerpo ]', '[ Diagnóstico: todos ]', '[ Órgano: todos ]', 'Diagnóstico contiene')))
 chequear('la actividad se ofrece como sector: actividad', 'LABORATORIO: Taco &gt; Cortar' in h and 'DIAGNÓSTICOS: Micro &gt; Informar' in h and 'TRASLADOS: Cito &gt; Informar' in h)
@@ -111,7 +111,7 @@ h, vistos = ver('tipo=BP&biopsia=Quirúrgicas&diagnostico=con')
 chequear('varios filtros a la vez', vistos == {BP1}, vistos)
 paginas = c.get('/?ver=todos&zona=Digestiva&pagina=1').get_data(as_text=True)
 chequear('quitar filtros vuelve a la lista completa', 'Quitar filtros' in paginas and 'href="/"' in paginas)
-for basura in ('dia=0', 'mes=13', 'anio=abc', 'zona=%FF', 'diagnostico=otro', 'lote=%25', 'plan=%27'):
+for basura in ('desde=x', 'hasta=99', 'zona=%FF', 'diagnostico=otro', 'lote=%25', 'plan=%27'):
     chequear('un valor raro (' + basura + ') no rompe la pantalla', c.get('/?' + basura).status_code == 200)
 
 print('FALLAS:', ', '.join(fallas) if fallas else 'ninguna')

@@ -14,7 +14,7 @@ from vighi.servicios.validacion import pendientes as pendientes_de_validar
 
 bp = Blueprint("tablero", __name__)
 
-CLAVES_FILTRO = ("q", "tipo", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta", "dia", "mes", "anio", "lote", "medico", "cobertura", "plan",
+CLAVES_FILTRO = ("q", "tipo", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta", "lote", "medico", "cobertura", "plan",
                  "biopsia", "zona", "diagnostico", "organo", "kwd")
 
 
@@ -26,21 +26,14 @@ def dia_valido(texto):
         return ""
 
 
-def numero_de(texto, tope, cifras, exacto=False):
-    if not (texto.isascii() and texto.isdigit() and (len(texto) == cifras if exacto else len(texto) <= cifras) and 1 <= int(texto) <= tope):
-        return ""
-    return texto.zfill(cifras)
-
-
 @bp.route("/")
 @requiere_login
 def tablero():
     yo = usuario_actual()
-    f = {k: request.args.get(k, "").strip() for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta", "dia", "mes", "anio",
+    f = {k: request.args.get(k, "").strip() for k in ("q", "tipo", "ver", "sector", "etapa", "semaforo", "ubicacion", "mf", "desde", "hasta",
                                                    "lote", "medico", "cobertura", "plan", "biopsia", "zona", "diagnostico", "organo", "kwd")}
     f["ver"] = f["ver"] or "todos"
     f["desde"], f["hasta"] = dia_valido(f["desde"]), dia_valido(f["hasta"])
-    f["dia"], f["mes"], f["anio"] = numero_de(f["dia"], 31, 2), numero_de(f["mes"], 12, 2), numero_de(f["anio"], 9999, 4, True)
     sectores = (yo["sectores"] or "").split(",")
     propios = yo["iniciales"] if "firmante" in sectores and not yo["admin"] and not puede("tablero_todos") else None
     datos = armar(f, sectores, pagina_pedida(request.args.get("pagina")), propios=propios)

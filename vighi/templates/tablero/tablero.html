@@ -16,18 +16,6 @@
     <option value="">[ Todas las muestras ]</option>
     {% for k, n in TIPOS.items() %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ n }}</option>{% endfor %}
   </select>
-  <select name="dia" title="Día de ingreso">
-    <option value="">[ día ]</option>
-    {% for d in range(1, 32) %}{% set v = '%02d' % d %}<option value="{{ v }}" {{ 'selected' if f.dia == v }}>{{ d }}</option>{% endfor %}
-  </select>
-  <select name="mes" title="Mes de ingreso">
-    <option value="">[ mes ]</option>
-    {% for n in ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre') %}{% set v = '%02d' % loop.index %}<option value="{{ v }}" {{ 'selected' if f.mes == v }}>{{ n }}</option>{% endfor %}
-  </select>
-  <select name="anio" title="Año de ingreso">
-    <option value="">[ año ]</option>
-    {% for a in anios %}<option value="{{ a }}" {{ 'selected' if f.anio == a }}>{{ a }}</option>{% endfor %}
-  </select>
   <label class="muted" title="Fecha de ingreso del protocolo">Ingresado del <input type="date" name="desde" value="{{ f.desde }}"></label>
   <label class="muted">al <input type="date" name="hasta" value="{{ f.hasta }}"></label>
   <select name="ubicacion" title="Lugar de recolección o de entrega">
