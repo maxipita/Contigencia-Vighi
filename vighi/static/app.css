@@ -719,6 +719,10 @@ a.chip-sel { text-decoration: none; }
 .tabla-dashboard td.sem-dy, .tabla-dashboard th.sem-dy { color: var(--aviso); }
 .tabla-dashboard td.sem-lt, .tabla-dashboard th.sem-lt { color: var(--error); }
 .tabla-dashboard td.sem-ot, .tabla-dashboard td.sem-dy, .tabla-dashboard td.sem-lt { font-weight: 600; }
+.tabla-dashboard .sem-ot, .tabla-dashboard tr.total td.sem-ot { background: var(--ok-fondo); }
+.tabla-dashboard .sem-dy, .tabla-dashboard tr.total td.sem-dy { background: var(--aviso-fondo); }
+.tabla-dashboard .sem-lt, .tabla-dashboard tr.total td.sem-lt { background: var(--error-fondo); }
+.tabla-dashboard td.sem-ot.cero, .tabla-dashboard td.sem-dy.cero, .tabla-dashboard td.sem-lt.cero { opacity: .6; }
 .tabla-dashboard td.cero { font-weight: 400; }
 .semaforo-total .caja { display: flex; flex-direction: column; min-width: 130px; padding: 10px 16px; border-radius: var(--radio); border: 1px solid var(--borde); border-left: 4px solid var(--borde); background: #fff; }
 .semaforo-total .caja b { font-size: 24px; line-height: 1.1; }

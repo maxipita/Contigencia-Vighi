@@ -54,7 +54,7 @@
 {% elif vista == 'patologos' %}
 {% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios informes. Quien tiene el permiso «Ver todos los protocolos del Tablero» ve los de todos los patólogos.</div>{% endif %}
 <table class="tabla-dashboard">
-  <tr><th>Responsable</th><th>Tipo</th><th class="num"><span class="semaforo on_time">En término</span></th><th class="num"><span class="semaforo delayed">Demorado</span></th><th class="num"><span class="semaforo late">Atrasado</span></th><th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th><th class="num">Total</th></tr>
+  <tr><th>Responsable</th><th>Tipo</th><th class="num sem-ot"><span class="semaforo on_time">En término</span></th><th class="num sem-dy"><span class="semaforo delayed">Demorado</span></th><th class="num sem-lt"><span class="semaforo late">Atrasado</span></th><th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th><th class="num">Total</th></tr>
   {% for r in d.filas %}
   <tr><td><b>{{ r.nombre }}</b></td><td>{{ r.tipo }}</td>
     {% for k in ('on_time', 'delayed', 'late', 'hasta_5', 'de_5_a_10', 'mas_de_10') %}<td class="num {{ COLOR_DE[k] }} {{ 'cero' if not r[k] }}">{{ r[k] }}{% if r.total and k in ('on_time', 'delayed', 'late') %} <span class="muted">({{ (r[k] * 100 / r.total) | round | int }}%)</span>{% endif %}</td>{% endfor %}
@@ -87,10 +87,10 @@
 
 {% else %}
 <table class="tabla-dashboard">
-  <tr><th>Actividad</th><th class="num">Pendientes</th><th class="num" title="En término"><span class="semaforo on_time">OT</span></th><th class="num" title="Demorados"><span class="semaforo delayed">DY</span></th><th class="num" title="Atrasados"><span class="semaforo late">LT</span></th><th class="num">Hechas hoy</th><th class="num">Hechas en el período</th><th class="num" title="Demora promedio desde la actividad anterior">Demora prom.</th></tr>
+  <tr><th>Actividad</th><th class="num">Pendientes</th><th class="num sem-ot" title="En término"><span class="semaforo on_time">OT</span></th><th class="num sem-dy" title="Demorados"><span class="semaforo delayed">DY</span></th><th class="num sem-lt" title="Atrasados"><span class="semaforo late">LT</span></th><th class="num">Hechas hoy</th><th class="num">Hechas en el período</th><th class="num" title="Demora promedio desde la actividad anterior">Demora prom.</th></tr>
   {% for r in d.filas %}
   <tr><td><b>{{ r.etapa }}</b></td>
-    {% if r.pend %}{{ semaforo_celdas(r.pend) }}{% else %}<td class="num muted">—</td><td></td><td></td><td></td>{% endif %}
+    {% if r.pend %}{{ semaforo_celdas(r.pend) }}{% else %}<td class="num muted">—</td><td class="sem-ot"></td><td class="sem-dy"></td><td class="sem-lt"></td>{% endif %}
     <td class="num">{{ r.hoy }}</td><td class="num">{{ r.periodo }}</td><td class="num">{{ r.demora or '—' }}</td></tr>
   {% endfor %}
 </table>
