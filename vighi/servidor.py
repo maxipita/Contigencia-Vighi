@@ -21,6 +21,8 @@ def ejecutar(app):
     except (RuntimeError, d1.ErrorD1) as error:
         print(f"No se puede iniciar el sistema: {error}")
         raise SystemExit(1)
+    from vighi.servicios import onedrive
+    onedrive.iniciar(app)
     if os.environ.get("CONTINGENCIA_DESARROLLO") == "1":
         app.jinja_env.auto_reload = True
         recarga = os.environ.get("CONTINGENCIA_SIN_RECARGA") != "1"

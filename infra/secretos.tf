@@ -33,10 +33,30 @@ resource "aws_ssm_parameter" "smtp_clave" {
   }
 }
 
+resource "aws_ssm_parameter" "graph" {
+  for_each = toset(var.graph)
+  name     = "${local.parametros}/${each.key}"
+  type     = "SecureString"
+  value    = "sin-configurar"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "graph_secreto" {
+  name  = "${local.parametros}/GRAPH_CLIENT_SECRET"
+  type  = "SecureString"
+  value = "sin-configurar"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 locals {
   secretos = merge({
     DATABASE_URL            = aws_ssm_parameter.database_url.arn
     CONTINGENCIA_SECRET_KEY = aws_ssm_parameter.clave_sesion.arn
     SMTP_CLAVE              = aws_ssm_parameter.smtp_clave.arn
-  }, { for k, p in aws_ssm_parameter.smtp : k => p.arn })
+    GRAPH_CLIENT_SECRET     = aws_ssm_parameter.graph_secreto.arn
+  }, { for k, p in aws_ssm_parameter.smtp : k => p.arn }, { for k, p in aws_ssm_parameter.graph : k => p.arn })
 }

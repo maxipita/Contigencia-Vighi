@@ -6,12 +6,15 @@ import shutil
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime
 
 EXTENSIONES = {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
 ESPERA_ESTABLE = 5
+CARPETAS_PROPIAS = {"procesadas", "con error"}
+ARCHIVO_ESTADO = "vigilar_ordenes.estado.json"
 
 
 def registrar(texto, archivo_log=None):
@@ -32,11 +35,12 @@ def cuerpo_multipart(nombre, contenido):
     return cabecera + contenido + f"\r\n--{limite}--\r\n".encode("utf-8"), f"multipart/form-data; boundary={limite}"
 
 
-def enviar(url, clave, ruta, tiempo=180):
+def enviar(url, clave, ruta, remota=None, tiempo=180):
     nombre = os.path.basename(ruta)
     with open(ruta, "rb") as f:
         cuerpo, tipo = cuerpo_multipart(nombre, f.read())
-    pedido = urllib.request.Request(url.rstrip("/") + "/api/ordenes/automatico", data=cuerpo, method="POST",
+    destino = url.rstrip("/") + "/api/ordenes/automatico" + ("?ruta=" + urllib.parse.quote(remota) if remota else "")
+    pedido = urllib.request.Request(destino, data=cuerpo, method="POST",
                                     headers={"Authorization": "Bearer " + clave, "Content-Type": tipo, "Accept": "application/json"})
     try:
         with urllib.request.urlopen(pedido, timeout=tiempo) as r:
@@ -59,6 +63,39 @@ def mover(ruta, destino):
     return final
 
 
+def relativa(carpeta, ruta):
+    return os.path.relpath(ruta, carpeta).replace("\\", "/")
+
+
+def ruta_remota(carpeta, ruta):
+    return "/" + os.path.basename(os.path.normpath(carpeta)) + "/" + relativa(carpeta, ruta)
+
+
+def es_suelto(carpeta, ruta):
+    return os.path.normpath(os.path.dirname(ruta)) == os.path.normpath(carpeta)
+
+
+def cargar_estado(archivo):
+    try:
+        with open(archivo, encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def guardar_estado(archivo, enviados):
+    if not archivo:
+        return
+    temporal = archivo + ".tmp"
+    try:
+        with open(temporal, "w", encoding="utf-8") as f:
+            json.dump(enviados, f)
+        os.replace(temporal, archivo)
+    except OSError:
+        pass
+
+
 def resumen(paginas):
     adjuntas = [p for p in paginas if p["estado"] == "adjunta"]
     pendientes = [p for p in paginas if p["estado"] == "pendiente"]
@@ -73,43 +110,58 @@ def resumen(paginas):
     return " · ".join(partes) or "sin páginas"
 
 
-def candidatos(carpeta, vistos, espera=ESPERA_ESTABLE):
+def candidatos(carpeta, vistos, espera=ESPERA_ESTABLE, enviados=None, desde=None):
     nuevos = []
-    for nombre in sorted(os.listdir(carpeta)):
-        ruta = os.path.join(carpeta, nombre)
-        if not os.path.isfile(ruta) or os.path.splitext(nombre)[1].lower() not in EXTENSIONES or nombre.startswith(("~", ".")):
-            continue
-        try:
-            info = os.stat(ruta)
-        except OSError:
-            continue
-        firma = (info.st_size, info.st_mtime)
-        anterior = vistos.get(ruta)
-        vistos[ruta] = (firma, time.time() if not anterior or anterior[0] != firma else anterior[1])
-        if info.st_size > 0 and time.time() - vistos[ruta][1] >= espera:
-            nuevos.append(ruta)
+    for raiz, subcarpetas, archivos in os.walk(carpeta):
+        subcarpetas[:] = sorted(s for s in subcarpetas if s.lower() not in CARPETAS_PROPIAS and not s.startswith("."))
+        for nombre in sorted(archivos):
+            ruta = os.path.join(raiz, nombre)
+            if os.path.splitext(nombre)[1].lower() not in EXTENSIONES or nombre.startswith(("~", ".")):
+                continue
+            try:
+                info = os.stat(ruta)
+            except OSError:
+                continue
+            firma = (info.st_size, info.st_mtime)
+            if desde and info.st_mtime < desde:
+                continue
+            if enviados is not None and enviados.get(relativa(carpeta, ruta)) == list(firma):
+                continue
+            anterior = vistos.get(ruta)
+            vistos[ruta] = (firma, time.time() if not anterior or anterior[0] != firma else anterior[1])
+            if info.st_size > 0 and time.time() - vistos[ruta][1] >= espera:
+                nuevos.append(ruta)
     return nuevos
 
 
-def procesar_carpeta(carpeta, url, clave, vistos, log=None, enviar_archivo=enviar, espera=ESPERA_ESTABLE):
+def procesar_carpeta(carpeta, url, clave, vistos, log=None, enviar_archivo=enviar, espera=ESPERA_ESTABLE, enviados=None, archivo_estado=None, desde=None):
     hechos = 0
-    for ruta in candidatos(carpeta, vistos, espera):
-        nombre = os.path.basename(ruta)
+
+    def archivar(ruta, destino):
+        if es_suelto(carpeta, ruta):
+            mover(ruta, os.path.join(carpeta, destino))
+        elif enviados is not None:
+            info = os.stat(ruta)
+            enviados[relativa(carpeta, ruta)] = [info.st_size, info.st_mtime]
+            guardar_estado(archivo_estado, enviados)
+
+    for ruta in candidatos(carpeta, vistos, espera, enviados, desde):
+        nombre = relativa(carpeta, ruta)
         try:
-            estado, datos = enviar_archivo(url, clave, ruta)
+            estado, datos = enviar_archivo(url, clave, ruta, ruta_remota(carpeta, ruta))
         except (urllib.error.URLError, OSError, TimeoutError) as error:
             registrar(f"{nombre}: sin conexión con el sistema ({getattr(error, 'reason', error)}); se reintenta", log)
             return hechos
         if estado == 200 and datos.get("ok"):
-            mover(ruta, os.path.join(carpeta, "Procesadas"))
+            archivar(ruta, "Procesadas")
             registrar(f"{nombre}: {resumen(datos['paginas'])}", log)
             hechos += 1
         elif estado == 401:
             registrar("La clave no es válida o fue revocada: se detiene el envío hasta que se corrija", log)
             return hechos
         elif estado == 400:
-            mover(ruta, os.path.join(carpeta, "Con error"))
-            registrar(f"{nombre}: el sistema no pudo leerlo ({datos.get('error')}); pasó a «Con error»", log)
+            archivar(ruta, "Con error")
+            registrar(f"{nombre}: el sistema no pudo leerlo ({datos.get('error')}); se descarta", log)
         else:
             registrar(f"{nombre}: error del sistema ({estado}); se reintenta", log)
             return hechos
@@ -118,27 +170,36 @@ def procesar_carpeta(carpeta, url, clave, vistos, log=None, enviar_archivo=envia
 
 
 def principal(argumentos=None):
-    p = argparse.ArgumentParser(description="Sube al sistema las órdenes escaneadas que aparecen en una carpeta.")
+    p = argparse.ArgumentParser(description="Sube al sistema las órdenes escaneadas que aparecen en una carpeta y en sus subcarpetas.")
     p.add_argument("--carpeta", default=os.environ.get("VIGHI_CARPETA"), help="carpeta que se vigila (la de OneDrive donde cae el escáner)")
     p.add_argument("--url", default=os.environ.get("VIGHI_URL"), help="dirección del sistema, por ejemplo https://contingencia.sistemacapvighi.com")
     p.add_argument("--clave", default=os.environ.get("VIGHI_CLAVE"), help="clave de integración (mejor por la variable VIGHI_CLAVE)")
     p.add_argument("--intervalo", type=int, default=20, help="segundos entre revisiones")
+    p.add_argument("--desde", help="ignora los archivos modificados antes de esta fecha (AAAA-MM-DD)")
     p.add_argument("--una-vez", action="store_true", help="revisa una sola vez y termina")
     a = p.parse_args(argumentos)
     if not (a.carpeta and a.url and a.clave):
         p.error("faltan la carpeta, la dirección o la clave (--carpeta, --url, --clave o las variables VIGHI_CARPETA, VIGHI_URL, VIGHI_CLAVE)")
     if not os.path.isdir(a.carpeta):
         p.error(f"la carpeta {a.carpeta} no existe")
+    desde = None
+    if a.desde:
+        try:
+            desde = datetime.strptime(a.desde, "%Y-%m-%d").timestamp()
+        except ValueError:
+            p.error("--desde tiene que ser una fecha AAAA-MM-DD")
     log = os.path.join(a.carpeta, "vigilar_ordenes.log")
-    registrar(f"Vigilando {a.carpeta} → {a.url}", log)
+    archivo_estado = os.path.join(a.carpeta, ARCHIVO_ESTADO)
+    enviados = cargar_estado(archivo_estado)
+    registrar(f"Vigilando {a.carpeta} (con subcarpetas) → {a.url}", log)
     vistos = {}
     if a.una_vez:
-        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log)
+        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log, enviados=enviados, archivo_estado=archivo_estado, desde=desde)
         time.sleep(ESPERA_ESTABLE + 1)
-        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log)
+        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log, enviados=enviados, archivo_estado=archivo_estado, desde=desde)
         return 0
     while True:
-        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log)
+        procesar_carpeta(a.carpeta, a.url, a.clave, vistos, log, enviados=enviados, archivo_estado=archivo_estado, desde=desde)
         time.sleep(a.intervalo)
 
 

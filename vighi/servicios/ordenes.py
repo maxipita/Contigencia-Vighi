@@ -9,6 +9,7 @@ from vighi.servicios.imagenes import reducir_a_jpeg
 
 PERMISOS_ORDENES = ("protocolo_editar",)
 MAX_PAGINAS = 40
+EXTENSIONES = (".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
 DPI = 200
 LADO_OCR = 1800
 SQL_ORDENES = """SELECT o.id, o.protocolo_id, o.nombre, o.pagina, o.metodo, o.creado_en, u.iniciales FROM ordenes o
@@ -21,6 +22,11 @@ PATRON_NUMERO = re.compile(r"(?<![A-Za-z0-9])[Cc]\s*#?\s*([0-9OoQDIl|SsBZ]{6})(?
 _modulos = {}
 _candado_ocr = threading.Lock()
 _cupo_archivos = threading.BoundedSemaphore(2)
+
+
+def grupo_de(ruta):
+    partes = [p for p in (ruta or "").replace("\\", "/").split("/") if p.strip()]
+    return "/".join(p.strip() for p in partes[:-1])[:300] if len(partes) >= 3 else None
 
 
 def _modulo(nombre):

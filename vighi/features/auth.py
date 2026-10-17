@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -6,6 +8,9 @@ from vighi.core.sesion import es_local, requiere_login, usuario_actual
 from vighi.dominio.estudios import SECTORES
 
 bp = Blueprint("auth", __name__)
+
+MAX_FALLOS_LOGIN = 6
+BLOQUEO_LOGIN_MINUTOS = 10
 
 
 @bp.route("/configurar", methods=["GET", "POST"])
@@ -40,14 +45,28 @@ def login():
     if not db.uno("SELECT 1 FROM usuarios WHERE admin=1 AND clave_hash IS NOT NULL"):
         return redirect(url_for("auth.configurar"))
     if request.method == "POST":
-        u = db.uno("SELECT * FROM usuarios WHERE iniciales=? AND activo=1", (request.form["iniciales"].strip().upper(),))
+        ini = request.form["iniciales"].strip().upper()
+        intento = db.uno("SELECT fallos, bloqueado_hasta FROM intentos_login WHERE iniciales=?", (ini,))
+        if intento and intento["bloqueado_hasta"] and intento["bloqueado_hasta"] > db.ahora():
+            flash("Demasiados intentos fallidos. Esperá unos minutos e intentá de nuevo.", "error")
+            return render_template("auth/login.html")
+        u = db.uno("SELECT * FROM usuarios WHERE iniciales=? AND activo=1", (ini,))
         if u and u["clave_hash"] and check_password_hash(u["clave_hash"], request.form["clave"]):
+            if intento:
+                db.ex("DELETE FROM intentos_login WHERE iniciales=?", (ini,))
             session.clear()
             session["uid"] = u["id"]
             db.auditar(u["id"], None, "login")
             destino = request.args.get("next", "")
             return redirect(destino if destino.startswith("/") and not destino.startswith("//") else url_for("tablero.tablero"))
-        flash("Iniciales o clave incorrectas (o el usuario todavía no tiene clave: pedísela al administrador).", "error")
+        fallos = (intento["fallos"] if intento else 0) + 1
+        bloqueado = (datetime.now() + timedelta(minutes=BLOQUEO_LOGIN_MINUTOS)).strftime("%Y-%m-%d %H:%M:%S") if fallos >= MAX_FALLOS_LOGIN else None
+        db.ex("DELETE FROM intentos_login WHERE iniciales=?", (ini,))
+        db.ex("INSERT INTO intentos_login (iniciales, fallos, bloqueado_hasta) VALUES (?,?,?)", (ini, fallos, bloqueado))
+        if bloqueado:
+            flash("Demasiados intentos fallidos. Esperá unos minutos e intentá de nuevo.", "error")
+        else:
+            flash("Iniciales o clave incorrectas (o el usuario todavía no tiene clave: pedísela al administrador).", "error")
     return render_template("auth/login.html")
 
 

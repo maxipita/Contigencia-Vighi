@@ -25,6 +25,22 @@ def nombre_seguro(nombre):
     return "".join(c for c in base if c.isprintable() and c not in '<>:"|?*')[:150] or "archivo"
 
 
+def _contenido_valido(ext, datos):
+    if ext == "pdf":
+        return datos.startswith(b"%PDF-")
+    if ext in ("jpg", "jpeg"):
+        return datos.startswith(b"\xff\xd8\xff")
+    if ext == "png":
+        return datos.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext == "webp":
+        return datos[:4] == b"RIFF" and datos[8:12] == b"WEBP"
+    if ext in ("xlsx", "docx"):
+        return datos.startswith(b"PK\x03\x04") or datos.startswith(b"PK\x05\x06")
+    if ext in ("xls", "doc"):
+        return datos.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+    return True
+
+
 def archivos_de(fid):
     return db.q(SQL_ARCHIVOS, (fid,))
 
@@ -43,6 +59,8 @@ def validar(nombre, datos):
         return f"«{nombre}» pesa más de {MAX_BYTES // (1024 * 1024)} MB."
     if not almacen.activo() and len(datos) > MAX_BYTES_EN_BASE:
         return f"«{nombre}» es muy grande para guardarlo sin almacenamiento de archivos (máximo 1 MB)."
+    if not _contenido_valido(ext, datos):
+        return f"«{nombre}»: el contenido no coincide con la extensión declarada."
     return None
 
 

@@ -48,6 +48,11 @@ variable "smtp" {
   default = ["SMTP_HOST", "SMTP_PORT", "SMTP_USUARIO", "SMTP_DESDE", "SMTP_NOMBRE"]
 }
 
+variable "graph" {
+  type    = list(string)
+  default = ["GRAPH_TENANT", "GRAPH_CLIENT_ID", "GRAPH_USUARIO", "GRAPH_CARPETA"]
+}
+
 variable "github_sub" {
   type    = string
   default = "repo:maxipita@259085329/Contigencia-Vighi@1398084935"

@@ -90,7 +90,7 @@ def requiere_admin(f):
 def verificar_csrf():
     if "csrf" not in session:
         session["csrf"] = secrets.token_hex(16)
-    if request.method == "POST" and request.path not in RUTAS_CON_CLAVE and not request.headers.get("Authorization", "").startswith("Bearer "):
+    if request.method == "POST" and request.path not in RUTAS_CON_CLAVE:
         token = request.form.get("_csrf") or request.headers.get("X-CSRF")
         if token != session["csrf"]:
             abort(400, "Formulario vencido: recargá la página e intentá de nuevo.")

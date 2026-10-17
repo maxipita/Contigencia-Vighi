@@ -5,17 +5,12 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from vighi.core import almacen, db
 from vighi.core.sesion import requiere_login, requiere_permiso, usuario_actual
 from vighi.servicios.claves_api import clave_valida
-from vighi.servicios.ordenes import PERMISOS_ORDENES, SQL_PENDIENTES, SQL_RECIENTES, asignar_orden, borrar_orden, lectores, procesar_archivo
+from vighi.servicios.onedrive import estado_onedrive
+from vighi.servicios.ordenes import (EXTENSIONES, PERMISOS_ORDENES, SQL_PENDIENTES, SQL_RECIENTES, asignar_orden, borrar_orden, grupo_de, lectores,
+                                      procesar_archivo)
 from vighi.servicios.protocolos import protocolo_o_404
 
 bp = Blueprint("ordenes", __name__)
-
-EXTENSIONES = (".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp")
-
-
-def grupo_de(ruta):
-    partes = [p for p in (ruta or "").replace("\\", "/").split("/") if p.strip()]
-    return "/".join(p.strip() for p in partes[:-1])[:300] if len(partes) >= 3 else None
 
 
 def volver(pid=None, ancla=""):
@@ -27,7 +22,7 @@ def volver(pid=None, ancla=""):
 @bp.route("/ordenes")
 @requiere_login
 def ordenes():
-    return render_template("ordenes/ordenes.html", pendientes=db.q(SQL_PENDIENTES), recientes=db.q(SQL_RECIENTES), lectores=lectores())
+    return render_template("ordenes/ordenes.html", pendientes=db.q(SQL_PENDIENTES), recientes=db.q(SQL_RECIENTES), lectores=lectores(), onedrive=estado_onedrive())
 
 
 @bp.route("/api/ordenes/subir", methods=["POST"])
