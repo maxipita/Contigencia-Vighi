@@ -360,15 +360,18 @@ details.importar[open] summary { margin-bottom: 8px; }
 .galeria .enlace { background: none; border: 0; padding: 0; color: var(--pizarra); font-size: 11px; cursor: pointer; text-decoration: underline; }
 .galeria .enlace:hover { color: var(--error); }
 .subida { display: grid; gap: 8px; }
-.visor { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(20, 10, 30, .88); }
+.visor { position: fixed; inset: 0; z-index: 100; display: flex; overflow: auto; background: rgba(20, 10, 30, .88); }
 .visor[hidden] { display: none; }
-.visor img { max-width: 92vw; max-height: 86vh; object-fit: contain; border-radius: 4px; background: #fff; }
-.visor button { position: absolute; background: rgba(255, 255, 255, .15); color: #fff; border: 0; border-radius: 999px; width: 44px; height: 44px; font-size: 28px; line-height: 1; cursor: pointer; }
+.visor img { margin: auto; max-width: 92vw; max-height: 86vh; object-fit: contain; border-radius: 4px; background: #fff; cursor: zoom-in; }
+.visor img.ampliada { max-width: none; max-height: none; cursor: grab; }
+.visor button { position: fixed; background: rgba(255, 255, 255, .15); color: #fff; border: 0; border-radius: 999px; width: 44px; height: 44px; font-size: 28px; line-height: 1; cursor: pointer; }
 .visor button:hover { background: rgba(255, 255, 255, .3); }
 .visor-x { top: 16px; right: 16px; }
+.visor-mas { top: 16px; right: 120px; }
+.visor-menos { top: 16px; right: 68px; }
 .visor-ant { left: 16px; top: 50%; }
 .visor-sig { right: 16px; top: 50%; }
-.visor-pie { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; }
+.visor-pie { position: fixed; bottom: 14px; left: 0; right: 0; text-align: center; color: #fff; font-size: 13px; pointer-events: none; }
 .lote-cabecera { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin: 14px 0 16px; }
 .lote-cabecera .acciones { margin-top: 0; }
 .lote-cabecera form { margin: 0; }
@@ -642,5 +645,6 @@ tr.importe-cero td:first-child { box-shadow: inset 3px 0 0 #e08a00; }
 .orden-barra { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .orden-botones { margin-left: auto; display: flex; gap: 4px; }
 .orden-marco { height: calc(100vh - 110px); overflow: auto; background: #fff; border-radius: 4px; text-align: center; }
-.orden-marco img { max-width: 100%; transition: transform .15s; transform-origin: center; }
-.orden-marco img.girada { max-width: none; }
+.orden-marco img { max-width: 100%; transition: transform .15s; transform-origin: center; cursor: zoom-in; }
+.orden-marco img.girada, .orden-marco img.ampliada { max-width: none; }
+.orden-marco img.ampliada { cursor: grab; }

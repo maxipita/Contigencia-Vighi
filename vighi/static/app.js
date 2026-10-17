@@ -392,26 +392,73 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
   }));
 });
 
+function ampliable(marco, img, soloConCtrl) {
+  let z = 1, base = 0, arrastre = null, movio = false;
+  const ajustar = nuevo => {
+    nuevo = Math.min(8, Math.max(1, nuevo));
+    if (nuevo < 1.05) nuevo = 1;
+    if (nuevo === z) return;
+    const cx = (marco.scrollLeft + marco.clientWidth / 2) / marco.scrollWidth, cy = (marco.scrollTop + marco.clientHeight / 2) / marco.scrollHeight;
+    if (z === 1) base = img.offsetWidth;
+    z = nuevo;
+    img.classList.toggle("ampliada", z > 1);
+    img.style.width = z > 1 ? base * z + "px" : "";
+    marco.scrollLeft = cx * marco.scrollWidth - marco.clientWidth / 2;
+    marco.scrollTop = cy * marco.scrollHeight - marco.clientHeight / 2;
+  };
+  img.draggable = false;
+  img.addEventListener("click", () => {
+    if (movio) { movio = false; return; }
+    ajustar(z === 1 ? 2.5 : 1);
+  });
+  marco.addEventListener("wheel", e => {
+    if (soloConCtrl && !e.ctrlKey) return;
+    e.preventDefault();
+    ajustar(z * (e.deltaY < 0 ? 1.25 : 0.8));
+  }, { passive: false });
+  img.addEventListener("pointerdown", e => {
+    if (z === 1 || e.button !== 0) return;
+    arrastre = { x: e.clientX, y: e.clientY, izq: marco.scrollLeft, arriba: marco.scrollTop };
+    movio = false;
+    img.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  img.addEventListener("pointermove", e => {
+    if (!arrastre) return;
+    const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) movio = true;
+    marco.scrollLeft = arrastre.izq - dx;
+    marco.scrollTop = arrastre.arriba - dy;
+  });
+  ["pointerup", "pointercancel"].forEach(t => img.addEventListener(t, () => { arrastre = null; }));
+  return { mas: () => ajustar(z * 1.5), menos: () => ajustar(z / 1.5), reiniciar: () => ajustar(1) };
+}
+
 (function () {
   const enlaces = [...document.querySelectorAll("a[data-visor]")];
   if (!enlaces.length) return;
   const visor = document.createElement("div");
   visor.className = "visor";
   visor.hidden = true;
-  visor.innerHTML = '<button type="button" class="visor-x" aria-label="Cerrar">×</button><button type="button" class="visor-ant" aria-label="Anterior">‹</button>' +
+  visor.innerHTML = '<button type="button" class="visor-x" aria-label="Cerrar">×</button><button type="button" class="visor-mas" aria-label="Acercar" title="Acercar (+)">+</button>' +
+    '<button type="button" class="visor-menos" aria-label="Alejar" title="Alejar (−)">−</button><button type="button" class="visor-ant" aria-label="Anterior">‹</button>' +
     '<img alt=""><button type="button" class="visor-sig" aria-label="Siguiente">›</button><div class="visor-pie"></div>';
   document.body.append(visor);
   const img = visor.querySelector("img"), pie = visor.querySelector(".visor-pie");
+  const zoom = ampliable(visor, img, false);
   let actual = 0;
   const mostrar = i => {
     actual = (i + enlaces.length) % enlaces.length;
+    zoom.reiniciar();
     img.src = enlaces[actual].href;
     pie.textContent = (enlaces[actual].title || "") + (enlaces.length > 1 ? "  (" + (actual + 1) + "/" + enlaces.length + ")" : "");
     visor.hidden = false;
   };
-  const cerrar = () => { visor.hidden = true; img.removeAttribute("src"); };
+  const cerrar = () => { zoom.reiniciar(); visor.hidden = true; img.removeAttribute("src"); };
   enlaces.forEach((a, i) => a.addEventListener("click", e => { e.preventDefault(); mostrar(i); }));
   visor.querySelector(".visor-x").addEventListener("click", cerrar);
+  visor.querySelector(".visor-mas").addEventListener("click", zoom.mas);
+  visor.querySelector(".visor-menos").addEventListener("click", zoom.menos);
   visor.querySelector(".visor-ant").addEventListener("click", () => mostrar(actual - 1));
   visor.querySelector(".visor-sig").addEventListener("click", () => mostrar(actual + 1));
   visor.addEventListener("click", e => { if (e.target === visor) cerrar(); });
@@ -420,6 +467,9 @@ document.querySelectorAll("form.edicion").forEach(function (form) {
     if (e.key === "Escape") cerrar();
     else if (e.key === "ArrowLeft") mostrar(actual - 1);
     else if (e.key === "ArrowRight") mostrar(actual + 1);
+    else if (e.key === "+" || e.key === "=") zoom.mas();
+    else if (e.key === "-" || e.key === "_") zoom.menos();
+    else if (e.key === "0") zoom.reiniciar();
   });
 })();
 
@@ -910,10 +960,12 @@ document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
   const datos = panel && panel.querySelector("[data-orden-datos]");
   if (!datos) return;
   const ids = JSON.parse(datos.textContent), img = panel.querySelector("[data-orden-img]"), pie = panel.querySelector("[data-orden-pie]");
+  const zoom = ampliable(panel.querySelector(".orden-marco"), img, true);
   let actual = 0, giro = 0;
   const mostrar = i => {
     actual = (i + ids.length) % ids.length;
     giro = 0;
+    zoom.reiniciar();
     img.style.transform = "";
     img.classList.remove("girada");
     img.src = "/orden/" + ids[actual];
@@ -922,6 +974,8 @@ document.querySelectorAll("input[data-abrev-de]").forEach((caja) => {
   const ant = panel.querySelector("[data-orden-ant]"), sig = panel.querySelector("[data-orden-sig]");
   if (ant) ant.addEventListener("click", () => mostrar(actual - 1));
   if (sig) sig.addEventListener("click", () => mostrar(actual + 1));
+  panel.querySelector("[data-orden-mas]").addEventListener("click", zoom.mas);
+  panel.querySelector("[data-orden-menos]").addEventListener("click", zoom.menos);
   panel.querySelector("[data-orden-girar]").addEventListener("click", () => {
     giro = (giro + 90) % 360;
     img.style.transform = "rotate(" + giro + "deg)";

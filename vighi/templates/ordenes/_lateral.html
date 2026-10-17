@@ -5,6 +5,7 @@
     <span class="muted" data-orden-pie></span>
     <span class="orden-botones">
       {% if ordenes | length > 1 %}<button type="button" class="btn sec mini-btn" data-orden-ant title="Anterior">‹</button><button type="button" class="btn sec mini-btn" data-orden-sig title="Siguiente">›</button>{% endif %}
+      <button type="button" class="btn sec mini-btn" data-orden-menos title="Alejar">−</button><button type="button" class="btn sec mini-btn" data-orden-mas title="Acercar (también Ctrl + rueda, o un clic sobre la orden)">+</button>
       <button type="button" class="btn sec mini-btn" data-orden-girar title="Girar">⟳</button>
     </span>
     {% endif %}
