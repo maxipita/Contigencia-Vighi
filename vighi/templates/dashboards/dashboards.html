@@ -16,13 +16,14 @@
 </div>
 <form class="filtros compacto" method="get">
   <input type="hidden" name="vista" value="{{ vista }}">
+  {% if vista == 'performance' %}
   <select name="anio" title="Año">{% for a in o.anios %}<option value="{{ a }}" {{ 'selected' if d.periodo.anio == a }}>{{ a }}</option>{% endfor %}</select>
   <select name="mes" title="Mes">{% for n, nombre in o.meses %}<option value="{{ n }}" {{ 'selected' if d.periodo.mes == n }}>{{ nombre }}</option>{% endfor %}</select>
-  {% if vista == 'performance' %}
   <select name="actividad" title="Actividad">{% for k, n in d.actividades %}<option value="{{ k }}" {{ 'selected' if d.etapa == k }}>{{ n }}</option>{% endfor %}</select>
   <select name="unidad" title="Qué se cuenta">{% for k, n in UNIDADES.items() %}<option value="{{ k }}" {{ 'selected' if d.unidad == k }}>{{ n }}</option>{% endfor %}</select>
   {% elif vista == 'patologos' %}
   <select name="actividad" title="Actividad">{% for k, n in d.actividades %}<option value="{{ k }}" {{ 'selected' if d.etapa == k }}>{{ n }}</option>{% endfor %}</select>
+  {% if d.personas %}<select name="persona" title="Patólogo"><option value="">Patólogo: todos</option>{% for i, n in d.personas %}<option value="{{ i }}" {{ 'selected' if f.persona == i }}>{{ n }}</option>{% endfor %}</select>{% endif %}
   {% endif %}
   <select name="tipo" title="Flujo"><option value="">Flujos: todos</option>{% for k in TIPOS %}<option value="{{ k }}" {{ 'selected' if f.tipo == k }}>{{ k }}</option>{% endfor %}</select>
   {{ lista('ubicacion', o.lugares, f.ubicacion, 'Procedencia: todas') }}
@@ -32,38 +33,32 @@
 
 {% if vista == 'gerencial' %}
 <div class="kpis">
-  {{ kpi('Hoy', d.ingresados_hoy, 'Protocolos ingresados') }}
-  {{ kpi('Ingresados', d.ingresados, 'En ' ~ MESES[d.periodo.mes - 1] ~ ' ' ~ d.periodo.anio) }}
-  {{ kpi('Informados', d.informados, 'Flujos cerrados en el período') }}
-  {{ kpi('Promedio', (d.demora_dias if d.demora_dias is not none else '—'), 'Días hábiles de ingreso a informe') }}
   {{ kpi('Pendientes', d.pendientes, 'Estudios en proceso') }}
+  {% for tipo, n in d.por_tipo %}{{ kpi(tipo, n, 'Pendientes') }}{% endfor %}
 </div>
 <div class="semaforo-total">
   {% for k, n in SEMAFOROS.items() %}<a class="caja {{ k }}" href="{{ url_for('tablero.tablero', semaforo=k) }}" title="Ver estos estudios"><b>{{ d.semaforo[k] }}</b><span>{{ n }}</span></a>{% endfor %}
 </div>
-<div class="config-grid">
-  <div class="tarjeta"><h2>Pendientes por sector</h2>
-    <table class="tabla-dashboard"><tr><th>Sector</th><th class="num">Estudios</th></tr>
-      {% for clave, nombre, n in d.por_sector %}<tr><td>{{ nombre }}</td><td class="num"><a href="{{ url_for('tablero.tablero', sector=clave) }}" title="Ver estos estudios">{{ n }}</a></td></tr>{% else %}<tr><td colspan="2" class="muted">No hay estudios pendientes.</td></tr>{% endfor %}
-    </table></div>
-  <div class="tarjeta"><h2>Ingresos por día</h2>
-    <table class="tabla-dashboard"><tr><th>Día</th><th class="num">Protocolos</th></tr>
-      {% for dia, n in d.por_dia %}<tr><td>{{ dia | f }}</td><td class="num">{{ n }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No hay ingresos en el período.</td></tr>{% endfor %}
-    </table></div>
-</div>
+<div class="tarjeta"><h2>Pendientes por sector</h2>
+  <table class="tabla-dashboard"><tr><th>Sector</th><th class="num">Estudios</th></tr>
+    {% for clave, nombre, n in d.por_sector %}<tr><td>{{ nombre }}</td><td class="num"><a href="{{ url_for('tablero.tablero', sector=clave) }}" title="Ver estos estudios">{{ n }}</a></td></tr>{% else %}<tr><td colspan="2" class="muted">No hay estudios pendientes.</td></tr>{% endfor %}
+  </table></div>
 
 {% elif vista == 'patologos' %}
-{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios informes. Quien tiene el permiso «Ver todos los estudios» ve los de todos los patólogos.</div>{% endif %}
+{% if d.solo_lo_suyo %}<div class="aviso">Ves solamente tus propios pendientes. Quien tiene el permiso «Ver todos los estudios» ve los de todos los patólogos.</div>{% endif %}
 <table class="tabla-dashboard">
-  <tr><th>Responsable</th><th>Tipo</th><th class="num sem-ot"><span class="semaforo on_time">En término</span></th><th class="num sem-dy"><span class="semaforo delayed">Demorado</span></th><th class="num sem-lt"><span class="semaforo late">Atrasado</span></th><th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th><th class="num">Total</th></tr>
+  <tr><th>Responsable</th><th>Tipo</th><th class="num">Pendientes</th><th class="num sem-ot"><span class="semaforo on_time">En término</span></th><th class="num sem-dy"><span class="semaforo delayed">Demorado</span></th><th class="num sem-lt"><span class="semaforo late">Atrasado</span></th>
+      <th class="num sem-lt">Atraso hasta 5 d</th><th class="num sem-lt">5 a 10 d</th><th class="num sem-lt">Más de 10 d</th></tr>
   {% for r in d.filas %}
-  <tr><td><b>{{ r.nombre }}</b></td><td>{{ r.tipo }}</td>
-    {% for k in ('on_time', 'delayed', 'late', 'hasta_5', 'de_5_a_10', 'mas_de_10') %}<td class="num {{ COLOR_DE[k] }} {{ 'cero' if not r[k] }}">{{ r[k] }}{% if r.total and k in ('on_time', 'delayed', 'late') %} <span class="muted">({{ (r[k] * 100 / r.total) | round | int }}%)</span>{% endif %}</td>{% endfor %}
-    <td class="num"><b>{{ r.total }}</b></td></tr>
-  {% else %}<tr><td colspan="9" class="muted">No hay informes en el período.</td></tr>{% endfor %}
-  {% if d.filas %}<tr class="total"><td>Total</td><td></td>{% for k in ('on_time', 'delayed', 'late', 'hasta_5', 'de_5_a_10', 'mas_de_10', 'total') %}<td class="num {{ COLOR_DE.get(k, '') }}">{{ d.total[k] }}</td>{% endfor %}</tr>{% endif %}
+  <tr><td><b>{{ r.nombre }}</b>{% if r.iniciales %} <a class="muted" href="{{ url_for('tablero.tablero', mf=r.iniciales) }}" title="Ver todos los estudios de {{ r.nombre }}">ver listado</a>{% endif %}</td><td>{{ r.tipo }}</td>
+    {% for k, sem in (('pend', ''), ('p_on_time', 'on_time'), ('p_delayed', 'delayed'), ('p_late', 'late')) %}<td class="num {{ {'on_time': 'sem-ot', 'delayed': 'sem-dy', 'late': 'sem-lt'}.get(sem, '') }} {{ 'cero' if not r[k] }}">{% if r[k] and r.iniciales %}<a href="{{ url_for('tablero.tablero', etapa=d.etapa, tipo=r.tipo, mf=r.iniciales, semaforo=sem or None) }}" title="Ver estos estudios">{{ r[k] }}</a>{% else %}{{ r[k] }}{% endif %}</td>{% endfor %}
+    {% for k in ('p_hasta_5', 'p_de_5_a_10', 'p_mas_de_10') %}<td class="num sem-lt {{ 'cero' if not r[k] }}">{{ r[k] }}</td>{% endfor %}</tr>
+  {% else %}<tr><td colspan="9" class="muted">No hay estudios pendientes de esta actividad.</td></tr>{% endfor %}
+  {% if d.filas %}<tr class="total"><td>Total</td><td></td>
+    {% for k, c in (('pend', ''), ('p_on_time', 'sem-ot'), ('p_delayed', 'sem-dy'), ('p_late', 'sem-lt'), ('p_hasta_5', 'sem-lt'), ('p_de_5_a_10', 'sem-lt'), ('p_mas_de_10', 'sem-lt')) %}<td class="num {{ c }}">{{ d.total[k] }}</td>{% endfor %}</tr>{% endif %}
 </table>
-<p class="muted">Se compara el momento en que se cerró la actividad con su plazo: <b>En término</b> hasta el límite, <b>Demorado</b> hasta un día hábil después y <b>Atrasado</b> desde ahí.</p>
+{% if d.elegida %}<p><a class="btn" href="{{ url_for('tablero.tablero', mf=f.persona) }}">Ver todo el listado de {{ d.elegida }}</a></p>{% endif %}
+<p class="muted">Son los estudios que esperan esta actividad, medidos contra el plazo de la actividad: <b>En término</b> si todavía no venció, <b>Demorado</b> hasta un día hábil después y <b>Atrasado</b> desde ahí. Lo ya informado se mira en Performance. Los números llevan a la lista de Estudios.</p>
 
 {% elif vista == 'performance' %}
 <p class="muted">Cada celda muestra la <b>producción diaria</b> (PD: cantidad ÷ días hábiles, contando {{ UNIDADES[d.unidad] | lower }}) y la <b>demora promedio</b> (PAD: tiempo hábil desde la actividad anterior hasta ésta). Pasá el cursor sobre un número para ver la cantidad y los días.</p>
@@ -88,22 +83,14 @@
 
 {% else %}
 <table class="tabla-dashboard">
-  <tr><th>Actividad</th><th class="num">Pendientes</th><th class="num sem-ot" title="En término"><span class="semaforo on_time">OT</span></th><th class="num sem-dy" title="Demorados"><span class="semaforo delayed">DY</span></th><th class="num sem-lt" title="Atrasados"><span class="semaforo late">LT</span></th><th class="num">Hechas hoy</th><th class="num">Hechas en el período</th><th class="num" title="Demora promedio desde la actividad anterior">Demora prom.</th></tr>
+  <tr><th>Actividad</th><th class="num">Pendientes</th><th class="num sem-ot" title="En término"><span class="semaforo on_time">OT</span></th><th class="num sem-dy" title="Demorados"><span class="semaforo delayed">DY</span></th><th class="num sem-lt" title="Atrasados"><span class="semaforo late">LT</span></th></tr>
   {% for r in d.filas %}
   <tr><td><b>{{ r.etapa }}</b></td>
-    {% if r.pend %}{{ semaforo_celdas(r.pend, r.clave, r.tipo) }}{% else %}<td class="num muted">—</td><td class="sem-ot"></td><td class="sem-dy"></td><td class="sem-lt"></td>{% endif %}
-    <td class="num">{{ r.hoy }}</td><td class="num">{{ r.periodo }}</td><td class="num">{{ r.demora or '—' }}</td></tr>
+    {% if r.pend %}{{ semaforo_celdas(r.pend, r.clave, r.tipo) }}{% else %}<td class="num muted">—</td><td class="sem-ot"></td><td class="sem-dy"></td><td class="sem-lt"></td>{% endif %}</tr>
   {% endfor %}
 </table>
 {% if d.extra %}
 <div class="kpis">{% for titulo, n in d.extra %}{{ kpi(titulo, n) }}{% endfor %}</div>
 {% endif %}
-<div class="tarjeta"><h2>Por persona en {{ MESES[d.periodo.mes - 1] }} {{ d.periodo.anio }}</h2>
-  <table class="tabla-dashboard">
-    <tr><th>Persona</th>{% for k, n in d.etapas %}<th class="num">{{ n }}</th>{% endfor %}</tr>
-    {% for p in d.personas %}<tr><td title="{{ p.iniciales }}">{{ p.nombre }}</td>{% for k, n in d.etapas %}<td class="num {{ 'cero' if not p.por_etapa.get(k) }}">{{ p.por_etapa.get(k, 0) }}</td>{% endfor %}</tr>
-    {% else %}<tr><td colspan="{{ d.etapas | length + 1 }}" class="muted">Nadie registró actividad en el período.</td></tr>{% endfor %}
-  </table>
-</div>
 {% endif %}
 {% endblock %}

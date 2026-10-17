@@ -17,8 +17,8 @@ def datos_sector(vista):
 
 
 def datos_patologos(f, hoy, yo):
-    solo = None if yo["admin"] or puede("tablero_todos") else yo["id"]
-    return {**dash.patologos(f, hoy, solo), "solo_lo_suyo": solo is not None}
+    propios = not (yo["admin"] or puede("tablero_todos"))
+    return {**dash.patologos(f, hoy, yo["iniciales"] if propios else None), "solo_lo_suyo": propios}
 
 
 def datos_performance(f, hoy, yo):

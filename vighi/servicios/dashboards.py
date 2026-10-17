@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from vighi.core import db
 from vighi.dominio import trazabilidad
 from vighi.dominio.estudios import ETAPAS, NOMBRE_ETAPA, SECTORES
-from vighi.servicios.consultas import SQL_CON_DECAL, SQL_CON_IHQ, SQL_ETAPAS
+from vighi.servicios.consultas import SQL_ETAPAS, SQL_RESPONSABLES
 from vighi.servicios.tablero import cargar_protocolos, plazos
 
 VISTAS = [("gerencial", "Gerencial"), ("ingreso", "Ingreso"), ("laboratorio", "Laboratorio"), ("macroscopia", "Macroscopía"),
@@ -41,7 +41,7 @@ SQL_UBICACIONES = ("SELECT DISTINCT lugar_recoleccion AS lugar FROM protocolos W
 
 
 def filtros_de(args):
-    return {k: args.get(k, "").strip() for k in ("anio", "mes", "tipo", "cobertura", "ubicacion", "actividad", "unidad")}
+    return {k: args.get(k, "").strip() for k in ("anio", "mes", "tipo", "cobertura", "ubicacion", "actividad", "unidad", "persona")}
 
 
 def momento(texto):
@@ -135,28 +135,15 @@ def pendientes_por_etapa(protocolos, fechas, etapas, f, feriados, ahora):
 
 
 def sector(vista, f, hoy):
-    per = periodo(f, hoy)
     protocolos, fechas, _ = cargar_protocolos()
     feriados, ahora = db.feriados(), datetime.now()
     etapas = dict(ETAPAS_DE[vista])
     pend = pendientes_por_etapa(protocolos, fechas, {k: v for k, v in etapas.items() if k != "ingreso"}, f, feriados, ahora)
-    eventos = [e for e in cargar_eventos(per["desde"]) if e["etapa"] in etapas and (not etapas[e["etapa"]] or e["tipo"] == etapas[e["etapa"]]) and pasa(e, f)
-               and per["desde"] <= e["dia"] <= per["hasta"]]
-    filas = []
-    for etapa in etapas:
-        suyos = [e for e in eventos if e["etapa"] == etapa]
-        fila = {"clave": etapa, "tipo": etapas[etapa], "etapa": NOMBRE_ETAPA[etapa] if etapa != "ingreso" else "Protocolo > Cargar", "pend": pend.get(etapa), "hoy": cantidad_de([e for e in suyos if e["dia"] == hoy], "estudios"),
-                "periodo": cantidad_de(suyos, "estudios"), "demora": texto_demora(demora_media(suyos))}
-        filas.append(fila)
-    personas = {}
-    for e in eventos:
-        p = personas.setdefault(e["usuario"], {"nombre": e["nombre"], "iniciales": e["iniciales"], "por_etapa": {}})
-        p["por_etapa"][e["etapa"]] = p["por_etapa"].get(e["etapa"], 0) + e["estudios"]
+    filas = [{"clave": etapa, "tipo": etapas[etapa], "etapa": NOMBRE_ETAPA[etapa] if etapa != "ingreso" else "Protocolo > Cargar", "pend": pend.get(etapa)} for etapa in etapas]
     extra = []
     if vista == "ingreso":
         extra = [("Protocolos por completar", db.uno(SQL_BORRADORES)["n"]), ("Datos de pacientes por validar", db.uno(SQL_A_VALIDAR)["n"])]
-    return {"periodo": per, "filas": filas, "personas": sorted(personas.values(), key=lambda x: x["nombre"]), "extra": extra,
-            "etapas": [(k, NOMBRE_ETAPA.get(k, "Protocolo > Cargar")) for k in etapas]}
+    return {"filas": filas, "extra": extra}
 
 
 def hay_cobertura(f):
@@ -164,69 +151,65 @@ def hay_cobertura(f):
 
 
 def gerencial(f, hoy):
-    per = periodo(f, hoy)
     protocolos, fechas, _ = cargar_protocolos()
     feriados, ahora = db.feriados(), datetime.now()
     de_cobertura = hay_cobertura(f)
-    elegidos = {pid: p for pid, p in protocolos.items()
-                if (de_cobertura is None or pid in de_cobertura) and (not f["ubicacion"] or f["ubicacion"] in (p.lugar_recoleccion, p.lugar_entrega))
-                and (not f["tipo"] or any(m.tipo == f["tipo"] for m in p.muestras))}
     semaforo = {"on_time": 0, "delayed": 0, "late": 0}
-    por_sector = {}
-    informados, dias_de_demora, vistos = 0, [], set()
-    por_dia = {}
-    for p in elegidos.values():
-        dia = date.fromisoformat(p.ingreso[:10])
-        if per["desde"] <= dia <= per["hasta"]:
-            por_dia[dia] = por_dia.get(dia, 0) + 1
-        for m in p.activas():
-            if f["tipo"] and m.tipo != f["tipo"]:
-                continue
-            if m.proxima:
-                plazos(p, m, fechas, feriados, ahora)
-                if m.semaforo:
-                    semaforo[m.semaforo] += 1
-                por_sector[m.proxima[2]] = por_sector.get(m.proxima[2], 0) + 1
-            elif m.flujo_id not in vistos and fechas.get(m.flujo_id):
-                vistos.add(m.flujo_id)
-                cierre = date.fromisoformat(max(fechas[m.flujo_id].values())[:10])
-                if per["desde"] <= cierre <= per["hasta"]:
-                    informados += 1
-                    dias_de_demora.append(trazabilidad.habiles_entre(dia, cierre, feriados))
-    ingresados = sum(por_dia.values())
-    return {"periodo": per, "ingresados_hoy": sum(1 for p in elegidos.values() if p.ingreso[:10] == hoy.isoformat()), "ingresados": ingresados,
-            "informados": informados, "demora_dias": round(sum(dias_de_demora) / len(dias_de_demora), 1) if dias_de_demora else None,
-            "pendientes": sum(semaforo.values()), "semaforo": semaforo,
-            "por_sector": sorted(((k, SECTORES[k], n) for k, n in por_sector.items() if k in SECTORES), key=lambda x: -x[2]),
-            "por_dia": [(dia.isoformat(), n) for dia, n in sorted(por_dia.items())]}
-
-
-def clasificar(e, feriados, con_ihq, con_decal):
-    limite = trazabilidad.limite(e["tipo"], e["etapa"], e["base"], feriados, (e["protocolo"], e["tipo"]) in con_decal, (e["protocolo"], e["tipo"]) in con_ihq)
-    estado = trazabilidad.semaforo(limite, e["cuando"], feriados)
-    atraso = trazabilidad.dias_atraso(limite, e["cuando"], feriados) if estado == "late" else 0
-    return estado, atraso
-
-
-def patologos(f, hoy, solo_usuario=None):
-    per = periodo(f, hoy)
-    etapa = f["actividad"] if f["actividad"] in ETAPAS_PATOLOGOS else "microscopia"
-    feriados = db.feriados()
-    con_ihq = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_IHQ)}
-    con_decal = {(r["protocolo_id"], r["tipo"]) for r in db.q(SQL_CON_DECAL)}
-    filas = {}
-    for e in cargar_eventos(per["desde"]):
-        if e["etapa"] != etapa or not per["desde"] <= e["dia"] <= per["hasta"] or not pasa(e, f) or (solo_usuario and e["usuario"] != solo_usuario):
+    por_sector, por_tipo = {}, {}
+    for pid, p in protocolos.items():
+        if (de_cobertura is not None and pid not in de_cobertura) or (f["ubicacion"] and f["ubicacion"] not in (p.lugar_recoleccion, p.lugar_entrega)):
             continue
-        estado, atraso = clasificar(e, feriados, con_ihq, con_decal)
-        fila = filas.setdefault((e["nombre"], e["tipo"]), {"nombre": e["nombre"], "tipo": e["tipo"], "on_time": 0, "delayed": 0, "late": 0, "hasta_5": 0, "de_5_a_10": 0, "mas_de_10": 0, "total": 0})
-        fila[estado] += 1
-        fila["total"] += 1
-        if estado == "late":
-            fila["hasta_5" if atraso <= 5 else ("de_5_a_10" if atraso <= 10 else "mas_de_10")] += 1
-    ordenadas = sorted(filas.values(), key=lambda x: (db.clave_nombre(x["nombre"]), x["tipo"]))
-    total = {k: sum(x[k] for x in ordenadas) for k in ("on_time", "delayed", "late", "hasta_5", "de_5_a_10", "mas_de_10", "total")}
-    return {"periodo": per, "filas": ordenadas, "total": total, "etapa": etapa, "actividades": [(k, NOMBRE_ETAPA[k]) for k in ETAPAS_PATOLOGOS]}
+        for m in p.activas():
+            if not m.proxima or (f["tipo"] and m.tipo != f["tipo"]):
+                continue
+            plazos(p, m, fechas, feriados, ahora)
+            if m.semaforo:
+                semaforo[m.semaforo] += 1
+            por_sector[m.proxima[2]] = por_sector.get(m.proxima[2], 0) + 1
+            por_tipo[m.tipo] = por_tipo.get(m.tipo, 0) + 1
+    return {"pendientes": sum(semaforo.values()), "semaforo": semaforo, "por_tipo": sorted(por_tipo.items()),
+            "por_sector": sorted(((k, SECTORES[k], n) for k, n in por_sector.items() if k in SECTORES), key=lambda x: -x[2])}
+
+
+CAMPOS_PATOLOGOS = ("pend", "p_on_time", "p_delayed", "p_late", "p_hasta_5", "p_de_5_a_10", "p_mas_de_10")
+
+
+def fila_patologo(iniciales, nombre, tipo):
+    return {"iniciales": iniciales, "nombre": nombre, "tipo": tipo, **{k: 0 for k in CAMPOS_PATOLOGOS}}
+
+
+def sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora):
+    protocolos, fechas, _ = cargar_protocolos()
+    de_cobertura = hay_cobertura(f)
+    for p in protocolos.values():
+        if (de_cobertura is not None and p.id not in de_cobertura) or (f["ubicacion"] and f["ubicacion"] not in (p.lugar_recoleccion, p.lugar_entrega)):
+            continue
+        for m in p.activas():
+            if not m.proxima or m.proxima[0] != etapa or (f["tipo"] and m.tipo != f["tipo"]) or (solo_iniciales and m.responsable != solo_iniciales):
+                continue
+            plazos(p, m, fechas, feriados, ahora)
+            estado = trazabilidad.semaforo(m.vence, ahora, feriados) if m.vence else "on_time"
+            iniciales = m.responsable or ""
+            fila = filas.setdefault((iniciales, m.tipo), fila_patologo(iniciales, nombres.get(iniciales, "Sin médico asignado"), m.tipo))
+            fila["pend"] += 1
+            fila["p_" + estado] += 1
+            if estado == "late":
+                atraso = trazabilidad.dias_atraso(m.vence, ahora, feriados)
+                fila["p_hasta_5" if atraso <= 5 else ("p_de_5_a_10" if atraso <= 10 else "p_mas_de_10")] += 1
+
+
+def patologos(f, hoy, solo_iniciales=None):
+    etapa = f["actividad"] if f["actividad"] in ETAPAS_PATOLOGOS else "microscopia"
+    feriados, ahora = db.feriados(), datetime.now()
+    usuarios = db.q(SQL_RESPONSABLES)
+    nombres = {u["iniciales"]: u["nombre"] or u["iniciales"] for u in usuarios}
+    filas = {}
+    sumar_pendientes(filas, etapa, f, nombres, solo_iniciales, feriados, ahora)
+    ordenadas = sorted((x for x in filas.values() if not f["persona"] or x["iniciales"] == f["persona"]), key=lambda x: (x["iniciales"] == "", db.clave_nombre(x["nombre"]), x["tipo"]))
+    total = {k: sum(x[k] for x in ordenadas) for k in CAMPOS_PATOLOGOS}
+    personas = None if solo_iniciales else [(u["iniciales"], u["nombre"] or u["iniciales"]) for u in usuarios if "firmante" in (u["sectores"] or "").split(",")]
+    elegida = next((n for i, n in (personas or []) if i == f["persona"]), "") if f["persona"] else ""
+    return {"filas": ordenadas, "total": total, "etapa": etapa, "actividades": [(k, NOMBRE_ETAPA[k]) for k in ETAPAS_PATOLOGOS], "personas": personas, "elegida": elegida}
 
 
 def ventanas(per):
